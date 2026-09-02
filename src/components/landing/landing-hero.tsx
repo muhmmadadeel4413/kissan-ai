@@ -31,13 +31,13 @@ export function LandingHero() {
       />
       <div className="relative mx-auto max-w-6xl px-4 pb-16 pt-16 sm:px-6 sm:pt-20">
         <div className="mx-auto max-w-3xl text-center">
-          <p className="mb-4 inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary-soft px-4 py-1.5 text-sm font-medium text-primary shadow-soft">
+          <p className="mb-4 inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary-soft px-4 py-1.5 text-sm font-medium text-primary shadow-soft ring-1 ring-inset ring-primary/10">
             <Sprout className="h-4 w-4" aria-hidden="true" />
             {t("hero.badge")}
           </p>
           <h1 className="font-heading text-4xl font-extrabold leading-tight tracking-tight text-foreground sm:text-5xl">
             {t("hero.titleA")}{" "}
-            <span className="bg-gradient-to-r from-primary to-[#35451f] bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-primary to-primary-deep bg-clip-text text-transparent">
               {t("hero.titleB")}
             </span>
           </h1>
@@ -67,8 +67,8 @@ export function LandingHero() {
 
           <div className="mt-12 grid gap-4 text-left sm:grid-cols-3">
             {HIGHLIGHTS.map((item) => (
-              <Card key={item.title} className="p-5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lift">
-                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-soft text-primary">
+              <Card key={item.title} className="group p-5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lift hover:border-primary/25">
+                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-soft text-primary ring-1 ring-inset ring-primary/10 transition-colors duration-200 group-hover:bg-primary group-hover:text-primary-foreground">
                   <item.icon className="h-5 w-5" aria-hidden="true" />
                 </span>
                 <h3 className="mt-3 text-sm font-semibold text-foreground">

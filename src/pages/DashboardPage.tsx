@@ -247,7 +247,7 @@ export default function DashboardPage() {
   return (
     <div className="space-y-8">
       {/* Premium welcome banner */}
-      <section className="relative overflow-hidden rounded-3xl border border-border bg-gradient-to-br from-primary to-[#35451f] p-6 text-primary-foreground shadow-lift sm:p-8">
+      <section className="relative overflow-hidden rounded-3xl border border-border bg-gradient-to-br from-primary to-primary-deep p-6 text-primary-foreground shadow-lift sm:p-8">
         <div className="pointer-events-none absolute inset-0 bg-leaf-grid opacity-20" aria-hidden="true" />
         <div className="relative flex flex-wrap items-center justify-between gap-4">
           <div className="max-w-2xl">

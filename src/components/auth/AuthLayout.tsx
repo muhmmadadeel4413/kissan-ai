@@ -34,7 +34,7 @@ export function AuthLayout({
           className="mb-8 flex items-center gap-2.5 cursor-pointer"
           aria-label={t("brand.name")}
         >
-          <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-[#35451f] text-primary-foreground shadow-lift">
+          <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary-deep text-primary-foreground shadow-lift ring-1 ring-inset ring-white/10">
             <Sprout className="h-6 w-6" aria-hidden="true" />
           </span>
           <span className="font-heading text-xl font-bold tracking-tight text-foreground">
@@ -43,13 +43,16 @@ export function AuthLayout({
         </Link>
 
         <div className="w-full">
-          <div className="rounded-2xl border border-border bg-card p-6 shadow-lift sm:p-8">
+          <div className="card-sheen rounded-2xl border border-border bg-card p-6 shadow-lift sm:p-8">
             <header className="mb-6 space-y-1.5">
-              <h1 className="font-heading text-2xl font-bold tracking-tight text-foreground">
-                {title}
-              </h1>
+              <div className="flex items-center gap-2.5">
+                <span className="h-1 w-5 rounded-full bg-accent" aria-hidden="true" />
+                <h1 className="font-heading text-2xl font-bold tracking-tight text-foreground">
+                  {title}
+                </h1>
+              </div>
               {subtitle ? (
-                <p className="text-sm leading-relaxed text-muted-foreground">
+                <p className="pl-7 text-sm leading-relaxed text-muted-foreground">
                   {subtitle}
                 </p>
               ) : null}

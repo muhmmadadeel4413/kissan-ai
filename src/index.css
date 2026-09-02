@@ -39,8 +39,18 @@
   --color-input: #cfd8c4;
   --color-ring: #4c6b3d;
 
+  /* Interactive hover depths (used by buttons / links) */
+  --color-primary-hover: #3e5c30;
+  --color-primary-deep: #2f4626;
+  --color-secondary-hover: #d9e5d1;
+  --color-accent-hover: #6f8a2c;
+  --color-danger-hover: #a83327;
+  --color-success-hover: #256829;
+  --color-warning-hover: #9c6715;
+
   /* Dark-green app shell (sidebar / drawer) */
   --color-sidebar: #22301f;
+  --color-sidebar-deep: #18211399;
   --color-sidebar-foreground: #e5ecdc;
   --color-sidebar-muted: #a3b290;
   --color-sidebar-accent: #2c3d28;
@@ -66,11 +76,12 @@
   --radius-xl: 1.25rem;
   --radius-2xl: 1.5rem;
 
-  --shadow-soft: 0 1px 3px 0 rgb(26 38 28 / 0.06),
-    0 1px 2px -1px rgb(26 38 28 / 0.06);
-  --shadow-lift: 0 4px 12px -2px rgb(26 38 28 / 0.12),
+  --shadow-soft: 0 1px 2px 0 rgb(26 38 28 / 0.05),
+    0 1px 3px 0 rgb(26 38 28 / 0.06);
+  --shadow-lift: 0 6px 18px -4px rgb(26 38 28 / 0.14),
     0 2px 6px -2px rgb(26 38 28 / 0.08);
-  --shadow-pop: 0 10px 30px -8px rgb(26 38 28 / 0.25);
+  --shadow-pop: 0 14px 40px -10px rgb(26 38 28 / 0.28),
+    0 4px 12px -4px rgb(26 38 28 / 0.12);
 
   --animate-fade-in: fade-in 0.2s ease-out;
   --animate-slide-in: slide-in 0.2s ease-out;
@@ -134,6 +145,36 @@
     text-rendering: optimizeLegibility;
   }
 
+  /* Brand-tinted text selection */
+  ::selection {
+    background-color: var(--color-primary-soft);
+    color: var(--color-primary);
+  }
+
+  /* Slim, quiet scrollbars that match the palette */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-input) transparent;
+  }
+
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    border-radius: 9999px;
+    background-color: var(--color-input);
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background-color: var(--color-primary);
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
   h1,
   h2,
   h3,
@@ -177,6 +218,14 @@
     --color-border: #2b3526;
     --color-input: #31402f;
     --color-ring: #8fb06a;
+
+    --color-primary-hover: #9fc27c;
+    --color-primary-deep: #b6d491;
+    --color-secondary-hover: #232f1c;
+    --color-accent-hover: #c4dd66;
+    --color-danger-hover: #e06a58;
+    --color-success-hover: #5dac68;
+    --color-warning-hover: #e0ab54;
 
     --color-sidebar: #151d12;
     --color-sidebar-foreground: #e0e9d8;
@@ -245,5 +294,33 @@
         rgb(127 155 54 / 0.1),
         transparent 55%
       );
+  }
+
+  /* Premium card surface: faint top-light sheen that lifts white cards off
+     the mint canvas without adding noise. Applied via ::before so it never
+     clips child content. */
+  .card-sheen {
+    position: relative;
+  }
+
+  .card-sheen::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    background: linear-gradient(
+      160deg,
+      rgb(255 255 255 / 0.7),
+      rgb(255 255 255 / 0) 42%
+    );
+  }
+
+  .dark .card-sheen::before {
+    background: linear-gradient(
+      160deg,
+      rgb(255 255 255 / 0.05),
+      rgb(255 255 255 / 0) 42%
+    );
   }
 }

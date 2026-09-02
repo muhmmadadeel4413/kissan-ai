@@ -50,7 +50,7 @@ function Brand({ tone = "sidebar" }: { tone?: "sidebar" | "light" }) {
   const { t } = useI18n();
   return (
     <Link to="/" className="flex items-center gap-2.5 px-1 cursor-pointer" aria-label={t("brand.name")}>
-      <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-[#35451f] text-primary-foreground shadow-soft">
+      <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary-deep text-primary-foreground shadow-soft ring-1 ring-inset ring-white/10">
         <Sprout className="h-5 w-5" aria-hidden="true" />
       </span>
       <span
@@ -71,14 +71,16 @@ function DrawerContent({ onNavigate }: { onNavigate: () => void }) {
   const manage = primaryNav.filter((i) => !TOOL_NAV_PATHS.has(i.to));
   return (
     <div className="flex h-full flex-col gap-1">
-      <p className="px-3 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wider text-sidebar-muted">
+      <p className="flex items-center gap-2 px-3 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wider text-sidebar-muted">
+        <span className="h-1 w-3 rounded-full bg-accent/70" aria-hidden="true" />
         {t("nav.aiTools")}
       </p>
       {tools.map((item) => (
         <NavLinkItem key={item.to} item={item} onNavigate={onNavigate} />
       ))}
       <div className="my-3 h-px bg-sidebar-border" />
-      <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-sidebar-muted">
+      <p className="flex items-center gap-2 px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-sidebar-muted">
+        <span className="h-1 w-3 rounded-full bg-sidebar-muted/50" aria-hidden="true" />
         {t("nav.manage")}
       </p>
       {manage.map((item) => (
@@ -166,14 +168,16 @@ export function AppLayout() {
           <Brand />
         </div>
         <nav className="flex-1 space-y-1 overflow-y-auto" aria-label={t("nav.primary")}>
-          <p className="px-3 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wider text-sidebar-muted">
+          <p className="flex items-center gap-2 px-3 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wider text-sidebar-muted">
+            <span className="h-1 w-3 rounded-full bg-accent/70" aria-hidden="true" />
             {t("nav.aiTools")}
           </p>
           {tools.map((item) => (
             <NavLinkItem key={item.to} item={item} />
           ))}
           <div className="my-3 h-px bg-sidebar-border" />
-          <p className="px-3 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wider text-sidebar-muted">
+          <p className="flex items-center gap-2 px-3 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wider text-sidebar-muted">
+            <span className="h-1 w-3 rounded-full bg-sidebar-muted/50" aria-hidden="true" />
             {t("nav.manage")}
           </p>
           {manage.map((item) => (
