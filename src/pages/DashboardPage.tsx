@@ -33,11 +33,18 @@ import { ErrorState } from "../components/layout/error-state";
 import { GrowthStageCard } from "../components/farm/growth-stage-card";
 import { WeatherSummaryCard } from "../components/weather/weather-summary-card";
 import { TodayActionsCard } from "../components/actions/today-actions-card";
+import { UpcomingTasksCard } from "../components/dashboard/upcoming-tasks-card";
+import { ExpenseBreakdownChart } from "../components/dashboard/expense-breakdown-chart";
+import { ForecastStrip } from "../components/dashboard/forecast-strip";
+import { FarmHealthGauge } from "../components/dashboard/farm-health-gauge";
+import type { HealthInput } from "../components/dashboard/farm-health-gauge";
+import { CropDoctorUploadCard } from "../components/dashboard/crop-doctor-upload-card";
 import { buildFarmContext } from "../lib/farm-context";
 import { fetchActiveRisks } from "../lib/risk-service";
 import { fetchDiagnoses } from "../lib/diagnosis-service";
 import { useFarm } from "../context/FarmContext";
 import { useRecentActivity } from "../hooks/useRecentActivity";
+import { useFarmWeather } from "../hooks/useFarmWeather";
 import type { ActivityItem, ActivityKind } from "../lib/activity-service";
 import type { Diagnosis, Level, RiskAlert } from "../types";
 import { cn } from "../lib/utils";
@@ -226,6 +233,19 @@ export default function DashboardPage() {
 
   /* ---- Recent Activity (real records only) ----------------------------- */
   const activity = useRecentActivity(farm.id);
+  const { status: weatherStatus } = useFarmWeather();
+
+  /* ---- Health Input — computed from real data signals ------------------ */
+  const healthInput: HealthInput = React.useMemo(
+    () => ({
+      riskCount: riskAlerts.length,
+      highRisks: riskCounts.high,
+      weatherAvailable: weatherStatus === "ready",
+      hasDiagnosis: latestDiagnosis !== null,
+      hasActions: activity.items.length > 0,
+    }),
+    [riskAlerts.length, riskCounts.high, weatherStatus, latestDiagnosis, activity.items.length]
+  );
 
   const latest = latestDiagnosis;
   const latestMeta = latest ? (LEVEL_META[latest.severity] ?? LEVEL_META.medium) : null;
@@ -240,6 +260,7 @@ export default function DashboardPage() {
     { to: "/voice", label: "Voice", icon: Mic },
     { to: "/weather", label: "Weather", icon: CloudSun },
     { to: "/risks", label: "Risks", icon: AlertTriangle },
+    { to: "/irrigation", label: "Irrigation", icon: Droplets },
     { to: "/yield", label: "Yield", icon: TrendingUp },
     { to: "/actions", label: "Today's Actions", icon: ListChecks },
   ];
@@ -436,238 +457,257 @@ export default function DashboardPage() {
         <GrowthStageCard growth={farmContext.growth} />
       </section>
 
-      {/* Today's Actions — real Decision Engine feed (no hardcoded cards) */}
-      <section className="space-y-3">
-        <SectionHeader title="Today's Actions" subtitle="Your decision plan, built from real farm data" />
-        <TodayActionsCard />
-      </section>
+      {/* ── Two-column intelligence grid ──────────────────────────────── */}
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
+        {/* ── Left column ── */}
+        <div className="space-y-8">
+          {/* Today's Actions — real Decision Engine feed (no hardcoded cards) */}
+          <section className="space-y-3">
+            <SectionHeader title="Today's Actions" subtitle="Your decision plan, built from real farm data" />
+            <TodayActionsCard />
+          </section>
 
-      {/* Weather — real live conditions for the farm's saved location */}
-      <section className="space-y-3">
-        <SectionHeader title="Weather" subtitle="Conditions that affect your crop today" />
-        <WeatherSummaryCard />
-      </section>
+          {/* Weather — live conditions + 5-day forecast strip */}
+          <section className="space-y-3">
+            <SectionHeader title="Weather" subtitle="Conditions that affect your crop today" />
+            <WeatherSummaryCard />
+            <ForecastStrip />
+          </section>
 
-      {/* Risk Alerts — real persisted alerts from the Risk Engine */}
-      <section className="space-y-3">
-        <SectionHeader title="Risk Alerts" subtitle="Threats to watch for" />
-        {risksLoading ? (
-          <LoadingState rows={2} title="Loading risk alerts…" />
-        ) : risksError ? (
-          <ErrorState
-            title="Risk information unavailable"
-            message={risksError}
-            onRetry={() => setRisksReload((k) => k + 1)}
-          />
-        ) : riskAlerts.length === 0 ? (
-          <Card>
-            <CardContent className="flex flex-col gap-3 py-5 sm:flex-row sm:items-center">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-success/10 text-success">
-                <ShieldCheck className="h-5 w-5" aria-hidden="true" />
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold text-foreground">
-                  No active risks detected
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  That doesn't guarantee your crop is completely safe — run an assessment to
-                  check for threats.
-                </p>
-              </div>
-              <Button asChild variant="outline" size="sm">
-                <Link to="/risks">Assess risks</Link>
-              </Button>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="space-y-3">
-            <Card>
-              <CardContent className="space-y-4 py-5">
-                <div className="flex flex-wrap items-center gap-3">
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
-                    <ShieldAlert className="h-5 w-5" aria-hidden="true" />
+          {/* Crop Doctor — quick upload shortcut */}
+          <CropDoctorUploadCard />
+
+          {/* Crop Health — latest real diagnosis from the Crop Doctor */}
+          <section className="space-y-3">
+            <SectionHeader title="Crop Health" subtitle="Your most recent crop check" />
+            {diagnosisStatus === "loading" ? (
+              <LoadingState rows={2} title="Loading crop health…" />
+            ) : diagnosisStatus === "error" ? (
+              <ErrorState
+                title="Unable to load diagnosis"
+                message={diagnosisError ?? "Please try again."}
+                onRetry={() => setDiagnosisReload((k) => k + 1)}
+              />
+            ) : !latest ? (
+              <EmptyState
+                icon={<Stethoscope className="h-6 w-6" />}
+                title="No crop diagnosis yet"
+                description="Analyze a crop photo with the AI Crop Doctor and the result will appear here with severity, confidence, and what to do next."
+                action={
+                  <Button asChild>
+                    <Link to="/crop-doctor">
+                      <ScanLine className="h-4 w-4" aria-hidden="true" />
+                      Analyze a Crop
+                    </Link>
+                  </Button>
+                }
+              />
+            ) : (
+              <Card>
+                <CardContent className="space-y-4 py-5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-sm font-semibold text-foreground">{latest.diagnosis}</p>
+                        <Badge variant={latestMeta?.variant ?? "warning"}>
+                          {latestMeta?.label ?? "Medium"} severity
+                        </Badge>
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {latest.crop} · {latest.confidence}% confidence · Diagnosed{" "}
+                        {formatDate(latest.createdAt)}
+                      </p>
+                    </div>
+                    {latest.imageUrl ? (
+                      <img
+                        src={latest.imageUrl}
+                        alt={`Crop photo for ${latest.diagnosis}`}
+                        loading="lazy"
+                        className="h-16 w-16 shrink-0 rounded-xl object-cover bg-muted"
+                      />
+                    ) : null}
+                  </div>
+
+                  {latest.description ? (
+                    <p className="text-sm leading-relaxed text-muted-foreground">
+                      {latest.description}
+                    </p>
+                  ) : null}
+
+                  {latest.recommendedActions && latest.recommendedActions.length > 0 ? (
+                    <div className="space-y-1.5 rounded-xl bg-primary-soft p-4">
+                      <p className="text-xs font-semibold text-primary">What to do next</p>
+                      <ol className="space-y-1.5">
+                        {latest.recommendedActions.slice(0, 3).map((action, i) => (
+                          <li
+                            key={i}
+                            className="flex items-start gap-2 text-xs leading-relaxed text-foreground"
+                          >
+                            <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
+                              {i + 1}
+                            </span>
+                            <span>{action}</span>
+                          </li>
+                        ))}
+                      </ol>
+                    </div>
+                  ) : null}
+
+                  <div className="flex flex-wrap gap-2">
+                    <Button asChild size="sm">
+                      <Link to="/crop-doctor">
+                        <ScanLine className="h-4 w-4" aria-hidden="true" />
+                        Analyze a Crop
+                      </Link>
+                    </Button>
+                    <Button asChild variant="outline" size="sm">
+                      <Link to="/diagnosis-history">Diagnosis history</Link>
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </section>
+        </div>
+
+        {/* ── Right column ── */}
+        <div className="space-y-8">
+          <UpcomingTasksCard />
+
+          {/* Risk Alerts — real persisted alerts from the Risk Engine */}
+          <section className="space-y-3">
+            <SectionHeader title="Risk Alerts" subtitle="Threats to watch for" />
+            {risksLoading ? (
+              <LoadingState rows={2} title="Loading risk alerts…" />
+            ) : risksError ? (
+              <ErrorState
+                title="Risk information unavailable"
+                message={risksError}
+                onRetry={() => setRisksReload((k) => k + 1)}
+              />
+            ) : riskAlerts.length === 0 ? (
+              <Card>
+                <CardContent className="flex flex-col gap-3 py-5 sm:flex-row sm:items-center">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-success/10 text-success">
+                    <ShieldCheck className="h-5 w-5" aria-hidden="true" />
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold text-foreground">
-                      {riskCounts.high > 0
-                        ? `${riskCounts.high} high-priority risk${riskCounts.high > 1 ? "s" : ""} to act on`
-                        : `${riskAlerts.length} risk alert${riskAlerts.length > 1 ? "s" : ""} detected`}
+                      No active risks detected
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      {riskCounts.high} high · {riskCounts.medium} medium · {riskCounts.low} low
+                      That doesn't guarantee your crop is completely safe — run an assessment to
+                      check for threats.
+                    </p>
+                  </div>
+                  <Button asChild variant="outline" size="sm">
+                    <Link to="/risks">Assess risks</Link>
+                  </Button>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="space-y-3">
+                <Card>
+                  <CardContent className="space-y-4 py-5">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                        <ShieldAlert className="h-5 w-5" aria-hidden="true" />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-foreground">
+                          {riskCounts.high > 0
+                            ? `${riskCounts.high} high-priority risk${riskCounts.high > 1 ? "s" : ""} to act on`
+                            : `${riskAlerts.length} risk alert${riskAlerts.length > 1 ? "s" : ""} detected`}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {riskCounts.high} high · {riskCounts.medium} medium · {riskCounts.low} low
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      {riskAlerts.slice(0, 3).map((risk) => {
+                        const meta = LEVEL_META[risk.level] ?? LEVEL_META.medium;
+                        return (
+                          <div
+                            key={risk.id}
+                            className="rounded-xl border border-border bg-background/40 p-4"
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <p className="text-sm font-semibold text-foreground">
+                                    {risk.title}
+                                  </p>
+                                  <Badge variant={meta.variant}>
+                                    <span
+                                      className={cn(
+                                        "mr-1.5 h-1.5 w-1.5 shrink-0 rounded-full",
+                                        risk.level === "high" && "bg-danger",
+                                        risk.level === "medium" && "bg-warning",
+                                        risk.level === "low" && "bg-success"
+                                      )}
+                                      aria-hidden="true"
+                                    />
+                                    {meta.label} risk
+                                  </Badge>
+                                </div>
+                                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                                  {risk.explanation}
+                                </p>
+                                {risk.recommendedActions.length > 0 ? (
+                                  <p className="mt-2 text-xs leading-relaxed text-foreground/80">
+                                    <span className="font-semibold text-foreground">Recommended: </span>
+                                    {risk.recommendedActions[0]}
+                                  </p>
+                                ) : null}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    <Button asChild variant="outline" size="sm">
+                      <Link to="/risks">View all risks</Link>
+                    </Button>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+          </section>
+
+          <FarmHealthGauge input={healthInput} />
+
+          <ExpenseBreakdownChart />
+
+          {/* Yield Estimate — honest state; no fabricated number */}
+          <section className="space-y-3">
+            <SectionHeader title="Yield Estimate" subtitle="Prediction range and confidence" />
+            <Card>
+              <CardContent className="flex flex-col gap-3 py-5 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-3">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                    <TrendingUp className="h-5 w-5" aria-hidden="true" />
+                  </span>
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">
+                      Yield estimate is not available yet.
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Yield prediction needs crop, weather, and growth history. Collect more farm
+                      data to unlock an estimate.
                     </p>
                   </div>
                 </div>
-
-                <div className="space-y-3">
-                  {riskAlerts.slice(0, 3).map((risk) => {
-                    const meta = LEVEL_META[risk.level] ?? LEVEL_META.medium;
-                    return (
-                      <div
-                        key={risk.id}
-                        className="rounded-xl border border-border bg-background/40 p-4"
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <p className="text-sm font-semibold text-foreground">
-                                {risk.title}
-                              </p>
-                              <Badge variant={meta.variant}>
-                                <span
-                                  className={cn(
-                                    "mr-1.5 h-1.5 w-1.5 shrink-0 rounded-full",
-                                    risk.level === "high" && "bg-danger",
-                                    risk.level === "medium" && "bg-warning",
-                                    risk.level === "low" && "bg-success"
-                                  )}
-                                  aria-hidden="true"
-                                />
-                                {meta.label} risk
-                              </Badge>
-                            </div>
-                            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                              {risk.explanation}
-                            </p>
-                            {risk.recommendedActions.length > 0 ? (
-                              <p className="mt-2 text-xs leading-relaxed text-foreground/80">
-                                <span className="font-semibold text-foreground">Recommended: </span>
-                                {risk.recommendedActions[0]}
-                              </p>
-                            ) : null}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                <Button asChild variant="outline" size="sm">
-                  <Link to="/risks">View all risks</Link>
+                <Button asChild variant="outline" size="sm" className="shrink-0">
+                  <Link to="/yield">View Yield</Link>
                 </Button>
               </CardContent>
             </Card>
-          </div>
-        )}
-      </section>
-
-      {/* Crop Health — latest real diagnosis from the Crop Doctor */}
-      <section className="space-y-3">
-        <SectionHeader title="Crop Health" subtitle="Your most recent crop check" />
-        {diagnosisStatus === "loading" ? (
-          <LoadingState rows={2} title="Loading crop health…" />
-        ) : diagnosisStatus === "error" ? (
-          <ErrorState
-            title="Unable to load diagnosis"
-            message={diagnosisError ?? "Please try again."}
-            onRetry={() => setDiagnosisReload((k) => k + 1)}
-          />
-        ) : !latest ? (
-          <EmptyState
-            icon={<Stethoscope className="h-6 w-6" />}
-            title="No crop diagnosis yet"
-            description="Analyze a crop photo with the AI Crop Doctor and the result will appear here with severity, confidence, and what to do next."
-            action={
-              <Button asChild>
-                <Link to="/crop-doctor">
-                  <ScanLine className="h-4 w-4" aria-hidden="true" />
-                  Analyze a Crop
-                </Link>
-              </Button>
-            }
-          />
-        ) : (
-          <Card>
-            <CardContent className="space-y-4 py-5">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="text-sm font-semibold text-foreground">{latest.diagnosis}</p>
-                    <Badge variant={latestMeta?.variant ?? "warning"}>
-                      {latestMeta?.label ?? "Medium"} severity
-                    </Badge>
-                  </div>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {latest.crop} · {latest.confidence}% confidence · Diagnosed{" "}
-                    {formatDate(latest.createdAt)}
-                  </p>
-                </div>
-                {latest.imageUrl ? (
-                  <img
-                    src={latest.imageUrl}
-                    alt={`Crop photo for ${latest.diagnosis}`}
-                    loading="lazy"
-                    className="h-16 w-16 shrink-0 rounded-xl object-cover bg-muted"
-                  />
-                ) : null}
-              </div>
-
-              {latest.description ? (
-                <p className="text-sm leading-relaxed text-muted-foreground">
-                  {latest.description}
-                </p>
-              ) : null}
-
-              {latest.recommendedActions && latest.recommendedActions.length > 0 ? (
-                <div className="space-y-1.5 rounded-xl bg-primary-soft p-4">
-                  <p className="text-xs font-semibold text-primary">What to do next</p>
-                  <ol className="space-y-1.5">
-                    {latest.recommendedActions.slice(0, 3).map((action, i) => (
-                      <li
-                        key={i}
-                        className="flex items-start gap-2 text-xs leading-relaxed text-foreground"
-                      >
-                        <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
-                          {i + 1}
-                        </span>
-                        <span>{action}</span>
-                      </li>
-                    ))}
-                  </ol>
-                </div>
-              ) : null}
-
-              <div className="flex flex-wrap gap-2">
-                <Button asChild size="sm">
-                  <Link to="/crop-doctor">
-                    <ScanLine className="h-4 w-4" aria-hidden="true" />
-                    Analyze a Crop
-                  </Link>
-                </Button>
-                <Button asChild variant="outline" size="sm">
-                  <Link to="/diagnosis-history">Diagnosis history</Link>
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-      </section>
-
-      {/* Yield Estimate — honest state; no fabricated number */}
-      <section className="space-y-3">
-        <SectionHeader title="Yield Estimate" subtitle="Prediction range and confidence" />
-        <Card>
-          <CardContent className="flex flex-col gap-3 py-5 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-3">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
-                <TrendingUp className="h-5 w-5" aria-hidden="true" />
-              </span>
-              <div>
-                <p className="text-sm font-semibold text-foreground">
-                  Yield estimate is not available yet.
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  Yield prediction needs crop, weather, and growth history. Collect more farm
-                  data to unlock an estimate.
-                </p>
-              </div>
-            </div>
-            <Button asChild variant="outline" size="sm" className="shrink-0">
-              <Link to="/yield">View Yield</Link>
-            </Button>
-          </CardContent>
-        </Card>
-      </section>
+          </section>
+        </div>
+      </div>
 
       {/* Recent Activity — real records only */}
       <section className="space-y-3">

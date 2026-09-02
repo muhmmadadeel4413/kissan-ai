@@ -1,3 +1,4 @@
+import * as React from "react";
 import {
   Bug,
   CloudRain,
@@ -172,6 +173,8 @@ export default function RisksPage() {
     retry,
   } = useFarmRisks();
 
+  const [filter, setFilter] = React.useState<"all" | "high" | "medium" | "low">("all");
+
   const high = risks.filter((r) => r.level === "high");
   const medium = risks.filter((r) => r.level === "medium");
   const low = risks.filter((r) => r.level === "low");
@@ -237,6 +240,38 @@ export default function RisksPage() {
             </div>
           ) : null}
 
+          {/* Level filter toggle */}
+          {risks.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {(["all", "high", "medium", "low"] as const).map((level) => {
+                const count =
+                  level === "all" ? risks.length
+                  : level === "high" ? high.length
+                  : level === "medium" ? medium.length
+                  : low.length;
+                const active = filter === level;
+                return (
+                  <button
+                    key={level}
+                    type="button"
+                    onClick={() => setFilter(level)}
+                    className={cn(
+                      "rounded-full border px-4 py-1.5 text-xs font-semibold transition-colors cursor-pointer",
+                      active
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border bg-card text-foreground hover:bg-muted"
+                    )}
+                  >
+                    {level === "all" ? "All" : level.charAt(0).toUpperCase() + level.slice(1)}{" "}
+                    <span className={cn("ml-1", active ? "text-primary-foreground/70" : "text-muted-foreground")}>
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
+
           {/* Empty state — no meaningful risks detected */}
           {risks.length === 0 ? (
             <EmptyState
@@ -249,7 +284,7 @@ export default function RisksPage() {
           ) : (
             <>
               {/* High */}
-              {high.length > 0 ? (
+              {high.length > 0 && (filter === "all" || filter === "high") ? (
                 <section className="space-y-3">
                   <SectionHeader title="High risks" subtitle="Take action soon" />
                   <div className="space-y-3">
@@ -261,7 +296,7 @@ export default function RisksPage() {
               ) : null}
 
               {/* Medium */}
-              {medium.length > 0 ? (
+              {medium.length > 0 && (filter === "all" || filter === "medium") ? (
                 <section className="space-y-3">
                   <SectionHeader title="Medium risks" subtitle="Monitor closely" />
                   <div className="space-y-3">
@@ -273,7 +308,7 @@ export default function RisksPage() {
               ) : null}
 
               {/* Low */}
-              {low.length > 0 ? (
+              {low.length > 0 && (filter === "all" || filter === "low") ? (
                 <section className="space-y-3">
                   <SectionHeader title="Low risks" subtitle="Worth a look" />
                   <div className="space-y-3">
