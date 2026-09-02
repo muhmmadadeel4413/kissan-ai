@@ -22,26 +22,24 @@ export function LandingHero() {
   return (
     <section
       id="home"
-      className="relative overflow-hidden bg-leaf-grid pt-24 sm:pt-28"
+      className="relative overflow-hidden bg-hero-wash pt-24 sm:pt-28"
     >
-      {/* Layered atmosphere: soft radial depth over the leaf-grid texture */}
+      {/* Layered atmosphere: soft radial depth over the premium wash */}
       <div
-        className="pointer-events-none absolute inset-0"
-        style={{
-          background:
-            "radial-gradient(60% 50% at 50% 0%, color-mix(in oklch, var(--color-primary) 14%, transparent), transparent)",
-        }}
+        className="pointer-events-none absolute inset-0 bg-leaf-grid opacity-70"
         aria-hidden="true"
       />
       <div className="relative mx-auto max-w-6xl px-4 pb-16 pt-16 sm:px-6 sm:pt-20">
         <div className="mx-auto max-w-3xl text-center">
-          <p className="mb-4 inline-flex items-center gap-2 rounded-full bg-primary-soft px-4 py-1.5 text-sm font-medium text-primary">
+          <p className="mb-4 inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary-soft px-4 py-1.5 text-sm font-medium text-primary shadow-soft">
             <Sprout className="h-4 w-4" aria-hidden="true" />
             {t("hero.badge")}
           </p>
-          <h1 className="text-4xl font-extrabold leading-tight tracking-tight text-foreground sm:text-5xl">
+          <h1 className="font-heading text-4xl font-extrabold leading-tight tracking-tight text-foreground sm:text-5xl">
             {t("hero.titleA")}{" "}
-            <span className="text-primary">{t("hero.titleB")}</span>
+            <span className="bg-gradient-to-r from-primary to-[#1f4a2e] bg-clip-text text-transparent">
+              {t("hero.titleB")}
+            </span>
           </h1>
           <p className="mx-auto mt-4 max-w-xl text-base text-muted-foreground sm:text-lg">
             {t("hero.subtitle")}
@@ -69,7 +67,7 @@ export function LandingHero() {
 
           <div className="mt-12 grid gap-4 text-left sm:grid-cols-3">
             {HIGHLIGHTS.map((item) => (
-              <Card key={item.title} className="p-5">
+              <Card key={item.title} className="p-5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lift">
                 <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-soft text-primary">
                   <item.icon className="h-5 w-5" aria-hidden="true" />
                 </span>

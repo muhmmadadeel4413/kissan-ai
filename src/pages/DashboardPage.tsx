@@ -25,7 +25,8 @@ import {
 import { Button } from "../components/ui/button";
 import { Card, CardContent } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
-import { PageHeader, SectionHeader } from "../components/layout/page-header";
+import { SectionHeader } from "../components/layout/page-header";
+import { StatCard } from "../components/layout/stat-card";
 import { EmptyState } from "../components/layout/empty-state";
 import { LoadingState } from "../components/layout/loading-state";
 import { ErrorState } from "../components/layout/error-state";
@@ -244,16 +245,88 @@ export default function DashboardPage() {
   ];
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title={`Welcome, ${farm.farmerName.split(" ")[0]}`}
-        subtitle={`${farm.currentCrop} farm · ${farm.location}`}
-        action={
-          <Button asChild variant="outline">
+    <div className="space-y-8">
+      {/* Premium welcome banner */}
+      <section className="relative overflow-hidden rounded-3xl border border-border bg-gradient-to-br from-primary to-[#1f4a2e] p-6 text-primary-foreground shadow-lift sm:p-8">
+        <div className="pointer-events-none absolute inset-0 bg-leaf-grid opacity-20" aria-hidden="true" />
+        <div className="relative flex flex-wrap items-center justify-between gap-4">
+          <div className="max-w-2xl">
+            <p className="text-sm font-medium text-primary-foreground/80">
+              {farm.currentCrop} · {farm.location}
+            </p>
+            <h1 className="mt-1 font-heading text-2xl font-bold tracking-tight sm:text-3xl">
+              Welcome back, {farm.farmerName.split(" ")[0]}
+            </h1>
+            <p className="mt-2 text-sm leading-relaxed text-primary-foreground/90">
+              Your AI farming decision assistant is ready — here's what's happening
+              on your farm today.
+            </p>
+          </div>
+          <Button
+            asChild
+            variant="secondary"
+            className="bg-white/95 text-primary hover:bg-white shadow-soft"
+          >
             <Link to="/farm-setup">Edit Farm</Link>
           </Button>
-        }
-      />
+        </div>
+      </section>
+
+      {/* KPI stat cards — every value from real farm data */}
+      <section aria-label="Farm summary at a glance">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <StatCard
+            label="Crop age"
+            value={
+              farmContext.growth.cropAgeDays !== null ? (
+                <>
+                  {farmContext.growth.cropAgeDays}
+                  <span className="ml-1 text-sm font-medium text-muted-foreground">days</span>
+                </>
+              ) : (
+                "—"
+              )
+            }
+            hint={farmContext.growth.stageLabel}
+            icon={Sprout}
+            to="/yield"
+          />
+          <StatCard
+            label="Active risk alerts"
+            value={riskAlerts.length}
+            hint={
+              riskCounts.high > 0
+                ? `${riskCounts.high} high priority · ${riskCounts.medium} medium`
+                : riskAlerts.length === 0
+                  ? "No active risks detected"
+                  : `${riskCounts.medium} medium · ${riskCounts.low} low`
+            }
+            icon={ShieldAlert}
+            iconClassName={
+              riskCounts.high > 0
+                ? "bg-danger-soft text-danger"
+                : riskAlerts.length > 0
+                  ? "bg-warning-soft text-warning"
+                  : undefined
+            }
+            to="/risks"
+          />
+          <StatCard
+            label="Latest crop check"
+            value={latest ? latest.diagnosis.split(" ").slice(0, 2).join(" ") : "No check yet"}
+            hint={latest ? `${latest.confidence}% confidence · ${latest.crop}` : "Run the AI Crop Doctor"}
+            icon={ScanLine}
+            to="/crop-doctor"
+          />
+          <StatCard
+            label="Today's actions"
+            value={activity.items.length > 0 ? activity.items.length : "—"}
+            hint="Your decision plan"
+            icon={ListChecks}
+            to="/actions"
+          />
+        </div>
+      </section>
 
       {/* Quick navigation to existing features */}
       <section className="space-y-3" aria-label="Quick access">

@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap');
 @import "tailwindcss";
 @plugin "tailwindcss-animate";
 
@@ -6,34 +7,37 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
-    "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+  --font-heading: "Plus Jakarta Sans", "Inter", ui-sans-serif, system-ui,
+    -apple-system, "Segoe UI", sans-serif;
 
-  /* ---- Agricultural palette: earthy greens, soil/amber accents, warm neutrals ---- */
-  --color-background: #faf8f3;
-  --color-foreground: #1c2b1e;
+  /* ---- Agricultural palette: refined earthy greens, soil/amber accents,
+         warm cream neutrals — premium but not loud ---- */
+  --color-background: #f7f5ef;
+  --color-foreground: #1a261c;
   --color-card: #ffffff;
-  --color-card-foreground: #1c2b1e;
+  --color-card-foreground: #1a261c;
   --color-popover: #ffffff;
-  --color-popover-foreground: #1c2b1e;
+  --color-popover-foreground: #1a261c;
 
-  --color-primary: #3e7c4f;
+  --color-primary: #2f6b3f;
   --color-primary-foreground: #ffffff;
   --color-primary-soft: #e8efe4;
 
   --color-secondary: #e8efe4;
   --color-secondary-foreground: #2c4030;
 
-  --color-accent: #d99a3d;
+  --color-accent: #c98a2b;
   --color-accent-foreground: #3a2a10;
   --color-accent-soft: #f9eeda;
 
-  --color-muted: #efece3;
+  --color-muted: #efede4;
   --color-muted-foreground: #6b6a5e;
 
-  --color-border: #e3dccd;
+  --color-border: #e4ddcc;
   --color-input: #d8d1c2;
-  --color-ring: #3e7c4f;
+  --color-ring: #2f6b3f;
 
   /* Semantic status colors */
   --color-success: #2e7d32;
@@ -54,11 +58,11 @@
   --radius-xl: 1.25rem;
   --radius-2xl: 1.5rem;
 
-  --shadow-soft: 0 1px 3px 0 rgb(28 43 30 / 0.06),
-    0 1px 2px -1px rgb(28 43 30 / 0.06);
-  --shadow-lift: 0 4px 12px -2px rgb(28 43 30 / 0.12),
-    0 2px 6px -2px rgb(28 43 30 / 0.08);
-  --shadow-pop: 0 10px 30px -8px rgb(28 43 30 / 0.25);
+  --shadow-soft: 0 1px 3px 0 rgb(26 38 28 / 0.06),
+    0 1px 2px -1px rgb(26 38 28 / 0.06);
+  --shadow-lift: 0 4px 12px -2px rgb(26 38 28 / 0.12),
+    0 2px 6px -2px rgb(26 38 28 / 0.08);
+  --shadow-pop: 0 10px 30px -8px rgb(26 38 28 / 0.25);
 
   --animate-fade-in: fade-in 0.2s ease-out;
   --animate-slide-in: slide-in 0.2s ease-out;
@@ -122,11 +126,20 @@
     text-rendering: optimizeLegibility;
   }
 
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-heading);
+  }
+
   /* Urdu (RTL) mode: swap the whole font stack to Unicode Urdu fonts.
      Nastaliq for display/body plus a clean sans fallback. English glyphs
      keep the original stack because it is restored for LTR documents. */
   html[dir="rtl"] {
     --font-sans: "Noto Nastaliq Urdu", "Noto Sans Urdu", ui-sans-serif,
+      system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-heading: "Noto Nastaliq Urdu", "Noto Sans Urdu", ui-sans-serif,
       system-ui, -apple-system, "Segoe UI", sans-serif;
   }
 
@@ -198,9 +211,24 @@
   /* Subtle leaf-grid texture used sparingly on hero/section backgrounds */
   .bg-leaf-grid {
     background-image: radial-gradient(
-      rgb(62 124 79 / 0.08) 1px,
+      rgb(47 107 63 / 0.08) 1px,
       transparent 1px
     );
     background-size: 22px 22px;
+  }
+
+  /* Soft top gradient wash for premium hero/section headers */
+  .bg-hero-wash {
+    background:
+      radial-gradient(
+        60% 80% at 20% 0%,
+        rgb(47 107 63 / 0.12),
+        transparent 60%
+      ),
+      radial-gradient(
+        50% 70% at 85% 10%,
+        rgb(201 138 43 / 0.08),
+        transparent 55%
+      );
   }
 }

@@ -35,6 +35,8 @@ const en: Dict = {
   "nav.closeMenu": "Close menu",
   "nav.main": "Main",
   "nav.primary": "Primary",
+  "nav.aiTools": "AI Tools",
+  "nav.manage": "Manage",
   "nav.bottom": "Bottom",
   "nav.more": "More",
 
@@ -526,6 +528,8 @@ const ur: Dict = {
   "nav.closeMenu": "مینو بند کریں",
   "nav.main": "مینو",
   "nav.primary": "بنیادی",
+  "nav.aiTools": "AI ٹولز",
+  "nav.manage": "انتظام",
   "nav.bottom": "نیچے",
   "nav.more": "مزید",
 

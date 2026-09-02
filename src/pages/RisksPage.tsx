@@ -25,9 +25,9 @@ import { cn } from "../lib/utils";
 
 export function levelBadge(level: "low" | "medium" | "high") {
   const map = {
-    low: { emoji: "🟢", variant: "success" as const, label: "LOW" },
-    medium: { emoji: "🟡", variant: "warning" as const, label: "MEDIUM" },
-    high: { emoji: "🔴", variant: "danger" as const, label: "HIGH" },
+    low: { variant: "success" as const, label: "LOW", dot: "bg-success" },
+    medium: { variant: "warning" as const, label: "MEDIUM", dot: "bg-warning" },
+    high: { variant: "danger" as const, label: "HIGH", dot: "bg-danger" },
   };
   return map[level];
 }
@@ -105,7 +105,7 @@ function RiskCard({ risk }: { risk: RiskAlert }) {
           </div>
         </div>
         <Badge variant={badge.variant}>
-          <span aria-hidden="true">{badge.emoji}</span>
+          <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", badge.dot)} aria-hidden="true" />
           <span className="ml-1">{badge.label}</span>
         </Badge>
       </CardHeader>
@@ -310,7 +310,7 @@ function StatusPill({
     <div className="flex items-center gap-2 rounded-xl border border-border bg-muted/40 px-3 py-2.5">
       <span className={cn("h-2.5 w-2.5 shrink-0 rounded-full", dot)} aria-hidden="true" />
       <div className="min-w-0">
-        <p className="text-lg font-bold leading-none text-foreground">{count}</p>
+        <p className="font-heading text-lg font-bold leading-none text-foreground">{count}</p>
         <p className="text-xs text-muted-foreground">{label}</p>
       </div>
     </div>

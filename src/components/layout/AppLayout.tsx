@@ -33,14 +33,27 @@ const FARM_DEPENDENT_PATHS = new Set([
   "/farm-profile",
 ]);
 
+/** Primary AI tools shown first in the sidebar (in order). */
+const TOOL_NAV_PATHS = new Set([
+  "/dashboard",
+  "/crop-doctor",
+  "/crop-recommendation",
+  "/assistant",
+  "/voice",
+  "/weather",
+  "/risks",
+  "/yield",
+  "/actions",
+]);
+
 function Brand() {
   const { t } = useI18n();
   return (
-    <Link to="/" className="flex items-center gap-2.5 px-1 cursor-pointer">
-      <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+    <Link to="/" className="flex items-center gap-2.5 px-1 cursor-pointer" aria-label={t("brand.name")}>
+      <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-[#1f4a2e] text-primary-foreground shadow-soft">
         <Sprout className="h-5 w-5" aria-hidden="true" />
       </span>
-      <span className="text-lg font-bold tracking-tight text-foreground">
+      <span className="font-heading text-lg font-bold tracking-tight text-foreground">
         {t("brand.name")}
       </span>
     </Link>
@@ -48,9 +61,22 @@ function Brand() {
 }
 
 function DrawerContent({ onNavigate }: { onNavigate: () => void }) {
+  const { t } = useI18n();
+  const tools = primaryNav.filter((i) => TOOL_NAV_PATHS.has(i.to));
+  const manage = primaryNav.filter((i) => !TOOL_NAV_PATHS.has(i.to));
   return (
     <div className="flex h-full flex-col gap-1">
-      {primaryNav.map((item) => (
+      <p className="px-3 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+        {t("nav.aiTools")}
+      </p>
+      {tools.map((item) => (
+        <NavLinkItem key={item.to} item={item} onNavigate={onNavigate} />
+      ))}
+      <div className="my-3 h-px bg-border" />
+      <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+        {t("nav.manage")}
+      </p>
+      {manage.map((item) => (
         <NavLinkItem key={item.to} item={item} onNavigate={onNavigate} />
       ))}
       <div className="my-3 h-px bg-border" />
@@ -124,22 +150,45 @@ export function AppLayout() {
 
   const closeDrawer = () => setDrawerOpen(false);
 
+  const tools = primaryNav.filter((i) => TOOL_NAV_PATHS.has(i.to));
+  const manage = primaryNav.filter((i) => !TOOL_NAV_PATHS.has(i.to));
+
   return (
     <div className="min-h-screen bg-background">
       {/* Desktop sidebar */}
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-border bg-card px-4 py-6 lg:flex">
-        <div className="mb-8">
+        <div className="mb-7 flex items-center justify-between px-1">
           <Brand />
         </div>
         <nav className="flex-1 space-y-1 overflow-y-auto" aria-label={t("nav.primary")}>
-          {primaryNav.map((item) => (
+          <p className="px-3 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            {t("nav.aiTools")}
+          </p>
+          {tools.map((item) => (
+            <NavLinkItem key={item.to} item={item} />
+          ))}
+          <div className="my-3 h-px bg-border" />
+          <p className="px-3 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            {t("nav.manage")}
+          </p>
+          {manage.map((item) => (
             <NavLinkItem key={item.to} item={item} />
           ))}
         </nav>
         <div className="mt-6 space-y-3 border-t border-border pt-4">
-          <p className="text-xs text-muted-foreground">
-            {farm ? farm.farmerName : t("app.nav.noFarm")}
-          </p>
+          <div className="flex items-center gap-2.5 px-1">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-soft text-sm font-bold text-primary">
+              {farm ? farm.farmerName.trim().charAt(0).toUpperCase() : "?"}
+            </span>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-foreground">
+                {farm ? farm.farmerName : t("app.nav.noFarm")}
+              </p>
+              {farm ? (
+                <p className="truncate text-xs text-muted-foreground">{farm.location}</p>
+              ) : null}
+            </div>
+          </div>
           <div className="flex flex-col gap-2">
             <LanguageToggle />
             <ThemeToggle />
@@ -191,7 +240,7 @@ export function AppLayout() {
 
       {/* Main content */}
       <main className="px-4 pb-24 pt-6 sm:px-6 lg:ml-64 lg:px-10 lg:pb-10 lg:pt-8">
-        <div className="mx-auto w-full max-w-5xl">
+        <div className="mx-auto w-full max-w-6xl">
           <Outlet />
         </div>
       </main>

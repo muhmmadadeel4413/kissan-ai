@@ -74,7 +74,7 @@ function StatTile({
         {icon}
         <span className="text-xs font-medium">{label}</span>
       </div>
-      <p className="mt-1.5 text-2xl font-bold text-foreground">
+      <p className="mt-1.5 font-heading text-2xl font-bold text-foreground">
         {value !== undefined ? (
           <>
             {value}

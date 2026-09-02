@@ -24,50 +24,54 @@ export function AuthLayout({
   const { t } = usePreferences();
 
   return (
-    <div className="flex min-h-dvh flex-col items-center justify-center bg-background px-4 py-10 sm:px-6">
-      {/* Brand mark */}
-      <Link
-        to="/"
-        className="mb-8 flex items-center gap-2.5 cursor-pointer"
-        aria-label={t("brand.name")}
-      >
-        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-soft">
-          <Sprout className="h-6 w-6" aria-hidden="true" />
-        </span>
-        <span className="text-xl font-bold tracking-tight text-foreground">
-          {t("brand.name")}
-        </span>
-      </Link>
+    <div className="relative flex min-h-dvh flex-col items-center justify-center overflow-hidden bg-background px-4 py-10 sm:px-6">
+      {/* Premium background wash */}
+      <div className="pointer-events-none absolute inset-0 bg-hero-wash" aria-hidden="true" />
+      <div className="relative flex w-full max-w-md flex-col items-center">
+        {/* Brand mark */}
+        <Link
+          to="/"
+          className="mb-8 flex items-center gap-2.5 cursor-pointer"
+          aria-label={t("brand.name")}
+        >
+          <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-[#1f4a2e] text-primary-foreground shadow-lift">
+            <Sprout className="h-6 w-6" aria-hidden="true" />
+          </span>
+          <span className="font-heading text-xl font-bold tracking-tight text-foreground">
+            {t("brand.name")}
+          </span>
+        </Link>
 
-      <div className="w-full max-w-md">
-        <div className="rounded-2xl border border-border bg-card p-6 shadow-lift sm:p-8">
-          <header className="mb-6 space-y-1.5">
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">
-              {title}
-            </h1>
-            {subtitle ? (
-              <p className="text-sm leading-relaxed text-muted-foreground">
-                {subtitle}
-              </p>
-            ) : null}
-          </header>
+        <div className="w-full">
+          <div className="rounded-2xl border border-border bg-card p-6 shadow-lift sm:p-8">
+            <header className="mb-6 space-y-1.5">
+              <h1 className="font-heading text-2xl font-bold tracking-tight text-foreground">
+                {title}
+              </h1>
+              {subtitle ? (
+                <p className="text-sm leading-relaxed text-muted-foreground">
+                  {subtitle}
+                </p>
+              ) : null}
+            </header>
 
-          {children}
-        </div>
-
-        {footer ? (
-          <div className="mt-6 flex flex-col items-center gap-2 text-center">
-            {footer}
+            {children}
           </div>
-        ) : null}
 
-        <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-          <LanguageToggle />
-          <ThemeToggle />
+          {footer ? (
+            <div className="mt-6 flex flex-col items-center gap-2 text-center">
+              {footer}
+            </div>
+          ) : null}
+
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+            <LanguageToggle />
+            <ThemeToggle />
+          </div>
+          <p className="mt-4 text-center text-xs text-muted-foreground">
+            {t("auth.rememberFor")} · {t("auth.languageNote")}
+          </p>
         </div>
-        <p className="mt-4 text-center text-xs text-muted-foreground">
-          {t("auth.rememberFor")} · {t("auth.languageNote")}
-        </p>
       </div>
     </div>
   );

@@ -30,10 +30,10 @@ export function LandingFooter() {
         <div className="grid gap-8 sm:grid-cols-3">
           <div>
             <div className="flex items-center gap-2.5">
-              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-[#1f4a2e] text-primary-foreground shadow-soft">
                 <Sprout className="h-5 w-5" aria-hidden="true" />
               </span>
-              <span className="text-lg font-bold tracking-tight text-foreground">
+              <span className="font-heading text-lg font-bold tracking-tight text-foreground">
                 {t("brand.name")}
               </span>
             </div>
