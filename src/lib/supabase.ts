@@ -106,8 +106,21 @@ export const supabaseAnonKey: string = (() => {
 
 /**
  * Shared Supabase client.
+ *
+ * We explicitly pin the auth flow type to `implicit` (the JavaScript client
+ * default; PKCE is for SSR). The NativelyAI preview panel runs the app inside
+ * a sandboxed iframe, where PKCE's redirect-with-code exchange is unreliable.
+ * Implicit flow lets sign-in / sign-up sessions be established directly in
+ * that context, which is required for auth to work from the preview panel.
  */
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    flowType: "implicit",
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: true,
+  },
+});
 
 /**
  * Non-secret connection details, useful for diagnostics. Never put the key

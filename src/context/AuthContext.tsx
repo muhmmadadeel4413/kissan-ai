@@ -112,7 +112,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
-          options: { emailRedirectTo: `${window.location.origin}/login` },
+          // Redirect back to the app origin (required for NativelyAI preview
+          // environments so the post-confirmation redirect lands inside the
+          // preview panel). Supabase's redirect allowlist already includes the
+          // ephemeral preview origins.
+          options: { emailRedirectTo: window.location.origin },
         });
         if (error) {
           // A network error usually means the browser never got the response —
