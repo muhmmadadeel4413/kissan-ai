@@ -37,7 +37,7 @@ export function LandingHero() {
           </p>
           <h1 className="font-heading text-4xl font-extrabold leading-tight tracking-tight text-foreground sm:text-5xl">
             {t("hero.titleA")}{" "}
-            <span className="bg-gradient-to-r from-primary to-[#1f4a2e] bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-primary to-[#35451f] bg-clip-text text-transparent">
               {t("hero.titleB")}
             </span>
           </h1>

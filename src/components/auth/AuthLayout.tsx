@@ -34,7 +34,7 @@ export function AuthLayout({
           className="mb-8 flex items-center gap-2.5 cursor-pointer"
           aria-label={t("brand.name")}
         >
-          <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-[#1f4a2e] text-primary-foreground shadow-lift">
+          <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-[#35451f] text-primary-foreground shadow-lift">
             <Sprout className="h-6 w-6" aria-hidden="true" />
           </span>
           <span className="font-heading text-xl font-bold tracking-tight text-foreground">

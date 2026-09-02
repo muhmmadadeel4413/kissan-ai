@@ -18,14 +18,14 @@ export function LanguageToggle({ className }: { className?: string }) {
     <div className={cn("flex items-center gap-2", className)}>
       <span
         id="lang-label"
-        className="shrink-0 text-xs font-medium uppercase tracking-wide text-muted-foreground"
+        className="shrink-0 text-xs font-medium uppercase tracking-wide text-sidebar-muted"
       >
         {t("common.language")}
       </span>
       <div
         role="radiogroup"
         aria-labelledby="lang-label"
-        className="flex items-center rounded-xl border border-border bg-background p-0.5"
+        className="flex items-center rounded-xl border border-sidebar-border bg-sidebar-accent p-0.5"
       >
         {LANGUAGE_OPTIONS.map((opt) => {
           const selected = language === opt.value;
@@ -40,7 +40,7 @@ export function LanguageToggle({ className }: { className?: string }) {
                 "flex items-center rounded-lg px-3 py-1.5 text-sm font-medium transition-colors duration-150 cursor-pointer",
                 selected
                   ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:text-foreground"
+                  : "text-sidebar-muted hover:text-sidebar-foreground"
               )}
             >
               {opt.label}
@@ -64,7 +64,7 @@ export function ThemeToggle({ className }: { className?: string }) {
       aria-label={dark ? t("common.light") : t("common.dark")}
       title={dark ? t("common.light") : t("common.dark")}
       className={cn(
-        "flex h-10 items-center gap-2 rounded-xl border border-border bg-background px-3 text-sm font-medium text-foreground transition-colors duration-150 hover:bg-muted cursor-pointer",
+        "flex h-10 items-center gap-2 rounded-xl border border-sidebar-border bg-sidebar-accent px-3 text-sm font-medium text-sidebar-foreground transition-colors duration-150 hover:bg-[#334530] cursor-pointer",
         className
       )}
     >

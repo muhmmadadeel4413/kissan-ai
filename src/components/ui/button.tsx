@@ -15,7 +15,7 @@ const buttonVariants = cva(
         outline:
           "border border-input bg-card text-foreground hover:bg-muted",
         ghost: "text-foreground hover:bg-muted",
-        accent: "bg-accent text-accent-foreground shadow-soft hover:bg-[#b87a20]",
+        accent: "bg-accent text-accent-foreground shadow-soft hover:bg-[#6f8a2c]",
         danger: "bg-danger text-danger-foreground hover:bg-[#a83327]",
       },
       size: {

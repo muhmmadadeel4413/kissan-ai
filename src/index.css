@@ -12,32 +12,40 @@
   --font-heading: "Plus Jakarta Sans", "Inter", ui-sans-serif, system-ui,
     -apple-system, "Segoe UI", sans-serif;
 
-  /* ---- Agricultural palette: refined earthy greens, soil/amber accents,
-         warm cream neutrals — premium but not loud ---- */
-  --color-background: #f7f5ef;
-  --color-foreground: #1a261c;
+  /* ---- Agricultural palette: olive/sage greens, lime accent, cool mint
+         canvas — realigned to the Vertical Harvest dashboard reference ---- */
+  --color-background: #f1f6f2;
+  --color-foreground: #1c2519;
   --color-card: #ffffff;
-  --color-card-foreground: #1a261c;
+  --color-card-foreground: #1c2519;
   --color-popover: #ffffff;
-  --color-popover-foreground: #1a261c;
+  --color-popover-foreground: #1c2519;
 
-  --color-primary: #2f6b3f;
+  --color-primary: #4c6b3d;
   --color-primary-foreground: #ffffff;
-  --color-primary-soft: #e8efe4;
+  --color-primary-soft: #e7efdc;
 
-  --color-secondary: #e8efe4;
-  --color-secondary-foreground: #2c4030;
+  --color-secondary: #e9efe0;
+  --color-secondary-foreground: #34422c;
 
-  --color-accent: #c98a2b;
-  --color-accent-foreground: #3a2a10;
-  --color-accent-soft: #f9eeda;
+  --color-accent: #7f9b36;
+  --color-accent-foreground: #232d0a;
+  --color-accent-soft: #eef4d6;
 
-  --color-muted: #efede4;
-  --color-muted-foreground: #6b6a5e;
+  --color-muted: #edf1e9;
+  --color-muted-foreground: #68745f;
 
-  --color-border: #e4ddcc;
-  --color-input: #d8d1c2;
-  --color-ring: #2f6b3f;
+  --color-border: #dce4d2;
+  --color-input: #cfd8c4;
+  --color-ring: #4c6b3d;
+
+  /* Dark-green app shell (sidebar / drawer) */
+  --color-sidebar: #22301f;
+  --color-sidebar-foreground: #e5ecdc;
+  --color-sidebar-muted: #a3b290;
+  --color-sidebar-accent: #2c3d28;
+  --color-sidebar-accent-foreground: #eef4e5;
+  --color-sidebar-border: rgb(255 255 255 / 0.08);
 
   /* Semantic status colors */
   --color-success: #2e7d32;
@@ -145,30 +153,37 @@
 
   /* ---- Deliberate dark palette (not an inversion of the light theme) ---- */
   .dark {
-    --color-background: #0f1410;
-    --color-foreground: #e8efe9;
-    --color-card: #16201a;
-    --color-card-foreground: #e8efe9;
-    --color-popover: #1a251d;
-    --color-popover-foreground: #e8efe9;
+    --color-background: #11160f;
+    --color-foreground: #e6ecde;
+    --color-card: #161d13;
+    --color-card-foreground: #e6ecde;
+    --color-popover: #1a2216;
+    --color-popover-foreground: #e6ecde;
 
-    --color-primary: #6fae82;
-    --color-primary-foreground: #0d1710;
-    --color-primary-soft: #1d2c22;
+    --color-primary: #8fb06a;
+    --color-primary-foreground: #10150b;
+    --color-primary-soft: #23311c;
 
-    --color-secondary: #1a251d;
-    --color-secondary-foreground: #cfe0d2;
+    --color-secondary: #1b2417;
+    --color-secondary-foreground: #ccd8bf;
 
-    --color-accent: #e0a94e;
-    --color-accent-foreground: #241a08;
-    --color-accent-soft: #2e2511;
+    --color-accent: #b4cd56;
+    --color-accent-foreground: #161d0a;
+    --color-accent-soft: #2b3413;
 
-    --color-muted: #1b241d;
-    --color-muted-foreground: #9fb0a2;
+    --color-muted: #1c251a;
+    --color-muted-foreground: #98a98d;
 
-    --color-border: #2a372c;
-    --color-input: #2e3c31;
-    --color-ring: #6fae82;
+    --color-border: #2b3526;
+    --color-input: #31402f;
+    --color-ring: #8fb06a;
+
+    --color-sidebar: #151d12;
+    --color-sidebar-foreground: #e0e9d8;
+    --color-sidebar-muted: #93a487;
+    --color-sidebar-accent: #212c1b;
+    --color-sidebar-accent-foreground: #eef4e5;
+    --color-sidebar-border: rgb(255 255 255 / 0.07);
 
     --color-success: #4e9c58;
     --color-success-foreground: #f2fbf3;
@@ -211,7 +226,7 @@
   /* Subtle leaf-grid texture used sparingly on hero/section backgrounds */
   .bg-leaf-grid {
     background-image: radial-gradient(
-      rgb(47 107 63 / 0.08) 1px,
+      rgb(76 107 61 / 0.08) 1px,
       transparent 1px
     );
     background-size: 22px 22px;
@@ -222,12 +237,12 @@
     background:
       radial-gradient(
         60% 80% at 20% 0%,
-        rgb(47 107 63 / 0.12),
+        rgb(76 107 61 / 0.12),
         transparent 60%
       ),
       radial-gradient(
         50% 70% at 85% 10%,
-        rgb(201 138 43 / 0.08),
+        rgb(127 155 54 / 0.1),
         transparent 55%
       );
   }

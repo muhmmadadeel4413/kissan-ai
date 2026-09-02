@@ -655,12 +655,12 @@ export default function VoicePage() {
                 : "Voice not available for this language"
             }
             className={cn(
-              "relative flex h-24 w-24 items-center justify-center rounded-full text-primary-foreground shadow-pop transition-transform active:scale-95 disabled:opacity-60 cursor-pointer",
+              "relative flex h-24 w-24 items-center justify-center rounded-full shadow-pop transition-transform active:scale-95 disabled:opacity-60 cursor-pointer",
               voiceState === "listening"
-                ? "bg-danger hover:bg-[#a83327]"
+                ? "bg-danger text-white hover:bg-[#a83327]"
                 : voiceState === "speaking"
-                ? "bg-accent hover:bg-[#cd8c2d]"
-                : "bg-primary hover:bg-[#356b44]"
+                ? "bg-accent text-accent-foreground hover:bg-[#6f8a2c]"
+                : "bg-primary text-primary-foreground hover:bg-[#3f5a31]"
             )}
           >
             {voiceState === "listening" ? (

@@ -46,14 +46,19 @@ const TOOL_NAV_PATHS = new Set([
   "/actions",
 ]);
 
-function Brand() {
+function Brand({ tone = "sidebar" }: { tone?: "sidebar" | "light" }) {
   const { t } = useI18n();
   return (
     <Link to="/" className="flex items-center gap-2.5 px-1 cursor-pointer" aria-label={t("brand.name")}>
-      <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-[#1f4a2e] text-primary-foreground shadow-soft">
+      <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-[#35451f] text-primary-foreground shadow-soft">
         <Sprout className="h-5 w-5" aria-hidden="true" />
       </span>
-      <span className="font-heading text-lg font-bold tracking-tight text-foreground">
+      <span
+        className={cn(
+          "font-heading text-lg font-bold tracking-tight",
+          tone === "sidebar" ? "text-sidebar-foreground" : "text-foreground"
+        )}
+      >
         {t("brand.name")}
       </span>
     </Link>
@@ -66,25 +71,25 @@ function DrawerContent({ onNavigate }: { onNavigate: () => void }) {
   const manage = primaryNav.filter((i) => !TOOL_NAV_PATHS.has(i.to));
   return (
     <div className="flex h-full flex-col gap-1">
-      <p className="px-3 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+      <p className="px-3 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wider text-sidebar-muted">
         {t("nav.aiTools")}
       </p>
       {tools.map((item) => (
         <NavLinkItem key={item.to} item={item} onNavigate={onNavigate} />
       ))}
-      <div className="my-3 h-px bg-border" />
-      <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+      <div className="my-3 h-px bg-sidebar-border" />
+      <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-sidebar-muted">
         {t("nav.manage")}
       </p>
       {manage.map((item) => (
         <NavLinkItem key={item.to} item={item} onNavigate={onNavigate} />
       ))}
-      <div className="my-3 h-px bg-border" />
+      <div className="my-3 h-px bg-sidebar-border" />
       <div className="flex flex-col gap-2 px-1 py-1">
         <LanguageToggle />
         <ThemeToggle />
       </div>
-      <div className="my-3 h-px bg-border" />
+      <div className="my-3 h-px bg-sidebar-border" />
       <div className="px-1 py-1">
         <LogoutButton onLogout={onNavigate} />
       </div>
@@ -156,36 +161,36 @@ export function AppLayout() {
   return (
     <div className="min-h-screen bg-background">
       {/* Desktop sidebar */}
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-border bg-card px-4 py-6 lg:flex">
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-sidebar-border bg-sidebar px-4 py-6 lg:flex">
         <div className="mb-7 flex items-center justify-between px-1">
           <Brand />
         </div>
         <nav className="flex-1 space-y-1 overflow-y-auto" aria-label={t("nav.primary")}>
-          <p className="px-3 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+          <p className="px-3 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wider text-sidebar-muted">
             {t("nav.aiTools")}
           </p>
           {tools.map((item) => (
             <NavLinkItem key={item.to} item={item} />
           ))}
-          <div className="my-3 h-px bg-border" />
-          <p className="px-3 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+          <div className="my-3 h-px bg-sidebar-border" />
+          <p className="px-3 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wider text-sidebar-muted">
             {t("nav.manage")}
           </p>
           {manage.map((item) => (
             <NavLinkItem key={item.to} item={item} />
           ))}
         </nav>
-        <div className="mt-6 space-y-3 border-t border-border pt-4">
+        <div className="mt-6 space-y-3 border-t border-sidebar-border pt-4">
           <div className="flex items-center gap-2.5 px-1">
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-soft text-sm font-bold text-primary">
               {farm ? farm.farmerName.trim().charAt(0).toUpperCase() : "?"}
             </span>
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-foreground">
+              <p className="truncate text-sm font-semibold text-sidebar-foreground">
                 {farm ? farm.farmerName : t("app.nav.noFarm")}
               </p>
               {farm ? (
-                <p className="truncate text-xs text-muted-foreground">{farm.location}</p>
+                <p className="truncate text-xs text-sidebar-muted">{farm.location}</p>
               ) : null}
             </div>
           </div>
@@ -199,7 +204,7 @@ export function AppLayout() {
 
       {/* Mobile header */}
       <header className="sticky top-0 z-30 flex items-center justify-between border-b border-border bg-background/95 px-4 py-3 backdrop-blur lg:hidden">
-        <Brand />
+        <Brand tone="light" />
         <button
           type="button"
           onClick={() => setDrawerOpen(true)}
@@ -219,13 +224,13 @@ export function AppLayout() {
             onClick={closeDrawer}
             aria-label={t("nav.closeMenu")}
           />
-          <div className="absolute inset-y-0 left-0 flex w-72 max-w-[85vw] flex-col bg-card p-4 shadow-pop animate-slide-in rtl:left-auto rtl:right-0">
+          <div className="absolute inset-y-0 left-0 flex w-72 max-w-[85vw] flex-col bg-sidebar p-4 shadow-pop animate-slide-in rtl:left-auto rtl:right-0">
             <div className="mb-6 flex items-center justify-between">
               <Brand />
               <button
                 type="button"
                 onClick={closeDrawer}
-                className="flex h-11 w-11 items-center justify-center rounded-xl text-foreground hover:bg-muted transition-colors cursor-pointer"
+                className="flex h-11 w-11 items-center justify-center rounded-xl text-sidebar-foreground hover:bg-sidebar-accent transition-colors cursor-pointer"
                 aria-label={t("nav.closeMenu")}
               >
                 <X className="h-6 w-6" aria-hidden="true" />

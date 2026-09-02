@@ -21,7 +21,7 @@ export function NavLinkItem({
           "group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-150 cursor-pointer",
           isActive
             ? "bg-primary-soft text-primary shadow-soft"
-            : "text-muted-foreground hover:bg-muted hover:text-foreground"
+            : "text-sidebar-muted hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
         )
       }
     >
@@ -32,7 +32,7 @@ export function NavLinkItem({
               "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors duration-150",
               isActive
                 ? "bg-primary text-primary-foreground"
-                : "bg-transparent group-hover:bg-card"
+                : "bg-transparent group-hover:bg-sidebar-accent"
             )}
           >
             <item.icon className="h-4 w-4" aria-hidden="true" />

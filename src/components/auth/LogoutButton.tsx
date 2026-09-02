@@ -40,7 +40,7 @@ export function LogoutButton({
       onClick={handleLogout}
       disabled={busy}
       className={cn(
-        "flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-background px-3 py-2.5 text-sm font-medium text-destructive transition-colors hover:bg-muted disabled:opacity-60 cursor-pointer",
+        "flex w-full items-center justify-center gap-2 rounded-xl border border-sidebar-border bg-sidebar-accent px-3 py-2.5 text-sm font-medium text-red-300 transition-colors hover:bg-[#3a4a33] disabled:opacity-60 cursor-pointer",
         className
       )}
     >
