@@ -115,6 +115,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           options: { emailRedirectTo: `${window.location.origin}/login` },
         });
         if (error) {
+          // A network error usually means the browser never got the response —
+          // but the request may well have reached Supabase and created the
+          // account anyway (e.g. a dropped mobile connection). Try to sign in
+          // to recover instead of leaving the user at a dead-end error.
+          if (isNetworkError(error)) {
+            const login = await supabase.auth.signInWithPassword({ email, password });
+            if (!login.error) {
+              // Account was actually created — the session is now set and the
+              // app continues as a normal sign-in.
+              return { needsEmailConfirmation: false };
+            }
+          }
           throw asFriendlyError(error, "We couldn't create your account. Please try again.");
         }
         // If email confirmation is enabled, Supabase returns no session; if it
