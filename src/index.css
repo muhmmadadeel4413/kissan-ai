@@ -1,0 +1,206 @@
+@import "tailwindcss";
+@plugin "tailwindcss-animate";
+
+/* Class-based dark mode: `.dark` on <html> switches the whole palette.
+   The dark colors are deliberately designed (below), not inverted. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+
+  /* ---- Agricultural palette: earthy greens, soil/amber accents, warm neutrals ---- */
+  --color-background: #faf8f3;
+  --color-foreground: #1c2b1e;
+  --color-card: #ffffff;
+  --color-card-foreground: #1c2b1e;
+  --color-popover: #ffffff;
+  --color-popover-foreground: #1c2b1e;
+
+  --color-primary: #3e7c4f;
+  --color-primary-foreground: #ffffff;
+  --color-primary-soft: #e8efe4;
+
+  --color-secondary: #e8efe4;
+  --color-secondary-foreground: #2c4030;
+
+  --color-accent: #d99a3d;
+  --color-accent-foreground: #3a2a10;
+  --color-accent-soft: #f9eeda;
+
+  --color-muted: #efece3;
+  --color-muted-foreground: #6b6a5e;
+
+  --color-border: #e3dccd;
+  --color-input: #d8d1c2;
+  --color-ring: #3e7c4f;
+
+  /* Semantic status colors */
+  --color-success: #2e7d32;
+  --color-success-foreground: #ffffff;
+  --color-success-soft: #e6f2e7;
+
+  --color-warning: #b97a1a;
+  --color-warning-foreground: #ffffff;
+  --color-warning-soft: #fbf0dc;
+
+  --color-danger: #c0392b;
+  --color-danger-foreground: #ffffff;
+  --color-danger-soft: #fbeae7;
+
+  --radius-sm: 0.375rem;
+  --radius-md: 0.625rem;
+  --radius-lg: 0.875rem;
+  --radius-xl: 1.25rem;
+  --radius-2xl: 1.5rem;
+
+  --shadow-soft: 0 1px 3px 0 rgb(28 43 30 / 0.06),
+    0 1px 2px -1px rgb(28 43 30 / 0.06);
+  --shadow-lift: 0 4px 12px -2px rgb(28 43 30 / 0.12),
+    0 2px 6px -2px rgb(28 43 30 / 0.08);
+  --shadow-pop: 0 10px 30px -8px rgb(28 43 30 / 0.25);
+
+  --animate-fade-in: fade-in 0.2s ease-out;
+  --animate-slide-in: slide-in 0.2s ease-out;
+  --animate-accordion-down: accordion-down 0.2s ease-out;
+  --animate-accordion-up: accordion-up 0.2s ease-out;
+
+  @keyframes accordion-down {
+    from {
+      height: 0;
+    }
+    to {
+      height: var(--radix-accordion-content-height);
+    }
+  }
+
+  @keyframes accordion-up {
+    from {
+      height: var(--radix-accordion-content-height);
+    }
+    to {
+      height: 0;
+    }
+  }
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes slide-in {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Urdu (RTL) mode: swap the whole font stack to Unicode Urdu fonts.
+     Nastaliq for display/body plus a clean sans fallback. English glyphs
+     keep the original stack because it is restored for LTR documents. */
+  html[dir="rtl"] {
+    --font-sans: "Noto Nastaliq Urdu", "Noto Sans Urdu", ui-sans-serif,
+      system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+
+  /* ---- Deliberate dark palette (not an inversion of the light theme) ---- */
+  .dark {
+    --color-background: #0f1410;
+    --color-foreground: #e8efe9;
+    --color-card: #16201a;
+    --color-card-foreground: #e8efe9;
+    --color-popover: #1a251d;
+    --color-popover-foreground: #e8efe9;
+
+    --color-primary: #6fae82;
+    --color-primary-foreground: #0d1710;
+    --color-primary-soft: #1d2c22;
+
+    --color-secondary: #1a251d;
+    --color-secondary-foreground: #cfe0d2;
+
+    --color-accent: #e0a94e;
+    --color-accent-foreground: #241a08;
+    --color-accent-soft: #2e2511;
+
+    --color-muted: #1b241d;
+    --color-muted-foreground: #9fb0a2;
+
+    --color-border: #2a372c;
+    --color-input: #2e3c31;
+    --color-ring: #6fae82;
+
+    --color-success: #4e9c58;
+    --color-success-foreground: #f2fbf3;
+    --color-success-soft: #17301d;
+
+    --color-warning: #d99a3d;
+    --color-warning-foreground: #2a1c06;
+    --color-warning-soft: #34260f;
+
+    --color-danger: #d95745;
+    --color-danger-foreground: #fff7f6;
+    --color-danger-soft: #3a1c18;
+
+    --shadow-soft: 0 1px 3px 0 rgb(0 0 0 / 0.35),
+      0 1px 2px -1px rgb(0 0 0 / 0.35);
+    --shadow-lift: 0 4px 12px -2px rgb(0 0 0 / 0.5),
+      0 2px 6px -2px rgb(0 0 0 / 0.4);
+    --shadow-pop: 0 10px 30px -8px rgb(0 0 0 / 0.6);
+  }
+
+  /* Visible focus states for keyboard users */
+  :focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer utilities {
+  /* Subtle leaf-grid texture used sparingly on hero/section backgrounds */
+  .bg-leaf-grid {
+    background-image: radial-gradient(
+      rgb(62 124 79 / 0.08) 1px,
+      transparent 1px
+    );
+    background-size: 22px 22px;
+  }
+}

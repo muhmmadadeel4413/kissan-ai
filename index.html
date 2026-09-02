@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Kissan AI – AI Farming Assistant for Smallholders</title>
+    <!-- Urdu typography: Unicode fonts used when the app runs in RTL/Urdu mode -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@400;500;600;700&family=Noto+Sans+Urdu:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <script>
+      // Apply persisted language (RTL) and theme before first paint to avoid a
+      // flash of the wrong direction or theme. Mirrors PreferencesContext.
+      (function () {
+        try {
+          var root = document.documentElement;
+          var lang = localStorage.getItem("kissanai.language.v1");
+          var theme = localStorage.getItem("kissanai.theme.v1");
+          if (lang === "ur") {
+            root.lang = "ur";
+            root.dir = "rtl";
+          }
+          if (!theme) {
+            theme =
+              window.matchMedia &&
+              window.matchMedia("(prefers-color-scheme: dark)").matches
+                ? "dark"
+                : "light";
+          }
+          if (theme === "dark") root.classList.add("dark");
+          root.style.colorScheme = theme;
+        } catch (e) {
+          /* storage unavailable — defaults apply */
+        }
+      })();
+    </script>
+      <!-- seo:start -->
+    <meta name="description" content="Kissan AI turns crop, weather &amp; risk data into plain, actionable guidance in Urdu, Punjabi &amp; English – diagnose leaf issues, get today&#x27;s tasks &amp; expected yield." />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Kissan AI – AI Farming Assistant for Smallholders" />
+    <meta property="og:description" content="Kissan AI turns crop, weather &amp; risk data into plain, actionable guidance in Urdu, Punjabi &amp; English – diagnose leaf issues, get today&#x27;s tasks &amp; expected yield." />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Kissan AI – AI Farming Assistant for Smallholders" />
+    <meta name="twitter:description" content="Kissan AI turns crop, weather &amp; risk data into plain, actionable guidance in Urdu, Punjabi &amp; English – diagnose leaf issues, get today&#x27;s tasks &amp; expected yield." />
+    <script type="application/ld+json">{"@context": "https://schema.org", "@type": "WebSite", "name": "Kissan AI \u2013 AI Farming Assistant for Smallholders", "description": "Kissan AI turns crop, weather & risk data into plain, actionable guidance in Urdu, Punjabi & English \u2013 diagnose leaf issues, get today's tasks & expected yield."}</script>
+    <!-- seo:end -->
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
