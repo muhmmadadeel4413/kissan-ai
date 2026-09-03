@@ -4,6 +4,8 @@ import { AuthProvider } from "./context/AuthContext";
 import { FarmProvider } from "./context/FarmContext";
 import { AppLayout } from "./components/layout/AppLayout";
 import { RequireAuth } from "./components/auth/RequireAuth";
+import { SupabaseSetupScreen } from "./components/auth/SupabaseSetupScreen";
+import { supabaseReady } from "./lib/supabase";
 import { LoadingState } from "./components/layout/loading-state";
 import LandingPage from "./pages/LandingPage";
 import LoginPage from "./pages/LoginPage";
@@ -53,37 +55,52 @@ export default function App() {
       <FarmProvider>
         <BrowserRouter>
           <Routes>
-            {/* Public */}
+            {/* Public — the landing page never needs the database, so it must
+                stay reachable even when Supabase isn't configured yet. */}
             <Route path="/" element={<LandingPage />} />
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/signup" element={<SignupPage />} />
-            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-            <Route path="/reset-password" element={<ResetPasswordPage />} />
 
-            {/* Protected app (authentication required) */}
-            <Route element={<RequireAuth />}>
-              <Route element={<AppLayout />}>
-                <Route path="/farm-setup" element={<FarmSetupPage />} />
-                <Route path="/dashboard" element={<DashboardPage />} />
-                <Route path="/crop-doctor" element={lazyEl(CropDoctorPage)} />
-                <Route path="/crop-recommendation" element={lazyEl(CropRecommendationPage)} />
-                <Route path="/assistant" element={lazyEl(AssistantPage)} />
-                <Route path="/voice" element={lazyEl(VoicePage)} />
-                <Route path="/weather" element={lazyEl(WeatherPage)} />
-                <Route path="/irrigation" element={lazyEl(IrrigationPage)} />
-                <Route path="/risks" element={lazyEl(RisksPage)} />
-                <Route path="/yield" element={lazyEl(YieldPage)} />
-                <Route path="/actions" element={lazyEl(ActionsPage)} />
-                <Route path="/diagnosis-history" element={lazyEl(DiagnosisHistoryPage)} />
-                <Route path="/chat-history" element={lazyEl(ChatHistoryPage)} />
-                <Route path="/farm-profile" element={lazyEl(FarmProfilePage)} />
-                <Route path="/expenses" element={lazyEl(ExpensesPage)} />
-                <Route path="/crop-calendar" element={lazyEl(CropCalendarPage)} />
-                <Route path="/settings" element={lazyEl(SettingsPage)} />
-              </Route>
-            </Route>
+            {supabaseReady ? (
+              <>
+                {/* Auth (public) */}
+                <Route path="/login" element={<LoginPage />} />
+                <Route path="/signup" element={<SignupPage />} />
+                <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+                <Route path="/reset-password" element={<ResetPasswordPage />} />
 
-            <Route path="*" element={<Navigate to="/" replace />} />
+                {/* Protected app (authentication required) */}
+                <Route element={<RequireAuth />}>
+                  <Route element={<AppLayout />}>
+                    <Route path="/farm-setup" element={<FarmSetupPage />} />
+                    <Route path="/dashboard" element={<DashboardPage />} />
+                    <Route path="/crop-doctor" element={lazyEl(CropDoctorPage)} />
+                    <Route path="/crop-recommendation" element={lazyEl(CropRecommendationPage)} />
+                    <Route path="/assistant" element={lazyEl(AssistantPage)} />
+                    <Route path="/voice" element={lazyEl(VoicePage)} />
+                    <Route path="/weather" element={lazyEl(WeatherPage)} />
+                    <Route path="/irrigation" element={lazyEl(IrrigationPage)} />
+                    <Route path="/risks" element={lazyEl(RisksPage)} />
+                    <Route path="/yield" element={lazyEl(YieldPage)} />
+                    <Route path="/actions" element={lazyEl(ActionsPage)} />
+                    <Route path="/diagnosis-history" element={lazyEl(DiagnosisHistoryPage)} />
+                    <Route path="/chat-history" element={lazyEl(ChatHistoryPage)} />
+                    <Route path="/farm-profile" element={lazyEl(FarmProfilePage)} />
+                    <Route path="/expenses" element={lazyEl(ExpensesPage)} />
+                    <Route path="/crop-calendar" element={lazyEl(CropCalendarPage)} />
+                    <Route path="/settings" element={lazyEl(SettingsPage)} />
+                  </Route>
+                </Route>
+
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </>
+            ) : (
+              /* Everything beyond the landing page needs the database — show a
+                 friendly setup screen instead of a white screen while the
+                 Supabase integration is unconfigured. */
+              <>
+                <Route path="/" element={<LandingPage />} />
+                <Route path="*" element={<SupabaseSetupScreen />} />
+              </>
+            )}
           </Routes>
         </BrowserRouter>
       </FarmProvider>

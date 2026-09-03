@@ -1,6 +1,6 @@
 import * as React from "react";
 import { Session, User } from "@supabase/supabase-js";
-import { supabase } from "../lib/supabase";
+import { supabase, supabaseReady } from "../lib/supabase";
 import { isNetworkError } from "../lib/supabase-errors";
 
 /**
@@ -78,6 +78,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   React.useEffect(() => {
     let active = true;
+
+    // When Supabase isn't configured yet, don't touch the client — the setup
+    // gate screen is shown instead, and we must not even read `supabase.auth`
+    // here (it would throw the "not configured" error during mount).
+    if (!supabaseReady) {
+      setLoading(false);
+      return () => {
+        active = false;
+      };
+    }
 
     // Hydrate the persisted session (also detects password-recovery redirects,
     // which Supabase places into the URL fragment).

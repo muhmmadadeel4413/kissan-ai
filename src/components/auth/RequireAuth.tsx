@@ -2,6 +2,8 @@ import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { LoadingState } from "../layout/loading-state";
 import { usePreferences } from "../../context/PreferencesContext";
+import { SupabaseSetupScreen } from "./SupabaseSetupScreen";
+import { supabaseReady } from "../../lib/supabase";
 
 /**
  * Route guard for private app pages.
@@ -15,6 +17,12 @@ export function RequireAuth() {
   const { isAuthenticated, loading } = useAuth();
   const { t } = usePreferences();
   const location = useLocation();
+
+  // If the Supabase integration isn't configured, no session can ever exist —
+  // show the friendly setup screen instead of redirecting into a broken login.
+  if (!supabaseReady) {
+    return <SupabaseSetupScreen />;
+  }
 
   if (loading) {
     return (

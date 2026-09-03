@@ -1,14 +1,14 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
 /**
- * Read and validate the Supabase connection settings.
+ * Supabase connection bootstrap.
  *
- * A "TypeError: Failed to fetch" in the console almost always means the
- * browser could not complete the request to Supabase at the network level —
- * usually because the configured URL is malformed (stray whitespace, a
- * trailing slash, a placeholder value) or points at the wrong project. We
- * normalise and validate here, at module load, so those mistakes surface as
- * a clear, actionable error instead of a cryptic fetch failure later.
+ * IMPORTANT: this module must NEVER throw at import time. Every feature module
+ * imports it, so a module-load throw white-screens the whole app — including
+ * the landing page, which needs no database at all. Instead we capture any
+ * configuration problem here, expose a `supabaseReady` flag and a
+ * `supabaseConfigError` message, and hand back a client that throws a clear,
+ * actionable error only when some feature actually tries to use it.
  */
 
 /**
@@ -20,8 +20,8 @@ import { createClient } from "@supabase/supabase-js";
  * (`import.meta.env[name]`): Vite statically replaces only the literal forms
  * during `vite build` and does NOT replace dynamic `import.meta.env[key]`
  * access, so the latter resolves to `undefined` in the production bundle even
- * when the variable is configured. This module-load-time validation surfaces a
- * clear, actionable error instead of a cryptic fetch failure later.
+ * when the variable is configured. This validation surfaces a clear, actionable
+ * error instead of a cryptic fetch failure later.
  */
 function readRequiredEnv(name: string, raw: string | undefined): string {
   if (typeof raw !== "string" || raw.trim().length === 0) {
@@ -79,57 +79,125 @@ function resolveSupabaseUrl(raw: string): string {
   return url;
 }
 
-const supabaseUrl = resolveSupabaseUrl(
-  readRequiredEnv("VITE_SUPABASE_URL", import.meta.env.VITE_SUPABASE_URL)
-);
+/**
+ * True when both required env vars were present and valid at startup, so a
+ * real Supabase client could be created. Components use this to render a
+ * friendly setup screen instead of crashing when the integration is missing.
+ */
+export const supabaseReady: boolean = (() => {
+  try {
+    resolveSupabaseUrl(readRequiredEnv("VITE_SUPABASE_URL", import.meta.env.VITE_SUPABASE_URL));
+    const anon = import.meta.env.VITE_SUPABASE_ANON_KEY;
+    readRequiredEnv("VITE_SUPABASE_ANON_KEY", anon);
+    return true;
+  } catch {
+    return false;
+  }
+})();
 
 /**
- * Resolve the browser-safe API key to send with every request.
- *
- * Project credentials are usually configured as VITE_SUPABASE_ANON_KEY (legacy
- * JWT). Newer projects expose a modern publishable key instead
- * (VITE_SUPABASE_PUBLISHABLE_KEY, format "sb_publishable_..."). We prefer the
- * publishable key when it is set (it is the recommended, independently
- * rotatable credential) and fall back to the legacy anon key otherwise, so the
- * app works whichever key the environment is populated with.
- *
- * Like the anon key, the publishable key is safe to ship to the browser: it is
- * a public credential, and Row Level Security governs what it can read/write.
+ * The human-readable reason Supabase is unavailable (or null when ready).
+ * Shown verbatim on the setup screen so the user knows exactly what to fix.
  */
-export const supabaseAnonKey: string = (() => {
+export const supabaseConfigError: string | null = (() => {
+  if (supabaseReady) return null;
+  try {
+    resolveSupabaseUrl(readRequiredEnv("VITE_SUPABASE_URL", import.meta.env.VITE_SUPABASE_URL));
+    readRequiredEnv("VITE_SUPABASE_ANON_KEY", import.meta.env.VITE_SUPABASE_ANON_KEY);
+    return "Supabase configuration is incomplete.";
+  } catch (err) {
+    return err instanceof Error ? err.message : "Supabase configuration is incomplete.";
+  }
+})();
+
+/**
+ * Resolve the browser-safe API key to send with every request (only called
+ * when `supabaseReady` is true, so it never throws at module scope).
+ */
+function resolveAnonKey(): string {
   const publishable = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
   if (typeof publishable === "string" && publishable.trim().length > 0) {
     return publishable.trim();
   }
   return readRequiredEnv("VITE_SUPABASE_ANON_KEY", import.meta.env.VITE_SUPABASE_ANON_KEY);
+}
+
+const supabaseUrl: string | null = (() => {
+  if (!supabaseReady) return null;
+  try {
+    return resolveSupabaseUrl(
+      readRequiredEnv("VITE_SUPABASE_URL", import.meta.env.VITE_SUPABASE_URL)
+    );
+  } catch {
+    return null;
+  }
 })();
+
+export const supabaseAnonKey: string | null = supabaseReady ? resolveAnonKey() : null;
+
+const realClient: SupabaseClient | null = (() => {
+  if (!supabaseReady || !supabaseUrl || !supabaseAnonKey) return null;
+  try {
+    return createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        // Explicitly pin the auth flow type to `implicit` (the JavaScript
+        // client default; PKCE is for SSR). The NativelyAI preview panel runs
+        // the app inside a sandboxed iframe, where PKCE's redirect-with-code
+        // exchange is unreliable. Implicit flow lets sign-in / sign-up
+        // sessions be established directly in that context.
+        flowType: "implicit",
+        autoRefreshToken: true,
+        persistSession: true,
+        detectSessionInUrl: true,
+      },
+    });
+  } catch {
+    return null;
+  }
+})();
+
+const NOT_READY_MESSAGE =
+  "Supabase isn't configured yet, so this feature is unavailable right now. " +
+  (supabaseConfigError ?? "Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in the Environment settings panel.") +
+  " Once configured, restart the preview server so the new variables take effect.";
 
 /**
  * Shared Supabase client.
  *
- * We explicitly pin the auth flow type to `implicit` (the JavaScript client
- * default; PKCE is for SSR). The NativelyAI preview panel runs the app inside
- * a sandboxed iframe, where PKCE's redirect-with-code exchange is unreliable.
- * Implicit flow lets sign-in / sign-up sessions be established directly in
- * that context, which is required for auth to work from the preview panel.
+ * When the integration is configured this is the real client. When it is not,
+ * this is a throwing proxy: accessing ANY member throws the actionable
+ * `NOT_READY_MESSAGE`. Feature code that calls `supabase.auth.getSession()`
+ * or `supabase.from(...)` therefore fails with a clear, instructive error
+ * instead of a cryptic `null` crash — and the UI can intercept it via the
+ * usual try/catch paths. The landing page never touches this client, so it
+ * stays fully functional even when the integration is missing.
  */
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    flowType: "implicit",
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: true,
-  },
-});
+export const supabase: SupabaseClient = (() => {
+  if (realClient) return realClient;
+
+  return new Proxy({} as SupabaseClient, {
+    get(_target, prop) {
+      // Symbol keys (e.g. Symbol.toStringTag / Promise internals) should not
+      // throw — they are probed by libraries and devtools.
+      if (typeof prop === "symbol") return undefined;
+      throw new Error(NOT_READY_MESSAGE);
+    },
+  }) as SupabaseClient;
+})();
 
 /**
  * Non-secret connection details, useful for diagnostics. Never put the key
  * in here — the URL alone is enough to confirm which project is configured.
+ * `host` is null when the integration is not ready.
  */
-export const supabaseConfig = {
-  url: supabaseUrl,
-  host: new URL(supabaseUrl).host,
-} as const;
+export const supabaseConfig: { url: string | null; host: string | null } = (() => {
+  if (!supabaseUrl) return { url: null, host: null };
+  try {
+    return { url: supabaseUrl, host: new URL(supabaseUrl).host };
+  } catch {
+    return { url: null, host: null };
+  }
+})();
 
 /**
  * Lightweight startup connectivity check. Runs once, fire-and-forget, and
@@ -139,7 +207,7 @@ export const supabaseConfig = {
  */
 export interface SupabaseConnectivity {
   ok: boolean;
-  host: string;
+  host: string | null;
   httpStatus: number | null;
   detail: string;
 }
@@ -154,20 +222,25 @@ export function checkSupabaseConnectivity(): Promise<SupabaseConnectivity> {
 }
 
 async function runConnectivityCheck(): Promise<SupabaseConnectivity> {
+  if (!supabaseUrl || !supabaseAnonKey) {
+    return {
+      ok: false,
+      host: null,
+      httpStatus: null,
+      detail: "Supabase is not configured (missing or invalid VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY).",
+    };
+  }
   const host = supabaseConfig.host;
   try {
     // Probe a real table query rather than the bare /rest/v1/ root, which
     // answers 401 for ANY key (even a valid one) and would be a false alarm.
-    const res = await fetch(
-      `${supabaseConfig.url}/rest/v1/farms?select=id&limit=1`,
-      {
-        headers: {
-          apikey: supabaseAnonKey,
-          Authorization: `Bearer ${supabaseAnonKey}`,
-          Accept: "application/json",
-        },
-      }
-    );
+    const res = await fetch(`${supabaseUrl}/rest/v1/farms?select=id&limit=1`, {
+      headers: {
+        apikey: supabaseAnonKey,
+        Authorization: `Bearer ${supabaseAnonKey}`,
+        Accept: "application/json",
+      },
+    });
     if (res.ok) {
       return { ok: true, host, httpStatus: res.status, detail: "connected" };
     }

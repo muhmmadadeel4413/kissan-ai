@@ -2,7 +2,6 @@ import { supabaseConfig } from "./supabase";
 
 /** The host this app's Supabase project should be pointed at. */
 export const EXPECTED_SUPABASE_HOST = "vxldkzrmtygurdggtjro.supabase.co";
-
 /**
  * Detect browser-level network failures ("TypeError: Failed to fetch" and
  * friends). These mean the HTTP request never completed — the browser could
@@ -26,6 +25,13 @@ export function isNetworkError(err: unknown): boolean {
  */
 export function networkErrorMessage(): string {
   const configured = supabaseConfig.host;
+  if (!configured) {
+    return (
+      "We couldn't reach the app's database because Supabase isn't configured yet. " +
+      "Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in the Environment settings panel, " +
+      "then restart the preview server."
+    );
+  }
   const onPoint =
     configured === EXPECTED_SUPABASE_HOST
       ? `The app is set to reach ${configured}, which looks correct.`
