@@ -202,24 +202,29 @@ export default function DashboardPage() {
         </div>
       </section>
 
-      {/* Row 2 — today's plan, growth stage, yield */}
+      {/* Row 2 — today's plan, growth stage, yield.
+          Each column is a flex column (header on top) and the card below it
+          grows via flex-1 to fill the full row height, so the three cards
+          always share one consistent height and align flush at the top and
+          bottom at every breakpoint. The [&>div:last-child] selector targets
+          the card's single root Card element directly after the header. */}
       <section aria-label="Today's plan and outlook">
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
-          <div className="space-y-3">
+          <div className="flex flex-col gap-3 [&>div:last-child]:flex-1">
             <SectionHeader
               title="What Should I Do Today?"
               subtitle="Your decision plan, built from real farm data"
             />
             <TodayActionsCard />
           </div>
-          <div className="space-y-3">
+          <div className="flex flex-col gap-3 [&>div:last-child]:flex-1">
             <SectionHeader
               title="Crop Growth Stage"
               subtitle="Crop age and current stage"
             />
             <GrowthStageCard growth={farmContext.growth} />
           </div>
-          <div className="space-y-3 md:col-span-2 xl:col-span-1">
+          <div className="flex flex-col gap-3 [&>div:last-child]:flex-1 md:col-span-2 xl:col-span-1">
             <SectionHeader
               title="AI Yield Prediction"
               subtitle="Estimate range and confidence"
