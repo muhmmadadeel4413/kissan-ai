@@ -46,6 +46,82 @@ function json(data: unknown, status = 200): Response {
 }
 
 /* ------------------------------------------------------------------ */
+/* Resilient Gemini call (handles free-tier 429 rate limits)           */
+/* ------------------------------------------------------------------ */
+
+const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta";
+
+/**
+ * Call Gemini's generateContent endpoint with a bounded retry on transient
+ * failures (429 rate-limit / 5xx). Throws a dedicated error when the quota
+ * is exhausted so the caller can reply with an honest, actionable message.
+ */
+async function callGemini(
+  apiKey: string,
+  body: Record<string, unknown>
+): Promise<{ text: string }> {
+  const url = `${GEMINI_BASE}/models/${MODEL}:generateContent?key=${apiKey}`;
+  const maxAttempts = 3;
+  let lastError = "Kissan AI is temporarily unavailable. Please try again.";
+  let quotaExhausted = false;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    let resp: Response;
+    try {
+      resp = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+    } catch {
+      lastError = "Kissan AI is temporarily unavailable. Please try again.";
+      if (attempt < maxAttempts) {
+        await new Promise((r) => setTimeout(r, 1500 * attempt));
+        continue;
+      }
+      throw new Error(lastError);
+    }
+
+    if (resp.ok) {
+      const data = await resp.json();
+      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+      if (!text) {
+        lastError = "Kissan AI couldn't form a reply. Please try again.";
+        if (attempt < maxAttempts) {
+          await new Promise((r) => setTimeout(r, 1500 * attempt));
+          continue;
+        }
+      }
+      return { text };
+    }
+
+    const errText = await resp.text();
+    console.error(`${MODEL} error (attempt ${attempt}/${maxAttempts}):`, resp.status, errText.slice(0, 300));
+
+    if (resp.status === 429) {
+      quotaExhausted = true;
+      if (attempt < maxAttempts) {
+        await new Promise((r) => setTimeout(r, 5000 * attempt));
+        continue;
+      }
+      break;
+    }
+    if (resp.status >= 500 && attempt < maxAttempts) {
+      await new Promise((r) => setTimeout(r, 1500 * attempt));
+      continue;
+    }
+    break;
+  }
+
+  if (quotaExhausted) {
+    throw new Error(
+      "Kissan AI is a bit busy right now — its request limit for this moment was reached. Please wait a minute and try again."
+    );
+  }
+  throw new Error(lastError);
+}
+
+/* ------------------------------------------------------------------ */
 /* Validation / sanitization of AI output (server-side, strict)        */
 /* ------------------------------------------------------------------ */
 
@@ -486,77 +562,60 @@ Deno.serve(async (req: Request) => {
   // 6) Call Gemini with a forced structured JSON response.
   const prompt = buildRecommendationPrompt(input);
 
-  let geminiResp: Response;
+  let geminiText: string;
   try {
-    geminiResp = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ role: "user", parts: [{ text: prompt }] }],
-          generationConfig: {
-            temperature: 0.4,
-            responseMimeType: "application/json",
-            responseSchema: {
-              type: "OBJECT",
-              properties: {
-                summary: { type: "STRING" },
-                recommendations: {
-                  type: "ARRAY",
-                  items: {
-                    type: "OBJECT",
-                    properties: {
-                      crop: { type: "STRING" },
-                      suitability: { type: "STRING", enum: ["high", "moderate", "low"] },
-                      confidence: { type: "INTEGER" },
-                      why_suitable: { type: "STRING" },
-                      soil_fit: { type: "STRING" },
-                      water_requirement: { type: "STRING" },
-                      weather_fit: { type: "STRING" },
-                      key_considerations: { type: "ARRAY", items: { type: "STRING" } },
-                    },
-                    required: ["crop", "suitability", "confidence", "why_suitable"],
-                  },
+    const result = await callGemini(apiKey, {
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      generationConfig: {
+        temperature: 0.4,
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: "OBJECT",
+          properties: {
+            summary: { type: "STRING" },
+            recommendations: {
+              type: "ARRAY",
+              items: {
+                type: "OBJECT",
+                properties: {
+                  crop: { type: "STRING" },
+                  suitability: { type: "STRING", enum: ["high", "moderate", "low"] },
+                  confidence: { type: "INTEGER" },
+                  why_suitable: { type: "STRING" },
+                  soil_fit: { type: "STRING" },
+                  water_requirement: { type: "STRING" },
+                  weather_fit: { type: "STRING" },
+                  key_considerations: { type: "ARRAY", items: { type: "STRING" } },
                 },
-                limitations: { type: "ARRAY", items: { type: "STRING" } },
-                needs_more_information: { type: "BOOLEAN" },
-                missing_information: { type: "ARRAY", items: { type: "STRING" } },
+                required: ["crop", "suitability", "confidence", "why_suitable"],
               },
-              required: ["recommendations"],
             },
+            limitations: { type: "ARRAY", items: { type: "STRING" } },
+            needs_more_information: { type: "BOOLEAN" },
+            missing_information: { type: "ARRAY", items: { type: "STRING" } },
           },
-        }),
-      }
-    );
-  } catch {
+          required: ["recommendations"],
+        },
+      },
+    });
+    geminiText = result.text;
+  } catch (err) {
+    console.error("recommend-crops Gemini error:", err instanceof Error ? err.message : err);
     return json(
-      { success: false, error: "Kissan AI is temporarily unavailable. Please try again." },
+      { success: false, error: err instanceof Error ? err.message : "Kissan AI is temporarily unavailable. Please try again." },
       502
     );
   }
-
-  if (!geminiResp.ok) {
-    const errText = await geminiResp.text();
-    console.error("recommend-crops Gemini error:", geminiResp.status, errText.slice(0, 300));
-    return json(
-      { success: false, error: "Kissan AI is temporarily unavailable. Please try again." },
-      502
-    );
-  }
-
-  const geminiData = await geminiResp.json();
-  const text = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
 
   let payload: ValidatedPayload | null = null;
   try {
-    payload = sanitizePayload(JSON.parse(text));
+    payload = sanitizePayload(JSON.parse(geminiText));
   } catch {
     payload = null;
   }
 
   if (!payload) {
-    console.error("recommend-crops parse failure. Raw:", text.slice(0, 500));
+    console.error("recommend-crops parse failure. Raw:", geminiText.slice(0, 500));
     return json(
       {
         success: false,

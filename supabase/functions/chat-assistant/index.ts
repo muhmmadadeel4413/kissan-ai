@@ -43,6 +43,82 @@ function json(data: unknown, status = 200): Response {
 }
 
 /* ------------------------------------------------------------------ */
+/* Resilient Gemini call (handles free-tier 429 rate limits)           */
+/* ------------------------------------------------------------------ */
+
+const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta";
+
+/**
+ * Call Gemini's generateContent endpoint with a bounded retry on transient
+ * failures (429 rate-limit / 5xx). Throws a dedicated error when the quota
+ * is exhausted so the caller can reply with an honest, actionable message.
+ */
+async function callGemini(
+  apiKey: string,
+  body: Record<string, unknown>
+): Promise<{ text: string }> {
+  const url = `${GEMINI_BASE}/models/${MODEL}:generateContent?key=${apiKey}`;
+  const maxAttempts = 3;
+  let lastError = "Kissan AI is temporarily unavailable. Please try again.";
+  let quotaExhausted = false;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    let resp: Response;
+    try {
+      resp = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+    } catch {
+      lastError = "Kissan AI is temporarily unavailable. Please try again.";
+      if (attempt < maxAttempts) {
+        await new Promise((r) => setTimeout(r, 1500 * attempt));
+        continue;
+      }
+      throw new Error(lastError);
+    }
+
+    if (resp.ok) {
+      const data = await resp.json();
+      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+      if (!text) {
+        lastError = "Kissan AI couldn't form a reply. Please try again.";
+        if (attempt < maxAttempts) {
+          await new Promise((r) => setTimeout(r, 1500 * attempt));
+          continue;
+        }
+      }
+      return { text };
+    }
+
+    const errText = await resp.text();
+    console.error(`${MODEL} error (attempt ${attempt}/${maxAttempts}):`, resp.status, errText.slice(0, 300));
+
+    if (resp.status === 429) {
+      quotaExhausted = true;
+      if (attempt < maxAttempts) {
+        await new Promise((r) => setTimeout(r, 5000 * attempt));
+        continue;
+      }
+      break;
+    }
+    if (resp.status >= 500 && attempt < maxAttempts) {
+      await new Promise((r) => setTimeout(r, 1500 * attempt));
+      continue;
+    }
+    break;
+  }
+
+  if (quotaExhausted) {
+    throw new Error(
+      "Kissan AI is a bit busy right now — its request limit for this moment was reached. Please wait a minute and try again."
+    );
+  }
+  throw new Error(lastError);
+}
+
+/* ------------------------------------------------------------------ */
 /* Context payload (sent by the client, built from existing systems)   */
 /* ------------------------------------------------------------------ */
 
@@ -402,80 +478,62 @@ Deno.serve(async (req: Request) => {
   const prompt = buildSystemPrompt(context, preferredLanguage, history);
   const userTurn = `Farmer: ${message}\n\nRespond now with your structured answer JSON.`;
 
-  let geminiResp: Response;
+  let geminiText: string;
   try {
-    geminiResp = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [
-            {
-              role: "user",
-              parts: [
-                { text: prompt },
-                { text: userTurn },
-              ],
-            },
+    const result = await callGemini(apiKey, {
+      contents: [
+        {
+          role: "user",
+          parts: [
+            { text: prompt },
+            { text: userTurn },
           ],
-          generationConfig: {
-            temperature: 0.4,
-            responseMimeType: "application/json",
-            responseSchema: {
-              type: "OBJECT",
-              properties: {
-                answer: { type: "STRING" },
-                language: { type: "STRING", enum: ["en", "ur"] },
-                confidence: { type: "STRING", enum: ["low", "moderate", "high"] },
-                needs_clarification: { type: "BOOLEAN" },
-                clarifying_question: { type: "STRING" },
-                key_points: { type: "ARRAY", items: { type: "STRING" } },
-                recommended_actions: { type: "ARRAY", items: { type: "STRING" } },
-              },
-              required: [
-                "answer",
-                "language",
-                "confidence",
-                "needs_clarification",
-                "clarifying_question",
-                "key_points",
-                "recommended_actions",
-              ],
-            },
+        },
+      ],
+      generationConfig: {
+        temperature: 0.4,
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: "OBJECT",
+          properties: {
+            answer: { type: "STRING" },
+            language: { type: "STRING", enum: ["en", "ur"] },
+            confidence: { type: "STRING", enum: ["low", "moderate", "high"] },
+            needs_clarification: { type: "BOOLEAN" },
+            clarifying_question: { type: "STRING" },
+            key_points: { type: "ARRAY", items: { type: "STRING" } },
+            recommended_actions: { type: "ARRAY", items: { type: "STRING" } },
           },
-        }),
-      }
-    );
-  } catch {
+          required: [
+            "answer",
+            "language",
+            "confidence",
+            "needs_clarification",
+            "clarifying_question",
+            "key_points",
+            "recommended_actions",
+          ],
+        },
+      },
+    });
+    geminiText = result.text;
+  } catch (err) {
+    console.error("chat-assistant Gemini error:", err instanceof Error ? err.message : err);
     return json(
-      { success: false, error: "Kissan AI is temporarily unavailable. Please try again." },
+      { success: false, error: err instanceof Error ? err.message : "Kissan AI is temporarily unavailable. Please try again." },
       502
     );
   }
-
-  if (!geminiResp.ok) {
-    const errText = await geminiResp.text();
-    console.error("chat-assistant Gemini error:", geminiResp.status, errText.slice(0, 300));
-    return json(
-      { success: false, error: "Kissan AI is temporarily unavailable. Please try again." },
-      502
-    );
-  }
-
-  const geminiData = await geminiResp.json();
-  const text =
-    geminiData?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
 
   let parsed: ChatReply | null = null;
   try {
-    parsed = sanitizeReply(JSON.parse(text));
+    parsed = sanitizeReply(JSON.parse(geminiText));
   } catch {
     parsed = null;
   }
 
   if (!parsed) {
-    console.error("chat-assistant parse failure. Raw:", text.slice(0, 500));
+    console.error("chat-assistant parse failure. Raw:", geminiText.slice(0, 500));
     return json(
       {
         success: false,

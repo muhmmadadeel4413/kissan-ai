@@ -34,6 +34,82 @@ function json(data: unknown, status = 200): Response {
   });
 }
 
+/* ------------------------------------------------------------------ */
+/* Resilient Gemini call (handles free-tier 429 rate limits)           */
+/* ------------------------------------------------------------------ */
+
+const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta";
+
+/**
+ * Call Gemini's generateContent endpoint with a bounded retry on transient
+ * failures (429 rate-limit / 5xx). Throws a dedicated error when the quota
+ * is exhausted so the caller can reply with an honest, actionable message.
+ */
+async function callGemini(
+  apiKey: string,
+  body: Record<string, unknown>
+): Promise<{ text: string }> {
+  const url = `${GEMINI_BASE}/models/${MODEL}:generateContent?key=${apiKey}`;
+  const maxAttempts = 3;
+  let lastError = "Kissan AI is temporarily unavailable. Please try again.";
+  let quotaExhausted = false;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    let resp: Response;
+    try {
+      resp = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+    } catch {
+      lastError = "Kissan AI is temporarily unavailable. Please try again.";
+      if (attempt < maxAttempts) {
+        await new Promise((r) => setTimeout(r, 1500 * attempt));
+        continue;
+      }
+      throw new Error(lastError);
+    }
+
+    if (resp.ok) {
+      const data = await resp.json();
+      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+      if (!text) {
+        lastError = "Kissan AI couldn't form a reply. Please try again.";
+        if (attempt < maxAttempts) {
+          await new Promise((r) => setTimeout(r, 1500 * attempt));
+          continue;
+        }
+      }
+      return { text };
+    }
+
+    const errText = await resp.text();
+    console.error(`${MODEL} error (attempt ${attempt}/${maxAttempts}):`, resp.status, errText.slice(0, 300));
+
+    if (resp.status === 429) {
+      quotaExhausted = true;
+      if (attempt < maxAttempts) {
+        await new Promise((r) => setTimeout(r, 5000 * attempt));
+        continue;
+      }
+      break;
+    }
+    if (resp.status >= 500 && attempt < maxAttempts) {
+      await new Promise((r) => setTimeout(r, 1500 * attempt));
+      continue;
+    }
+    break;
+  }
+
+  if (quotaExhausted) {
+    throw new Error(
+      "Kissan AI is a bit busy right now — its request limit for this moment was reached. Please wait a minute and try again."
+    );
+  }
+  throw new Error(lastError);
+}
+
 /** Chunked base64 encode to avoid call-stack limits on large images. */
 function bytesToBase64(bytes: Uint8Array): string {
   let binary = "";
@@ -181,65 +257,56 @@ Schema:
   "notes": "Any important caveat, e.g. when to consult a local agricultural officer. Always remind that this is AI guidance, not a substitute for a professional."
 }`;
 
-  const geminiResp = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${apiKey}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [
-              { text: prompt },
-              { inlineData: { mimeType: contentType, data: base64 } },
-            ],
-          },
-        ],
-        generationConfig: {
-          temperature: 0.3,
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: "OBJECT",
-            properties: {
-              diagnosis: { type: "STRING" },
-              severity: { type: "STRING", enum: ["low", "medium", "high"] },
-              confidence: { type: "INTEGER" },
-              description: { type: "STRING" },
-              causes: { type: "ARRAY", items: { type: "STRING" } },
-              recommendedActions: { type: "ARRAY", items: { type: "STRING" } },
-              notes: { type: "STRING" },
-            },
-            required: [
-              "diagnosis",
-              "severity",
-              "confidence",
-              "description",
-              "causes",
-              "recommendedActions",
-              "notes",
-            ],
-          },
+  let geminiText: string;
+  try {
+    const result = await callGemini(apiKey, {
+      contents: [
+        {
+          parts: [
+            { text: prompt },
+            { inlineData: { mimeType: contentType, data: base64 } },
+          ],
         },
-      }),
-    }
-  );
-
-  if (!geminiResp.ok) {
-    const errText = await geminiResp.text();
-    console.error("Gemini error:", geminiResp.status, errText);
+      ],
+      generationConfig: {
+        temperature: 0.3,
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: "OBJECT",
+          properties: {
+            diagnosis: { type: "STRING" },
+            severity: { type: "STRING", enum: ["low", "medium", "high"] },
+            confidence: { type: "INTEGER" },
+            description: { type: "STRING" },
+            causes: { type: "ARRAY", items: { type: "STRING" } },
+            recommendedActions: { type: "ARRAY", items: { type: "STRING" } },
+            notes: { type: "STRING" },
+          },
+          required: [
+            "diagnosis",
+            "severity",
+            "confidence",
+            "description",
+            "causes",
+            "recommendedActions",
+            "notes",
+          ],
+        },
+      },
+    });
+    geminiText = result.text;
+  } catch (err) {
+    console.error("Gemini error:", err instanceof Error ? err.message : err);
     return json(
-      { success: false, error: "The AI couldn't analyze this photo right now. Please try again." },
+      { success: false, error: err instanceof Error ? err.message : "The AI couldn't analyze this photo right now. Please try again." },
       502
     );
   }
 
-  const geminiData = await geminiResp.json();
-  const text =
-    geminiData?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-  const parsed = parseDiagnosis(text);
+  const parsed = parseDiagnosis(geminiText);
 
   if (!parsed) {
-    console.error("Gemini parse failure. Raw:", text.slice(0, 500));
+    console.error("Gemini parse failure. Raw:", geminiText.slice(0, 500));
     return json(
       { success: false, error: "The AI returned an unexpected result. Please try another photo." },
       502
