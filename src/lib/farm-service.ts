@@ -15,10 +15,17 @@ export interface FarmRow {
   current_crop: string;
   current_crop_variety: string | null;
   planting_date: string | null;
+  farm_name: string | null;
+  water_source: string | null;
+  farm_age_years: number | null;
   created_at: string;
 }
 
 function optional(value: string | null): string | undefined {
+  return value ?? undefined;
+}
+
+function optionalNum(value: number | null): number | undefined {
   return value ?? undefined;
 }
 
@@ -35,13 +42,16 @@ function rowToFarm(row: FarmRow): Farm {
     currentCrop: row.current_crop,
     currentCropVariety: optional(row.current_crop_variety),
     plantingDate: optional(row.planting_date),
+    farmName: optional(row.farm_name),
+    waterSource: optional(row.water_source),
+    farmAgeYears: optionalNum(row.farm_age_years),
     createdAt: row.created_at,
   };
 }
 
 /** Map a partial form input to snake_case DB columns (only provided fields). */
-function farmInputToRow(input: Partial<FarmSetupInput>): Record<string, string | null> {
-  const row: Record<string, string | null> = {};
+function farmInputToRow(input: Partial<FarmSetupInput>): Record<string, string | number | null> {
+  const row: Record<string, string | number | null> = {};
   if (input.farmerName !== undefined) row.farmer_name = input.farmerName;
   if (input.phone !== undefined) row.phone = input.phone || null;
   if (input.email !== undefined) row.email = input.email || null;
@@ -52,6 +62,10 @@ function farmInputToRow(input: Partial<FarmSetupInput>): Record<string, string |
   if (input.currentCrop !== undefined) row.current_crop = input.currentCrop;
   if (input.currentCropVariety !== undefined) row.current_crop_variety = input.currentCropVariety || null;
   if (input.plantingDate !== undefined) row.planting_date = input.plantingDate || null;
+  if (input.farmName !== undefined) row.farm_name = input.farmName || null;
+  if (input.waterSource !== undefined) row.water_source = input.waterSource || null;
+  if (input.farmAgeYears !== undefined)
+    row.farm_age_years = input.farmAgeYears != null ? input.farmAgeYears : null;
   return row;
 }
 
