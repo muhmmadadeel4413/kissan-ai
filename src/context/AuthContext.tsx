@@ -24,7 +24,12 @@ interface AuthContextValue {
   /** True while the initial session is being resolved (prevents flash). */
   loading: boolean;
   isAuthenticated: boolean;
-  signUp: (email: string, password: string) => Promise<{ needsEmailConfirmation: boolean }>;
+  /** Optional full name is stored as Supabase user metadata (`full_name`). */
+  signUp: (
+    email: string,
+    password: string,
+    fullName?: string
+  ) => Promise<{ needsEmailConfirmation: boolean }>;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   resetPasswordForEmail: (email: string) => Promise<void>;
@@ -108,7 +113,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       loading,
       isAuthenticated: Boolean(user),
 
-      async signUp(email, password) {
+      async signUp(email, password, fullName) {
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
@@ -116,7 +121,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // environments so the post-confirmation redirect lands inside the
           // preview panel). Supabase's redirect allowlist already includes the
           // ephemeral preview origins.
-          options: { emailRedirectTo: window.location.origin },
+          options: {
+            emailRedirectTo: window.location.origin,
+            ...(fullName ? { data: { full_name: fullName } } : {}),
+          },
         });
         if (error) {
           // A network error usually means the browser never got the response —

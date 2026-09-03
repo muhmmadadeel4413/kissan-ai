@@ -801,11 +801,22 @@ const en: Dict = {
   "auth.redirDashboard": "Taking you to your dashboard…",
   "auth.redirectLogin": "Back to Login",
   "auth.signupApproach": "Create your farm after you're signed in.",
+  "auth.fullName": "Full name",
+  "auth.fullNamePlaceholder": "e.g. Muhammad Aslam",
+  "auth.errNameRequired": "Please enter your full name.",
+  "auth.termsPrefix": "I agree to the",
+  "auth.terms": "Terms & Conditions",
+  "auth.privacy": "Privacy Policy",
+  "auth.termsAnd": "and",
+  "auth.errTermsRequired": "Please accept the Terms & Conditions to continue.",
 
-  /* ---------- Login page split-screen visual panel ---------- */
+  /* ---------- Auth pages split-screen visual panel ---------- */
   "auth.welcomeBack": "Welcome Back!",
   "auth.visualSubtitle":
     "Your farm, your weather, and your decisions — all in one place. Sign in to continue.",
+  "auth.signupVisualTitle": "Join Kissan AI",
+  "auth.signupVisualSubtitle":
+    "Your farm, your weather, and your decisions — all in one place. Create your account to get started.",
   "auth.featCropDiagnosis": "AI Crop Diagnosis",
   "auth.featWeather": "Real-time Weather",
   "auth.featRecommendations": "Smart Recommendations",
@@ -1605,10 +1616,20 @@ const ur: Dict = {
   "auth.redirDashboard": "آپ کو ڈیش بورڈ پر لے جا رہے ہیں…",
   "auth.redirectLogin": "لاگ ان پر واپس",
   "auth.signupApproach": "سائن ان کے بعد اپنا فارم بنائیں۔",
+  "auth.fullName": "پورا نام",
+  "auth.fullNamePlaceholder": "مثلاً محمد اسلم",
+  "auth.errNameRequired": "براہ کرم اپنا پورا نام درج کریں۔",
+  "auth.termsPrefix": "میں اس سے متفق ہوں",
+  "auth.terms": "شرائط و ضوابط",
+  "auth.privacy": "رازداری کی پالیسی",
+  "auth.termsAnd": "اور",
+  "auth.errTermsRequired": "جاری رکھنے کے لیے براہ کرم شرائط و ضوابط قبول کریں۔",
 
-  /* ---------- Login page split-screen visual panel ---------- */
+  /* ---------- Auth pages split-screen visual panel ---------- */
   "auth.welcomeBack": "خوش آمدید!",
   "auth.visualSubtitle": "آپ کا فارم، آپ کا موسم، اور آپ کے فیصلے — سب ایک جگہ۔ سائن ان کرتے رہیں۔",
+  "auth.signupVisualTitle": "کسان اے آئی میں شامل ہوں",
+  "auth.signupVisualSubtitle": "آپ کا فارم، آپ کا موسم، اور آپ کے فیصلے — سب ایک جگہ۔ شروع کرنے کے لیے اپنا اکاؤنٹ بنائیں۔",
   "auth.featCropDiagnosis": "اے آئی فصل کی تشخیص",
   "auth.featWeather": "ریئل ٹائم موسم",
   "auth.featRecommendations": "اسمارٹ سفارشات",

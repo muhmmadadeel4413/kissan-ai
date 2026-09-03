@@ -3,13 +3,16 @@ import { Sprout, ScanSearch, CloudSun, Sparkles, Tractor } from "lucide-react";
 import { usePreferences } from "../../context/PreferencesContext";
 
 /**
- * Left-hand visual panel for the split-screen login page.
+ * Left-hand visual panel for the split-screen auth pages (login / signup).
  *
  * Reproduces the reference design: a full-height dark Kissan AI green panel
- * with the brand mark near the top, "Welcome Back!" messaging, a short list
- * of feature highlights with icons, and a farming landscape rendered inline
- * (SVG) as an integrated background with a soft overlay so text stays
- * readable. Hidden below the lg breakpoint, where the form takes over.
+ * with the brand mark near the top, welcome messaging, a short list of feature
+ * highlights with icons, and a farming landscape rendered inline (SVG) as an
+ * integrated background with a soft overlay so text stays readable. Hidden
+ * below the lg breakpoint, where the form takes over.
+ *
+ * The heading and subtitle come from i18n keys so the same panel serves both
+ * the login page ("Welcome Back!") and the signup page ("Join Kissan AI").
  */
 const FEATURES = [
   { key: "auth.featCropDiagnosis", Icon: ScanSearch },
@@ -68,7 +71,15 @@ function FarmScene() {
   );
 }
 
-export function LoginVisualPanel() {
+export function LoginVisualPanel({
+  titleKey = "auth.welcomeBack",
+  subtitleKey = "auth.visualSubtitle",
+}: {
+  /** i18n key for the panel heading (defaults to the login copy). */
+  titleKey?: string;
+  /** i18n key for the panel supporting text (defaults to the login copy). */
+  subtitleKey?: string;
+}) {
   const { t } = usePreferences();
 
   return (
@@ -106,10 +117,10 @@ export function LoginVisualPanel() {
       {/* Welcome + feature list (vertically centred) */}
       <div className="relative z-20 flex flex-1 flex-col justify-center px-10 pb-44 xl:px-12">
         <h2 className="font-heading text-4xl font-bold leading-[1.1] tracking-tight text-white xl:text-5xl">
-          {t("auth.welcomeBack")}
+          {t(titleKey)}
         </h2>
         <p className="mt-4 max-w-sm text-base leading-relaxed text-white/80">
-          {t("auth.visualSubtitle")}
+          {t(subtitleKey)}
         </p>
 
         <ul className="mt-10 space-y-5">
