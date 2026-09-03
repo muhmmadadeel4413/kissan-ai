@@ -1,28 +1,28 @@
 import * as React from "react";
 import { Link } from "react-router-dom";
 import {
+  Activity,
   CalendarDays,
+  ChevronRight,
   Droplets,
+  History,
+  Home,
   IdCard,
   Leaf,
   Mail,
   MapPin,
+  MessageSquare,
+  Mountain,
   Pencil,
   Phone,
   Ruler,
   Sprout,
-  User,
-  Mountain,
-  History,
-  MessageSquare,
-  Activity,
-  Waves,
   Timer,
+  User,
+  Waves,
 } from "lucide-react";
 import { Button } from "../components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
-import { Badge } from "../components/ui/badge";
-import { PageHeader } from "../components/layout/page-header";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "../components/ui/card";
 import { EmptyState } from "../components/layout/empty-state";
 import { buildFarmContext } from "../lib/farm-context";
 import { useFarm } from "../context/FarmContext";
@@ -33,7 +33,15 @@ import { cn } from "../lib/utils";
 /* Tab types                                                            */
 /* ------------------------------------------------------------------ */
 
-type TabId = "overview" | "soil" | "irrigation" | "history";
+type TabId = "overview" | "fields" | "soil" | "irrigation" | "history";
+
+/**
+ * Decorative hero visual for the farm. The app stores no farm photo today,
+ * so a representative field image stands in as pure presentation — it is
+ * never treated as user data and never replaced by a real upload field.
+ */
+const FARM_HERO_IMAGE =
+  "https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=1400&q=80";
 
 /* ------------------------------------------------------------------ */
 /* InfoRow — shared display helper                                      */
@@ -55,9 +63,37 @@ function InfoRow({
       </span>
       <div className="min-w-0">
         <p className="text-xs font-medium text-muted-foreground">{label}</p>
-        <p className="text-sm font-semibold text-foreground">{value || "—"}</p>
+        <p className="truncate text-sm font-semibold text-foreground">{value || "—"}</p>
       </div>
     </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* StatCard — compact label/value tile (bottom info cards)             */
+/* ------------------------------------------------------------------ */
+
+function StatCard({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  value: string;
+}) {
+  return (
+    <Card className="card-sheen p-5 shadow-soft">
+      <div className="flex items-start gap-3">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-soft text-primary ring-1 ring-inset ring-primary/10">
+          <Icon className="h-5 w-5" aria-hidden="true" />
+        </span>
+        <div className="min-w-0">
+          <p className="text-xs font-medium text-muted-foreground">{label}</p>
+          <p className="truncate text-sm font-semibold text-foreground">{value || "—"}</p>
+        </div>
+      </div>
+    </Card>
   );
 }
 
@@ -91,28 +127,37 @@ export default function FarmProfilePage() {
 
   const tabs: { id: TabId; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
     { id: "overview", label: t("farmProfile.tabOverview"), icon: IdCard },
+    { id: "fields", label: t("farmProfile.tabFields"), icon: Ruler },
     { id: "soil", label: t("farmProfile.tabSoil"), icon: Mountain },
     { id: "irrigation", label: t("farmProfile.tabIrrigation"), icon: Droplets },
     { id: "history", label: t("farmProfile.tabHistory"), icon: History },
   ];
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
-      <PageHeader
-        title={t("page.farmProfile")}
-        subtitle={farm.farmName ? farm.farmName : t("farmProfile.subtitle")}
-        action={
-          <Button asChild variant="outline">
-            <Link to="/farm-setup">
-              <Pencil className="h-4 w-4" aria-hidden="true" />
-              {t("farmProfile.editBtn")}
-            </Link>
-          </Button>
-        }
-      />
+    <div className="space-y-6">
+      {/* Breadcrumb — My Farm / Farm Profile */}
+      <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-sm">
+        <Link
+          to="/dashboard"
+          className="font-medium text-muted-foreground transition-colors duration-150 hover:text-foreground cursor-pointer"
+        >
+          {t("farmProfile.breadcrumbMyFarm")}
+        </Link>
+        <ChevronRight
+          className="h-3.5 w-3.5 text-muted-foreground rtl:rotate-180"
+          aria-hidden="true"
+        />
+        <span aria-current="page" className="font-semibold text-foreground">
+          {t("page.farmProfile")}
+        </span>
+      </nav>
 
       {/* Tab bar */}
-      <div className="flex gap-1 rounded-xl border border-border bg-card p-1">
+      <div
+        role="tablist"
+        aria-label="Farm profile sections"
+        className="flex items-center gap-1 overflow-x-auto border-b border-border"
+      >
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const active = activeTab === tab.id;
@@ -120,23 +165,29 @@ export default function FarmProfilePage() {
             <button
               key={tab.id}
               type="button"
+              role="tab"
+              aria-selected={active}
               onClick={() => setActiveTab(tab.id)}
               className={cn(
-                "flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors duration-150 cursor-pointer",
+                "relative -mb-px flex shrink-0 cursor-pointer items-center gap-1.5 border-b-2 px-3.5 py-2.5 text-sm font-medium transition-colors duration-150",
                 active
-                  ? "bg-primary text-primary-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
+                  ? "border-accent text-foreground"
+                  : "border-transparent text-muted-foreground hover:border-border hover:text-foreground"
               )}
             >
-              <Icon className="h-4 w-4" aria-hidden="true" />
-              <span className="hidden sm:inline">{tab.label}</span>
+              <Icon
+                className={cn("h-4 w-4", active ? "text-accent" : "text-muted-foreground")}
+                aria-hidden="true"
+              />
+              {tab.label}
             </button>
           );
         })}
       </div>
 
       {/* Tab content */}
-      {activeTab === "overview" && <OverviewTab farm={farm} farmContext={farmContext} />}
+      {activeTab === "overview" && <OverviewTab farm={farm} />}
+      {activeTab === "fields" && <FieldsTab farm={farm} farmContext={farmContext} />}
       {activeTab === "soil" && <SoilTab farm={farm} />}
       {activeTab === "irrigation" && <IrrigationTab farm={farm} />}
       {activeTab === "history" && <HistoryTab />}
@@ -145,10 +196,124 @@ export default function FarmProfilePage() {
 }
 
 /* ------------------------------------------------------------------ */
-/* Overview Tab                                                         */
+/* Overview Tab — reference layout                                     */
 /* ------------------------------------------------------------------ */
 
 function OverviewTab({
+  farm,
+}: {
+  farm: ReturnType<typeof useFarm>["farm"] & object;
+}) {
+  const { t } = usePreferences();
+
+  const sowingDate = farm.plantingDate
+    ? new Date(farm.plantingDate + "T00:00:00").toLocaleDateString()
+    : "";
+
+  return (
+    <div className="space-y-6">
+      {/* Large farm image + Farm Information card */}
+      <div className="grid items-stretch gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
+        {/* Large farm image */}
+        <div className="relative min-h-[260px] overflow-hidden rounded-2xl border border-border bg-muted shadow-soft lg:h-full">
+          <img
+            src={FARM_HERO_IMAGE}
+            alt={t("farmProfile.farmImageAlt")}
+            className="absolute inset-0 h-full w-full object-cover"
+            loading="lazy"
+          />
+          <div
+            className="absolute inset-0 bg-gradient-to-t from-foreground/55 via-foreground/5 to-transparent"
+            aria-hidden="true"
+          />
+          <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between gap-3">
+            <span className="inline-flex max-w-[70%] items-center gap-1.5 rounded-full bg-background/85 px-3 py-1.5 text-xs font-semibold text-foreground shadow-soft backdrop-blur">
+              <Sprout className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
+              <span className="truncate">{farm.farmName || farm.currentCrop}</span>
+            </span>
+            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-accent px-2.5 py-1 text-[11px] font-semibold text-accent-foreground shadow-soft">
+              {t("farmProfile.farmBadge")}
+            </span>
+          </div>
+        </div>
+
+        {/* Farm Information card */}
+        <Card className="card-sheen flex flex-col shadow-soft">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <IdCard className="h-5 w-5 text-primary" aria-hidden="true" />
+              {t("farmProfile.farmInfoCard")}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="grid flex-1 content-start gap-3.5">
+            <InfoRow
+              icon={<Home className="h-4 w-4" />}
+              label={t("farmProfile.farmName")}
+              value={farm.farmName ?? ""}
+            />
+            <InfoRow
+              icon={<MapPin className="h-4 w-4" />}
+              label={t("farmProfile.location")}
+              value={farm.location}
+            />
+            <InfoRow
+              icon={<Ruler className="h-4 w-4" />}
+              label={t("farmProfile.totalArea")}
+              value={farm.landArea}
+            />
+            <InfoRow
+              icon={<Leaf className="h-4 w-4" />}
+              label={t("farmProfile.currentCrop")}
+              value={farm.currentCrop}
+            />
+            <InfoRow
+              icon={<CalendarDays className="h-4 w-4" />}
+              label={t("farmProfile.sowingDate")}
+              value={sowingDate}
+            />
+            <InfoRow
+              icon={<Sprout className="h-4 w-4" />}
+              label={t("farmProfile.cropVariety")}
+              value={farm.currentCropVariety ?? ""}
+            />
+          </CardContent>
+          <CardFooter className="border-t border-border pt-4">
+            <Button asChild className="w-full">
+              <Link to="/farm-setup">
+                <Pencil className="h-4 w-4" aria-hidden="true" />
+                {t("farmProfile.editBtn")}
+              </Link>
+            </Button>
+          </CardFooter>
+        </Card>
+      </div>
+
+      {/* Bottom info cards */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard icon={Mountain} label={t("farmProfile.soilType")} value={farm.soilType} />
+        <StatCard
+          icon={Droplets}
+          label={t("farmProfile.irrigationMethod")}
+          value={farm.irrigationMethod}
+        />
+        <StatCard icon={Waves} label={t("farmProfile.waterSource")} value={farm.waterSource ?? ""} />
+        <StatCard
+          icon={Timer}
+          label={t("farmProfile.farmAge")}
+          value={
+            farm.farmAgeYears != null ? t("farmProfile.years", { n: farm.farmAgeYears }) : ""
+          }
+        />
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Fields Tab                                                          */
+/* ------------------------------------------------------------------ */
+
+function FieldsTab({
   farm,
   farmContext,
 }: {
@@ -159,65 +324,23 @@ function OverviewTab({
 
   return (
     <div className="space-y-6">
-      {/* Farm ID + name */}
+      {/* Field details */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <IdCard className="h-5 w-5 text-primary" aria-hidden="true" />
-            {t("farmProfile.farmIdCard")}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <p className="font-mono text-sm text-foreground">{farm.id}</p>
-          {farm.farmName ? (
-            <div className="flex items-center gap-2">
-              <Badge variant="default">{farm.farmName}</Badge>
-            </div>
-          ) : null}
-          {farm.farmAgeYears != null ? (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Timer className="h-4 w-4" aria-hidden="true" />
-              {farm.farmAgeYears} {t("farmProfile.yearsOperating")}
-            </div>
-          ) : null}
-          <p className="text-xs text-muted-foreground">
-            {t("farmProfile.farmIdHint")}
-          </p>
-        </CardContent>
-      </Card>
-
-      {/* Farmer Information */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <User className="h-5 w-5 text-primary" aria-hidden="true" />
-            {t("farmProfile.farmerCard")}
+            <Ruler className="h-5 w-5 text-primary" aria-hidden="true" />
+            {t("farmProfile.fieldDetails")}
           </CardTitle>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
-          <InfoRow icon={<User className="h-4 w-4" />} label={t("farmSetup.farmerName")} value={farm.farmerName} />
-          <InfoRow icon={<Phone className="h-4 w-4" />} label={t("farmSetup.phone")} value={farm.phone ?? ""} />
-          <InfoRow icon={<Mail className="h-4 w-4" />} label={t("farmSetup.email")} value={farm.email ?? ""} />
+          <InfoRow icon={<Home className="h-4 w-4" />} label={t("farmProfile.farmName")} value={farm.farmName ?? ""} />
+          <InfoRow icon={<Ruler className="h-4 w-4" />} label={t("farmProfile.totalArea")} value={farm.landArea} />
+          <InfoRow icon={<MapPin className="h-4 w-4" />} label={t("farmProfile.location")} value={farm.location} />
+          <InfoRow icon={<Waves className="h-4 w-4" />} label={t("farmProfile.waterSource")} value={farm.waterSource ?? ""} />
         </CardContent>
       </Card>
 
-      {/* Farm Information */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <MapPin className="h-5 w-5 text-primary" aria-hidden="true" />
-            {t("farmProfile.farmInfoCard")}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="grid gap-4 sm:grid-cols-2">
-          <InfoRow icon={<MapPin className="h-4 w-4" />} label={t("farmSetup.location")} value={farm.location} />
-          <InfoRow icon={<Ruler className="h-4 w-4" />} label={t("farmSetup.landArea")} value={farm.landArea} />
-          <InfoRow icon={<Leaf className="h-4 w-4" />} label={t("farmSetup.soilType")} value={farm.soilType} />
-          <InfoRow icon={<Droplets className="h-4 w-4" />} label={t("farmSetup.irrigation")} value={farm.irrigationMethod} />
-        </CardContent>
-      </Card>
-
-      {/* Crop Information */}
+      {/* Current crop */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -226,11 +349,11 @@ function OverviewTab({
           </CardTitle>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
-          <InfoRow icon={<Sprout className="h-4 w-4" />} label={t("farmSetup.currentCrop")} value={farm.currentCrop} />
-          <InfoRow icon={<Leaf className="h-4 w-4" />} label={t("farmSetup.variety")} value={farm.currentCropVariety ?? ""} />
+          <InfoRow icon={<Leaf className="h-4 w-4" />} label={t("farmProfile.currentCrop")} value={farm.currentCrop} />
+          <InfoRow icon={<Sprout className="h-4 w-4" />} label={t("farmProfile.cropVariety")} value={farm.currentCropVariety ?? ""} />
           <InfoRow
             icon={<CalendarDays className="h-4 w-4" />}
-            label={t("farmSetup.plantingDate")}
+            label={t("farmProfile.sowingDate")}
             value={
               farm.plantingDate
                 ? new Date(farm.plantingDate + "T00:00:00").toLocaleDateString()
@@ -238,7 +361,7 @@ function OverviewTab({
             }
           />
           <InfoRow
-            icon={<Sprout className="h-4 w-4" />}
+            icon={<Timer className="h-4 w-4" />}
             label={t("farmProfile.cropAge")}
             value={
               farmContext.growth.cropAgeDays !== null
@@ -255,6 +378,22 @@ function OverviewTab({
                 : farmContext.growth.stageLabel
             }
           />
+        </CardContent>
+      </Card>
+
+      {/* Farmer information */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <User className="h-5 w-5 text-primary" aria-hidden="true" />
+            {t("farmProfile.farmerCard")}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-4 sm:grid-cols-2">
+          <InfoRow icon={<User className="h-4 w-4" />} label={t("farmProfile.farmerName")} value={farm.farmerName} />
+          <InfoRow icon={<Phone className="h-4 w-4" />} label={t("farmProfile.phone")} value={farm.phone ?? ""} />
+          <InfoRow icon={<Mail className="h-4 w-4" />} label={t("farmProfile.email")} value={farm.email ?? ""} />
+          <InfoRow icon={<IdCard className="h-4 w-4" />} label={t("farmProfile.farmIdCard")} value={farm.id} />
         </CardContent>
       </Card>
     </div>
@@ -279,8 +418,8 @@ function SoilTab({ farm }: { farm: ReturnType<typeof useFarm>["farm"] & object }
           </CardTitle>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
-          <InfoRow icon={<Mountain className="h-4 w-4" />} label={t("farmSetup.soilType")} value={farm.soilType} />
-          <InfoRow icon={<MapPin className="h-4 w-4" />} label={t("farmSetup.location")} value={farm.location} />
+          <InfoRow icon={<Mountain className="h-4 w-4" />} label={t("farmProfile.soilType")} value={farm.soilType} />
+          <InfoRow icon={<MapPin className="h-4 w-4" />} label={t("farmProfile.location")} value={farm.location} />
         </CardContent>
       </Card>
 
@@ -320,9 +459,9 @@ function IrrigationTab({ farm }: { farm: ReturnType<typeof useFarm>["farm"] & ob
           </CardTitle>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
-          <InfoRow icon={<Droplets className="h-4 w-4" />} label={t("farmSetup.irrigation")} value={farm.irrigationMethod} />
-          <InfoRow icon={<Waves className="h-4 w-4" />} label={t("farmSetup.waterSource")} value={farm.waterSource ?? ""} />
-          <InfoRow icon={<Ruler className="h-4 w-4" />} label={t("farmSetup.landArea")} value={farm.landArea} />
+          <InfoRow icon={<Droplets className="h-4 w-4" />} label={t("farmProfile.irrigationMethod")} value={farm.irrigationMethod} />
+          <InfoRow icon={<Waves className="h-4 w-4" />} label={t("farmProfile.waterSource")} value={farm.waterSource ?? ""} />
+          <InfoRow icon={<Ruler className="h-4 w-4" />} label={t("farmProfile.totalArea")} value={farm.landArea} />
         </CardContent>
       </Card>
 
