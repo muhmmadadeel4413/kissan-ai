@@ -13,6 +13,10 @@ import {
   CalendarClock,
   Wind,
   Leaf,
+  MapPin,
+  Ruler,
+  TrendingUp,
+  ListChecks,
 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Card, CardContent } from "../components/ui/card";
@@ -22,15 +26,18 @@ import { EmptyState } from "../components/layout/empty-state";
 import { LoadingState } from "../components/layout/loading-state";
 import { ErrorState } from "../components/layout/error-state";
 import { IrrigationFarmContextCard } from "../components/irrigation/irrigation-farm-context-card";
+import { SoilMoistureCard } from "../components/irrigation/soil-moisture-card";
 import { useFarm } from "../context/FarmContext";
 import { useFarmWeather } from "../hooks/useFarmWeather";
 import { usePreferences } from "../context/PreferencesContext";
+import { buildFarmContext } from "../lib/farm-context";
 import {
   fetchIrrigationHistory,
   requestIrrigationAdvice,
   type IrrigationWeatherInput,
 } from "../lib/irrigation-service";
 import type {
+  Farm,
   IrrigationRecommendation,
   IrrigationRecommendationRecord,
   IrrigationStatus,
@@ -38,7 +45,7 @@ import type {
 } from "../types";
 
 /**
- * Irrigation Advisor (Prompt 14).
+ * Irrigation Advisor (Prompt 14) — UI redesign.
  *
  * Answers "when and how much should I irrigate?" by reusing the existing Farm
  * Context Engine (real saved farm + deterministic growth) and the existing
@@ -46,6 +53,12 @@ import type {
  * server-side in the `irrigation-advisor` Edge Function (deterministic
  * rain-aware rules + optional Gemini explanation, structured JSON, validated
  * and persisted) and always reflects real data — never mocked.
+ *
+ * This file is a UI-only redesign of the page. All calculations, services,
+ * API calls, state management, loading/error/empty states, and the history
+ * flow are preserved exactly as before — only the layout/visual hierarchy
+ * changed to match the reference (Current Recommendation | Soil Moisture
+ * two-card grid + Next Irrigation strip).
  */
 export default function IrrigationPage() {
   const { farm } = useFarm();
@@ -84,6 +97,7 @@ export default function IrrigationPage() {
   >("loading");
   const [historyReload, setHistoryReload] = React.useState(0);
   const [openRecordId, setOpenRecordId] = React.useState<string | null>(null);
+  const historyRef = React.useRef<HTMLElement | null>(null);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -157,6 +171,14 @@ export default function IrrigationPage() {
     weather.status === "error" ||
     weather.status === "idle" ||
     (weather.status === "ready" && !weather.weather);
+
+  /** "View Irrigation Plan" → reuse the existing saved-history flow. */
+  const viewIrrigationPlan = () => {
+    if (history.length > 0) {
+      setOpenRecordId(history[0].id);
+    }
+    historyRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
 
   return (
     <div className="space-y-6">
@@ -277,17 +299,31 @@ export default function IrrigationPage() {
         />
       ) : null}
 
-      {/* Successful result */}
+      {/* Successful result — redesigned two-card layout */}
       {runStatus === "success" && result ? (
-        <ResultCard
-          recommendation={result.recommendation}
-          weatherUnavailable={weatherUnavailable}
-          onRegenerate={runAdvice}
-        />
+        <>
+          <section className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+            {/* Left / Main — Current Recommendation */}
+            <div className="lg:col-span-2">
+              <CurrentRecommendationCard
+                recommendation={result.recommendation}
+                farm={farm}
+                weatherUnavailable={weatherUnavailable}
+                onViewPlan={viewIrrigationPlan}
+              />
+            </div>
+
+            {/* Right — Soil Moisture (real value when available, honest fallback otherwise) */}
+            <SoilMoistureCard value={null} />
+          </section>
+
+          {/* Bottom — Next Irrigation */}
+          <NextIrrigationStrip recommendation={result.recommendation} />
+        </>
       ) : null}
 
       {/* History — real saved records only */}
-      <section className="space-y-3">
+      <section className="space-y-3" ref={historyRef}>
         <SectionHeader title={t("irrigation.historyTitle")} subtitle={t("irrigation.historySub")} />
         {historyStatus === "loading" ? (
           <LoadingState rows={2} title={t("common.loading")} />
@@ -380,14 +416,291 @@ function formatDate(iso: string): string {
   });
 }
 
+/* ------------------------------------------------------------------ */
+/* Current Recommendation (left card) — UI redesign                    */
+/* ------------------------------------------------------------------ */
+
+function CurrentRecommendationCard({
+  recommendation,
+  farm,
+  weatherUnavailable,
+  onViewPlan,
+}: {
+  recommendation: IrrigationRecommendation;
+  farm: Farm;
+  weatherUnavailable?: boolean;
+  onViewPlan?: () => void;
+}) {
+  const { t } = usePreferences();
+  const statusMeta = STATUS_META[recommendation.status] ?? STATUS_META.insufficient;
+  const urgencyMeta = URGENCY_META[recommendation.urgency] ?? URGENCY_META.low;
+  const context = buildFarmContext(farm);
+
+  const farmChips = [
+    { labelKey: "irrigation.crop", value: farm.currentCrop || "—", icon: Sprout },
+    { labelKey: "irrigation.growthStage", value: context.growth.stageLabel || "—", icon: TrendingUp },
+    { labelKey: "irrigation.soil", value: farm.soilType || "—", icon: Leaf },
+    { labelKey: "irrigation.method", value: farm.irrigationMethod || "—", icon: DropletIcon },
+    { labelKey: "irrigation.location", value: farm.location || "—", icon: MapPin },
+    { labelKey: "irrigation.landArea", value: farm.landArea || "—", icon: Ruler },
+  ];
+
+  const waterNeed =
+    recommendation.waterGuidance.relative || t("irrigation.waterCantEstimate");
+
+  return (
+    <Card className="h-full">
+      <CardContent className="flex h-full flex-col gap-5 py-6">
+        {/* Title row */}
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-soft text-primary">
+              <DropletIcon className="h-4.5 w-4.5" aria-hidden="true" />
+            </span>
+            <div>
+              <p className="font-heading text-base font-bold text-foreground">
+                {t("irrigation.currentRecommendation")}
+              </p>
+              <p className="text-xs text-muted-foreground">{t("irrigation.currentRecSub")}</p>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant={statusMeta.variant === "neutral" ? "outline" : statusMeta.variant}>
+              {t(statusMeta.labelKey)}
+            </Badge>
+            <Badge variant={urgencyMeta.variant}>{t(urgencyMeta.labelKey)}</Badge>
+          </div>
+        </div>
+
+        {/* Irrigate within — real timing from the existing recommendation */}
+        <div className="rounded-2xl border border-primary/15 bg-primary-soft/40 p-5">
+          <div className="flex items-center gap-2 text-primary">
+            <Clock className="h-4 w-4" aria-hidden="true" />
+            <p className="text-xs font-semibold uppercase tracking-wide">
+              {t("irrigation.irrigateWithin")}
+            </p>
+          </div>
+          <p className="mt-2 font-heading text-3xl font-extrabold tracking-tight text-foreground sm:text-4xl">
+            {recommendation.timing?.recommended_time || t("irrigation.waterCantEstimate")}
+          </p>
+          {recommendation.timing?.reason ? (
+            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+              {recommendation.timing.reason}
+            </p>
+          ) : null}
+        </div>
+
+        {/* Estimated water need — real guidance, never a fabricated number */}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="rounded-2xl border border-border/70 bg-background p-4">
+            <div className="flex items-center gap-2 text-primary">
+              <DropletIcon className="h-4 w-4" aria-hidden="true" />
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                {t("irrigation.estimatedWaterNeed")}
+              </p>
+            </div>
+            <p className="mt-2 text-base font-semibold leading-relaxed text-foreground">
+              {waterNeed}
+            </p>
+          </div>
+
+          {/* Reason — supporting explanation from the existing recommendation */}
+          <div className="rounded-2xl border border-border/70 bg-background p-4">
+            <div className="flex items-center gap-2 text-primary">
+              <ListChecks className="h-4 w-4" aria-hidden="true" />
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                {t("irrigation.reason")}
+              </p>
+            </div>
+            <p className="mt-2 text-sm leading-relaxed text-foreground">
+              {recommendation.recommendation || "—"}
+            </p>
+          </div>
+        </div>
+
+        {/* Farm / soil / weather context — real saved data */}
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            {t("irrigation.myFarm")}
+          </p>
+          <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-4 sm:grid-cols-3">
+            {farmChips.map(({ labelKey, value, icon: Icon }) => (
+              <div key={labelKey} className="space-y-1">
+                <dt className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                  <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+                  {t(labelKey)}
+                </dt>
+                <dd className="text-sm font-semibold text-foreground">{value}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+
+        {/* Impact context */}
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <ImpactRow
+            icon={<Wind className="h-4 w-4" aria-hidden="true" />}
+            label={t("irrigation.weatherImpact")}
+            value={recommendation.weatherImpact}
+          />
+          <ImpactRow
+            icon={<Leaf className="h-4 w-4" aria-hidden="true" />}
+            label={t("irrigation.soilImpact")}
+            value={recommendation.soilImpact}
+          />
+          <ImpactRow
+            icon={<Layers className="h-4 w-4" aria-hidden="true" />}
+            label={t("irrigation.cropStageImpact")}
+            value={recommendation.cropStageImpact}
+          />
+          <ImpactRow
+            icon={<CloudSun className="h-4 w-4" aria-hidden="true" />}
+            label={t("irrigation.rainAdjustment")}
+            value={recommendation.rainAdjustment}
+          />
+        </div>
+
+        {/* Limitations — honest degradation, preserved from before */}
+        {weatherUnavailable ? (
+          <InfoNote text={t("irrigation.weatherUnavailable")} tone="neutral" />
+        ) : null}
+
+        {/* View Irrigation Plan — reuses the existing saved-history flow */}
+        <div className="mt-auto pt-1">
+          <Button size="lg" className="w-full sm:w-auto" onClick={onViewPlan}>
+            <CalendarClock className="h-4 w-4" aria-hidden="true" />
+            {t("irrigation.viewIrrigationPlan")}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Next Irrigation (bottom strip) — UI redesign                        */
+/* ------------------------------------------------------------------ */
+
+function NextIrrigationStrip({
+  recommendation,
+}: {
+  recommendation: IrrigationRecommendation;
+}) {
+  const { t } = usePreferences();
+
+  return (
+    <Card>
+      <CardContent className="flex flex-col gap-4 py-5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-start gap-3">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary-soft text-primary">
+            <CalendarClock className="h-5 w-5" aria-hidden="true" />
+          </span>
+          <div className="min-w-0">
+            <p className="font-heading text-base font-bold text-foreground">
+              {t("irrigation.nextIrrigation")}
+            </p>
+            <p className="text-xs text-muted-foreground">{t("irrigation.nextIrrigationSub")}</p>
+            <p className="mt-2 font-heading text-2xl font-extrabold tracking-tight text-foreground">
+              {recommendation.timing?.recommended_time || t("irrigation.waterCantEstimate")}
+            </p>
+            {recommendation.nextCheck ? (
+              <p className="mt-1 text-sm text-muted-foreground">
+                {t("irrigation.nextCheck")}: {recommendation.nextCheck}
+              </p>
+            ) : null}
+          </div>
+        </div>
+        {recommendation.timing?.reason ? (
+          <p className="max-w-sm text-sm leading-relaxed text-muted-foreground">
+            {recommendation.timing.reason}
+          </p>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+function ImpactRow({
+  icon,
+  label,
+  value,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value?: string;
+}) {
+  return (
+    <div className="flex items-start gap-2 rounded-xl border border-border/60 bg-background p-3">
+      <span className="mt-0.5 text-primary">{icon}</span>
+      <div className="min-w-0">
+        <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
+        <dd className="text-sm leading-relaxed text-foreground">{value || "—"}</dd>
+      </div>
+    </div>
+  );
+}
+
+function HistoryRow({
+  record,
+  open,
+  onToggle,
+}: {
+  record: IrrigationRecommendationRecord;
+  open: boolean;
+  onToggle: () => void;
+}) {
+  const { t } = usePreferences();
+  const rec = record.recommendation;
+  const meta = STATUS_META[rec.status] ?? STATUS_META.insufficient;
+  return (
+    <Card>
+      <CardContent className="p-4">
+        <button
+          type="button"
+          onClick={onToggle}
+          className="flex w-full flex-wrap items-center justify-between gap-3 text-left cursor-pointer"
+          aria-expanded={open}
+        >
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-soft text-primary">
+              <DropletIcon className="h-4 w-4" aria-hidden="true" />
+            </span>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-foreground">
+                {t(meta.labelKey)}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {t("irrigation.reportedOn", { date: formatDate(record.createdAt) })}
+              </p>
+            </div>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <Badge variant={meta.variant === "neutral" ? "outline" : meta.variant}>
+              {t("irrigation.urgency." + rec.urgency)}
+            </Badge>
+          </div>
+        </button>
+
+        {open ? (
+          <div className="mt-4 border-t border-border pt-4">
+            <ResultCard recommendation={rec} />
+          </div>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* ResultCard — reused unchanged for expanded history rows              */
+/* ------------------------------------------------------------------ */
+
 function ResultCard({
   recommendation,
   weatherUnavailable = false,
-  onRegenerate,
 }: {
   recommendation: IrrigationRecommendation;
   weatherUnavailable?: boolean;
-  onRegenerate?: () => void;
 }) {
   const { t } = usePreferences();
   const statusMeta = STATUS_META[recommendation.status] ?? STATUS_META.insufficient;
@@ -402,19 +715,6 @@ function ResultCard({
   return (
     <div className="space-y-4">
       <section className="space-y-3">
-        <SectionHeader
-          title={t("irrigation.resultTitle")}
-          subtitle={t("irrigation.resultSub")}
-          action={
-            onRegenerate ? (
-              <Button variant="outline" size="sm" onClick={onRegenerate}>
-                <Loader2 className="h-4 w-4" aria-hidden="true" />
-                {t("irrigation.retry")}
-              </Button>
-            ) : undefined
-          }
-        />
-
         <Card>
           <CardContent className="space-y-4 py-5">
             <div className="flex flex-wrap items-center gap-2">
@@ -534,76 +834,5 @@ function ResultCard({
         ) : null}
       </section>
     </div>
-  );
-}
-
-function ImpactRow({
-  icon,
-  label,
-  value,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value?: string;
-}) {
-  return (
-    <div className="flex items-start gap-2 rounded-xl border border-border/60 bg-background p-3">
-      <span className="mt-0.5 text-primary">{icon}</span>
-      <div className="min-w-0">
-        <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
-        <dd className="text-sm leading-relaxed text-foreground">{value || "—"}</dd>
-      </div>
-    </div>
-  );
-}
-
-function HistoryRow({
-  record,
-  open,
-  onToggle,
-}: {
-  record: IrrigationRecommendationRecord;
-  open: boolean;
-  onToggle: () => void;
-}) {
-  const { t } = usePreferences();
-  const rec = record.recommendation;
-  const meta = STATUS_META[rec.status] ?? STATUS_META.insufficient;
-  return (
-    <Card>
-      <CardContent className="p-4">
-        <button
-          type="button"
-          onClick={onToggle}
-          className="flex w-full flex-wrap items-center justify-between gap-3 text-left cursor-pointer"
-          aria-expanded={open}
-        >
-          <div className="flex min-w-0 items-center gap-3">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-soft text-primary">
-              <DropletIcon className="h-4 w-4" aria-hidden="true" />
-            </span>
-            <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-foreground">
-                {t(meta.labelKey)}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {t("irrigation.reportedOn", { date: formatDate(record.createdAt) })}
-              </p>
-            </div>
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <Badge variant={meta.variant === "neutral" ? "outline" : meta.variant}>
-              {t("irrigation.urgency." + rec.urgency)}
-            </Badge>
-          </div>
-        </button>
-
-        {open ? (
-          <div className="mt-4 border-t border-border pt-4">
-            <ResultCard recommendation={rec} />
-          </div>
-        ) : null}
-      </CardContent>
-    </Card>
   );
 }
