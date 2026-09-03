@@ -1,15 +1,10 @@
 import * as React from "react";
 import {
-  Bug,
   ChevronRight,
   Clock,
-  CloudRain,
-  Droplets,
-  Leaf,
   RefreshCw,
   ShieldAlert,
   ShieldCheck,
-  Thermometer,
 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { PageHeader } from "../components/layout/page-header";
@@ -17,7 +12,7 @@ import { EmptyState } from "../components/layout/empty-state";
 import { LoadingState } from "../components/layout/loading-state";
 import { ErrorState } from "../components/layout/error-state";
 import { useFarmRisks } from "../hooks/useFarmRisks";
-import type { Level, RiskAlert, RiskType } from "../types";
+import type { Level, RiskAlert } from "../types";
 import { cn } from "../lib/utils";
 
 /* ------------------------------------------------------------------ */
@@ -41,43 +36,44 @@ const LEVEL_RANK: Record<Level, number> = { high: 0, medium: 1, low: 2 };
 
 const SEVERITY_META: Record<
   Level,
-  { label: string; chip: string; text: string; dot: string }
+  {
+    label: string;
+    chip: string;
+    text: string;
+    dot: string;
+    bar: string;
+    tint: string;
+    icon: React.ReactNode;
+  }
 > = {
   high: {
     label: "High Risk",
     chip: "bg-danger-soft text-danger ring-danger/20",
     text: "text-danger",
     dot: "bg-danger",
+    bar: "bg-danger",
+    tint: "bg-danger/[0.04]",
+    icon: <ShieldAlert className="h-5 w-5" aria-hidden="true" />,
   },
   medium: {
     label: "Medium Risk",
     chip: "bg-warning-soft text-warning ring-warning/20",
     text: "text-warning",
     dot: "bg-warning",
+    bar: "bg-warning",
+    tint: "bg-warning/[0.05]",
+    icon: <ShieldAlert className="h-5 w-5" aria-hidden="true" />,
   },
   low: {
     label: "Low Risk",
     chip: "bg-success-soft text-success ring-success/15",
     text: "text-success",
     dot: "bg-success",
+    bar: "bg-success",
+    tint: "bg-success/[0.05]",
+    icon: <ShieldCheck className="h-5 w-5" aria-hidden="true" />,
   },
 };
-
-/* ------------------------------------------------------------------ */
-/* Risk type → label + icon                                            */
-/* ------------------------------------------------------------------ */
-
-const RISK_TYPE_META: Record<RiskType, { label: string; icon: React.ReactNode }> = {
-  disease: { label: "Disease Risk", icon: <Leaf className="h-4 w-4" aria-hidden="true" /> },
-  pest: { label: "Pest Risk", icon: <Bug className="h-4 w-4" aria-hidden="true" /> },
-  weather: { label: "Weather Risk", icon: <CloudRain className="h-4 w-4" aria-hidden="true" /> },
-  irrigation: { label: "Irrigation Risk", icon: <Droplets className="h-4 w-4" aria-hidden="true" /> },
-  crop_stress: { label: "Crop Stress", icon: <Thermometer className="h-4 w-4" aria-hidden="true" /> },
-};
-
-function riskTypeMeta(type: RiskType): { label: string; icon: React.ReactNode } {
-  return RISK_TYPE_META[type] ?? { label: "Risk", icon: <ShieldAlert className="h-4 w-4" aria-hidden="true" /> };
-}
 
 /* ------------------------------------------------------------------ */
 /* Time indicators (existing behaviour, preserved)                     */
@@ -114,27 +110,37 @@ function formatDateTime(iso: string | null): string {
 
 function AlertRow({ alert }: { alert: RiskAlert }) {
   const severity = SEVERITY_META[alert.level];
-  const meta = riskTypeMeta(alert.riskType);
 
   return (
-    <div className="group flex items-center gap-3 rounded-2xl border border-border bg-card p-4 shadow-soft transition-shadow duration-200 hover:shadow-lift sm:gap-4 sm:p-5">
+    <div
+      className={cn(
+        "group relative flex items-center gap-3 overflow-hidden rounded-2xl border border-border bg-card p-4 shadow-soft transition-all duration-200 hover:shadow-lift sm:gap-4 sm:p-5",
+        severity.tint
+      )}
+    >
+      {/* Severity accent bar — left edge, colour-coded from the real level */}
+      <span
+        className={cn("absolute inset-y-0 left-0 w-1", severity.bar)}
+        aria-hidden="true"
+      />
+
       {/* Severity icon chip (colour-coded from the real alert level) */}
       <span
         className={cn(
-          "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ring-1 ring-inset",
+          "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ring-1 ring-inset",
           severity.chip
         )}
         aria-hidden="true"
       >
-        {meta.icon}
+        {severity.icon}
       </span>
 
       {/* Alert content */}
-      <div className="min-w-0 flex-1 space-y-1">
+      <div className="min-w-0 flex-1 space-y-0.5">
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5">
           <span
             className={cn(
-              "inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide",
+              "inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider",
               severity.text
             )}
           >
