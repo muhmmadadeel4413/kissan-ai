@@ -1,6 +1,8 @@
 import * as React from "react";
 import {
   Bug,
+  ChevronRight,
+  Clock,
   CloudRain,
   Droplets,
   Leaf,
@@ -9,29 +11,57 @@ import {
   ShieldCheck,
   Thermometer,
 } from "lucide-react";
-import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
-import { PageHeader, SectionHeader } from "../components/layout/page-header";
+import { PageHeader } from "../components/layout/page-header";
 import { EmptyState } from "../components/layout/empty-state";
 import { LoadingState } from "../components/layout/loading-state";
 import { ErrorState } from "../components/layout/error-state";
 import { useFarmRisks } from "../hooks/useFarmRisks";
-import type { RiskAlert, RiskType } from "../types";
+import type { Level, RiskAlert, RiskType } from "../types";
 import { cn } from "../lib/utils";
 
 /* ------------------------------------------------------------------ */
-/* Shared level → emoji + badge variant (🟢 LOW / 🟡 MEDIUM / 🔴 HIGH) */
+/* Level filter definition — All / High / Medium / Low                 */
 /* ------------------------------------------------------------------ */
 
-export function levelBadge(level: "low" | "medium" | "high") {
-  const map = {
-    low: { variant: "success" as const, label: "LOW", dot: "bg-success" },
-    medium: { variant: "warning" as const, label: "MEDIUM", dot: "bg-warning" },
-    high: { variant: "danger" as const, label: "HIGH", dot: "bg-danger" },
-  };
-  return map[level];
-}
+type AlertFilter = "all" | Level;
+
+const FILTERS: { key: AlertFilter; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "high", label: "High" },
+  { key: "medium", label: "Medium" },
+  { key: "low", label: "Low" },
+];
+
+const LEVEL_RANK: Record<Level, number> = { high: 0, medium: 1, low: 2 };
+
+/* ------------------------------------------------------------------ */
+/* Severity presentation — derived from the existing alert level.      */
+/* ------------------------------------------------------------------ */
+
+const SEVERITY_META: Record<
+  Level,
+  { label: string; chip: string; text: string; dot: string }
+> = {
+  high: {
+    label: "High Risk",
+    chip: "bg-danger-soft text-danger ring-danger/20",
+    text: "text-danger",
+    dot: "bg-danger",
+  },
+  medium: {
+    label: "Medium Risk",
+    chip: "bg-warning-soft text-warning ring-warning/20",
+    text: "text-warning",
+    dot: "bg-warning",
+  },
+  low: {
+    label: "Low Risk",
+    chip: "bg-success-soft text-success ring-success/15",
+    text: "text-success",
+    dot: "bg-success",
+  },
+};
 
 /* ------------------------------------------------------------------ */
 /* Risk type → label + icon                                            */
@@ -45,12 +75,12 @@ const RISK_TYPE_META: Record<RiskType, { label: string; icon: React.ReactNode }>
   crop_stress: { label: "Crop Stress", icon: <Thermometer className="h-4 w-4" aria-hidden="true" /> },
 };
 
-function riskTypeLabel(type: RiskType): { label: string; icon: React.ReactNode } {
+function riskTypeMeta(type: RiskType): { label: string; icon: React.ReactNode } {
   return RISK_TYPE_META[type] ?? { label: "Risk", icon: <ShieldAlert className="h-4 w-4" aria-hidden="true" /> };
 }
 
 /* ------------------------------------------------------------------ */
-/* Relative "last assessed" label                                      */
+/* Time indicators (existing behaviour, preserved)                     */
 /* ------------------------------------------------------------------ */
 
 function relativeTime(iso: string | null): string {
@@ -79,84 +109,63 @@ function formatDateTime(iso: string | null): string {
 }
 
 /* ------------------------------------------------------------------ */
-/* Risk card                                                           */
+/* Alert row — horizontal card matching the reference layout           */
 /* ------------------------------------------------------------------ */
 
-function RiskCard({ risk }: { risk: RiskAlert }) {
-  const badge = levelBadge(risk.level);
-  const meta = riskTypeLabel(risk.riskType);
+function AlertRow({ alert }: { alert: RiskAlert }) {
+  const severity = SEVERITY_META[alert.level];
+  const meta = riskTypeMeta(alert.riskType);
 
   return (
-    <Card
-      className={cn(
-        "overflow-hidden",
-        risk.level === "high" && "border-danger/40",
-        risk.level === "medium" && "border-warning/40",
-        risk.level === "low" && "border-border"
-      )}
-    >
-      <CardHeader className="flex-row items-start justify-between space-y-0 pb-3">
-        <div className="flex items-center gap-2">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-            {meta.icon}
+    <div className="group flex items-center gap-3 rounded-2xl border border-border bg-card p-4 shadow-soft transition-shadow duration-200 hover:shadow-lift sm:gap-4 sm:p-5">
+      {/* Severity icon chip (colour-coded from the real alert level) */}
+      <span
+        className={cn(
+          "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ring-1 ring-inset",
+          severity.chip
+        )}
+        aria-hidden="true"
+      >
+        {meta.icon}
+      </span>
+
+      {/* Alert content */}
+      <div className="min-w-0 flex-1 space-y-1">
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5">
+          <span
+            className={cn(
+              "inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide",
+              severity.text
+            )}
+          >
+            <span className={cn("h-1.5 w-1.5 rounded-full", severity.dot)} aria-hidden="true" />
+            {severity.label}
           </span>
-          <div>
-            <CardTitle className="text-sm">{risk.title}</CardTitle>
-            <p className="text-xs font-medium text-muted-foreground">{meta.label}</p>
-          </div>
+          <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Clock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            <time dateTime={alert.createdAt}>{relativeTime(alert.createdAt)}</time>
+          </span>
         </div>
-        <Badge variant={badge.variant}>
-          <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", badge.dot)} aria-hidden="true" />
-          <span className="ml-1">{badge.label}</span>
-        </Badge>
-      </CardHeader>
 
-      <CardContent className="space-y-4 text-sm">
-        {/* Why */}
-        <p className="text-foreground/90">{risk.explanation}</p>
-
-        {/* Evidence */}
-        {risk.evidence.length > 0 ? (
-          <div>
-            <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Why this matters
-            </p>
-            <ul className="space-y-1.5">
-              {risk.evidence.map((e, i) => (
-                <li key={i} className="flex items-start gap-2 text-muted-foreground">
-                  <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary-soft ring-2 ring-primary/30" />
-                  <span>{e}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
-
-        {/* Recommended actions */}
-        {risk.recommendedActions.length > 0 ? (
-          <div>
-            <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              What to do
-            </p>
-            <ol className="list-decimal space-y-1.5 pl-4 text-foreground/90">
-              {risk.recommendedActions.map((a, i) => (
-                <li key={i} className="break-words">{a}</li>
-              ))}
-            </ol>
-          </div>
-        ) : null}
-
-        <p className="text-xs text-muted-foreground">
-          This is an advisory assessment based on your saved farm, crop, weather,
-          and diagnosis data — not a diagnosis.
+        <p className="truncate text-sm font-semibold text-foreground sm:text-[15px]">
+          {alert.title}
         </p>
-      </CardContent>
-    </Card>
+        <p className="line-clamp-2 text-sm leading-relaxed text-muted-foreground">
+          {alert.explanation}
+        </p>
+      </div>
+
+      {/* Action affordance — visual only, no fake interaction */}
+      <ChevronRight
+        className="h-5 w-5 shrink-0 text-muted-foreground/50 transition-transform duration-200 group-hover:translate-x-0.5"
+        aria-hidden="true"
+      />
+    </div>
   );
 }
 
 /* ------------------------------------------------------------------ */
-/* Page                                                                */
+/* Page — Alerts (existing /risks route, redesigned UI)                */
 /* ------------------------------------------------------------------ */
 
 export default function RisksPage() {
@@ -173,20 +182,28 @@ export default function RisksPage() {
     retry,
   } = useFarmRisks();
 
-  const [filter, setFilter] = React.useState<"all" | "high" | "medium" | "low">("all");
+  const [filter, setFilter] = React.useState<AlertFilter>("all");
 
-  const high = risks.filter((r) => r.level === "high");
-  const medium = risks.filter((r) => r.level === "medium");
-  const low = risks.filter((r) => r.level === "low");
+  const filtered = React.useMemo(() => {
+    const list = filter === "all" ? risks : risks.filter((r) => r.level === filter);
+    return [...list].sort(
+      (a, b) =>
+        LEVEL_RANK[a.level] - LEVEL_RANK[b.level] ||
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+  }, [risks, filter]);
+
+  const filterCount = (key: AlertFilter) =>
+    key === "all" ? risks.length : counts[key];
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Farm Risk"
+        title="Alerts"
         subtitle={
           farm
-            ? `Risks that could affect your ${farm.currentCrop} crop right now`
-            : "Understand what could threaten your crop"
+            ? `Risks that could affect your ${farm.currentCrop} crop right now — from your farm, weather, and crop-health data.`
+            : "Stay on top of risks that could affect your farm"
         }
         action={
           <Button variant="outline" size="sm" onClick={refresh} disabled={assessing}>
@@ -198,36 +215,15 @@ export default function RisksPage() {
       />
 
       {status === "loading" ? (
-        <LoadingState rows={2} title="Assessing your farm risks…" />
+        <LoadingState rows={3} title="Loading your alerts…" />
       ) : status === "error" ? (
         <ErrorState
-          title="Couldn't update your farm risk assessment"
-          message={error ?? "We couldn't update your farm risk assessment right now. Please try again."}
+          title="Couldn't load your alerts"
+          message={error ?? "We couldn't load your farm alerts right now. Please try again."}
           onRetry={retry}
         />
       ) : (
         <>
-          {/* Overall status */}
-          <Card>
-            <CardContent className="space-y-3 py-5">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <ShieldCheck className="h-5 w-5 text-primary" aria-hidden="true" />
-                  <p className="text-sm font-semibold text-foreground">Overall status</p>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Last assessed: {formatDateTime(assessedAt)} ({relativeTime(assessedAt)})
-                </p>
-              </div>
-
-              <div className="grid grid-cols-3 gap-3">
-                <StatusPill label="High" count={counts.high} tone="high" />
-                <StatusPill label="Medium" count={counts.medium} tone="medium" />
-                <StatusPill label="Low" count={counts.low} tone="low" />
-              </div>
-            </CardContent>
-          </Card>
-
           {/* Limitations — honest about missing inputs, never guessed */}
           {limitations.length > 0 ? (
             <div className="flex items-start gap-2 rounded-2xl border border-border bg-card p-4 text-sm text-muted-foreground">
@@ -240,114 +236,86 @@ export default function RisksPage() {
             </div>
           ) : null}
 
-          {/* Level filter toggle */}
-          {risks.length > 0 ? (
-            <div className="flex flex-wrap gap-2">
-              {(["all", "high", "medium", "low"] as const).map((level) => {
-                const count =
-                  level === "all" ? risks.length
-                  : level === "high" ? high.length
-                  : level === "medium" ? medium.length
-                  : low.length;
-                const active = filter === level;
-                return (
-                  <button
-                    key={level}
-                    type="button"
-                    onClick={() => setFilter(level)}
+          {/* Filter tabs — All / High / Medium / Low, driven by real data */}
+          <div role="group" aria-label="Filter alerts by severity" className="flex flex-wrap gap-2">
+            {FILTERS.map(({ key, label }) => {
+              const active = filter === key;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setFilter(key)}
+                  aria-pressed={active}
+                  className={cn(
+                    "inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold transition-all duration-200 cursor-pointer",
+                    active
+                      ? "border-primary bg-primary text-primary-foreground shadow-soft"
+                      : "border-border bg-card text-foreground hover:border-primary/30 hover:bg-muted"
+                  )}
+                >
+                  {label}
+                  <span
                     className={cn(
-                      "rounded-full border px-4 py-1.5 text-xs font-semibold transition-colors cursor-pointer",
+                      "rounded-full px-2 py-0.5 text-xs tabular-nums transition-colors duration-200",
                       active
-                        ? "border-primary bg-primary text-primary-foreground"
-                        : "border-border bg-card text-foreground hover:bg-muted"
+                        ? "bg-primary-foreground/15 text-primary-foreground"
+                        : "bg-muted text-muted-foreground"
                     )}
                   >
-                    {level === "all" ? "All" : level.charAt(0).toUpperCase() + level.slice(1)}{" "}
-                    <span className={cn("ml-1", active ? "text-primary-foreground/70" : "text-muted-foreground")}>
-                      {count}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          ) : null}
+                    {filterCount(key)}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
 
-          {/* Empty state — no meaningful risks detected */}
+          {/* Compact status strip — severity counts + last assessed */}
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-xs text-muted-foreground">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+              {(["high", "medium", "low"] as Level[]).map((level) => (
+                <span key={level} className="inline-flex items-center gap-1.5 font-medium">
+                  <span
+                    className={cn("h-1.5 w-1.5 rounded-full", SEVERITY_META[level].dot)}
+                    aria-hidden="true"
+                  />
+                  {counts[level]} {SEVERITY_META[level].label}
+                </span>
+              ))}
+            </div>
+            <span>
+              Last assessed: {formatDateTime(assessedAt)} ({relativeTime(assessedAt)})
+            </span>
+          </div>
+
+          {/* No alerts at all */}
           {risks.length === 0 ? (
             <EmptyState
               icon={<ShieldCheck className="h-6 w-6" />}
-              title="No significant risks detected"
-              description={
-                "No significant risks were detected from the available farm and weather information. We don't invent alerts we can't back up — check back when conditions change."
+              title="No alerts right now"
+              description="No significant risks were detected from the available farm and weather information. We don't invent alerts we can't back up — check back when conditions change."
+            />
+          ) : filtered.length === 0 ? (
+            /* Selected filter has no results */
+            <EmptyState
+              icon={<ShieldCheck className="h-6 w-6" />}
+              title={`No ${filter}-risk alerts right now`}
+              description={`There are no ${filter}-risk alerts from your current farm data. Try another filter or view all alerts.`}
+              action={
+                <Button variant="outline" size="sm" onClick={() => setFilter("all")}>
+                  View all alerts
+                </Button>
               }
             />
           ) : (
-            <>
-              {/* High */}
-              {high.length > 0 && (filter === "all" || filter === "high") ? (
-                <section className="space-y-3">
-                  <SectionHeader title="High risks" subtitle="Take action soon" />
-                  <div className="space-y-3">
-                    {high.map((r) => (
-                      <RiskCard key={r.id} risk={r} />
-                    ))}
-                  </div>
-                </section>
-              ) : null}
-
-              {/* Medium */}
-              {medium.length > 0 && (filter === "all" || filter === "medium") ? (
-                <section className="space-y-3">
-                  <SectionHeader title="Medium risks" subtitle="Monitor closely" />
-                  <div className="space-y-3">
-                    {medium.map((r) => (
-                      <RiskCard key={r.id} risk={r} />
-                    ))}
-                  </div>
-                </section>
-              ) : null}
-
-              {/* Low */}
-              {low.length > 0 && (filter === "all" || filter === "low") ? (
-                <section className="space-y-3">
-                  <SectionHeader title="Low risks" subtitle="Worth a look" />
-                  <div className="space-y-3">
-                    {low.map((r) => (
-                      <RiskCard key={r.id} risk={r} />
-                    ))}
-                  </div>
-                </section>
-              ) : null}
-            </>
+            /* Real alert feed — horizontal rows, highest severity first */
+            <div className="space-y-3">
+              {filtered.map((alert) => (
+                <AlertRow key={alert.id} alert={alert} />
+              ))}
+            </div>
           )}
         </>
       )}
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/* Status pill                                                         */
-/* ------------------------------------------------------------------ */
-
-function StatusPill({
-  label,
-  count,
-  tone,
-}: {
-  label: string;
-  count: number;
-  tone: "high" | "medium" | "low";
-}) {
-  const dot =
-    tone === "high" ? "bg-danger" : tone === "medium" ? "bg-warning" : "bg-success";
-  return (
-    <div className="flex items-center gap-2 rounded-xl border border-border bg-muted/40 px-3 py-2.5">
-      <span className={cn("h-2.5 w-2.5 shrink-0 rounded-full", dot)} aria-hidden="true" />
-      <div className="min-w-0">
-        <p className="font-heading text-lg font-bold leading-none text-foreground">{count}</p>
-        <p className="text-xs text-muted-foreground">{label}</p>
-      </div>
     </div>
   );
 }
