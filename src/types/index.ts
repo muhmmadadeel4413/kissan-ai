@@ -35,12 +35,6 @@ export interface Farm {
   currentCrop: string;
   currentCropVariety?: string;
   plantingDate?: string;
-  /** Optional display name for the farm (Phase 1D). */
-  farmName?: string;
-  /** Water source description — well, canal, bore, etc. (Phase 1D). */
-  waterSource?: string;
-  /** How many years the farm has been operational (Phase 1D). */
-  farmAgeYears?: number;
   createdAt: string;
 }
 
@@ -386,98 +380,6 @@ export interface CropRecommendationRecord {
   missingInformation: string[];
   createdAt: string;
 }
-
-/* ------------------------------------------------------------------ */
-/* Phase 1A — Expenses Tracking                                        */
-/* ------------------------------------------------------------------ */
-
-/**
- * Expense categories supported by the farm expense tracker. Maps 1:1 to the
- * CHECK constraint on the `expenses` table.
- */
-export type ExpenseCategory =
-  | "seeds"
-  | "fertilizer"
-  | "pesticide"
-  | "labor"
-  | "irrigation"
-  | "equipment"
-  | "fuel"
-  | "transport"
-  | "other";
-
-/**
- * A persisted farm expense record. Mirrors an `expenses` row (mapped from
- * snake_case columns). Every record is owned by a farm and entered manually
- * by the farmer — never fabricated.
- */
-export interface Expense {
-  id: string;
-  farmId: string;
-  category: ExpenseCategory;
-  amount: number;
-  description?: string;
-  /** ISO date string (YYYY-MM-DD). */
-  expenseDate: string;
-  createdAt: string;
-}
-
-/** Input shape for creating/updating an expense. */
-export type ExpenseInput = Omit<Expense, "id" | "createdAt">;
-
-/** Aggregated total for one expense category within a date range. */
-export interface ExpenseCategoryTotal {
-  category: ExpenseCategory;
-  total: number;
-  count: number;
-}
-
-/* ------------------------------------------------------------------ */
-/* Phase 1B — Crop Calendar / Farm Events                              */
-/* ------------------------------------------------------------------ */
-
-/**
- * Event types supported by the crop calendar. Maps 1:1 to the CHECK
- * constraint on the `farm_events` table.
- */
-export type FarmEventType =
-  | "irrigation"
-  | "fertilizer"
-  | "pesticide"
-  | "pest_monitoring"
-  | "harvest"
-  | "inspection"
-  | "other";
-
-/** Lifecycle status of a farm event. */
-export type FarmEventStatus = "scheduled" | "completed" | "skipped";
-
-/**
- * A persisted farm calendar event. Mirrors a `farm_events` row (mapped from
- * snake_case columns). Events are manually created by the farmer or could
- * later be auto-generated from the Today's Actions engine.
- */
-export interface FarmEvent {
-  id: string;
-  farmId: string;
-  eventType: FarmEventType;
-  title: string;
-  description?: string;
-  /** ISO date string (YYYY-MM-DD). */
-  scheduledDate: string;
-  status: FarmEventStatus;
-  completedAt?: string;
-  createdAt: string;
-}
-
-/** Input shape for creating/updating a farm event. */
-export type FarmEventInput = {
-  farmId: string;
-  eventType: FarmEventType;
-  title: string;
-  description?: string;
-  scheduledDate: string;
-};
 
 /* ------------------------------------------------------------------ */
 /* Phase 14 — Irrigation Advisor                                       */

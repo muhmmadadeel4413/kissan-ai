@@ -81,9 +81,6 @@ export default function FarmSetupPage() {
     currentCrop: farm?.currentCrop ?? "",
     currentCropVariety: farm?.currentCropVariety ?? "",
     plantingDate: farm?.plantingDate ?? "",
-    farmName: farm?.farmName ?? "",
-    waterSource: farm?.waterSource ?? "",
-    farmAgeYears: farm?.farmAgeYears,
   });
   const [errors, setErrors] = useState<FormErrors>({});
   const [saved, setSaved] = useState(false);
@@ -233,15 +230,6 @@ export default function FarmSetupPage() {
 
         <Section step="2" title={t("farmSetup.sectionFarm")}>
           <div className="space-y-2">
-            <Label htmlFor="farmName">{t("farmSetup.farmName")}</Label>
-            <Input
-              id="farmName"
-              value={form.farmName}
-              onChange={(e) => setField("farmName", e.target.value)}
-              placeholder={t("farmSetup.farmNamePlaceholder")}
-            />
-          </div>
-          <div className="space-y-2">
             <Label htmlFor="location">{t("farmSetup.location")}</Label>
             <Input
               id="location"
@@ -300,32 +288,6 @@ export default function FarmSetupPage() {
                 </SelectContent>
               </Select>
               <FieldError message={errors.irrigationMethod} />
-            </div>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="waterSource">{t("farmSetup.waterSource")}</Label>
-              <Input
-                id="waterSource"
-                value={form.waterSource}
-                onChange={(e) => setField("waterSource", e.target.value)}
-                placeholder={t("farmSetup.waterSourcePlaceholder")}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="farmAgeYears">{t("farmSetup.farmAge")}</Label>
-              <Input
-                id="farmAgeYears"
-                type="number"
-                min="0"
-                max="200"
-                value={form.farmAgeYears ?? ""}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  setField("farmAgeYears", v === "" ? undefined : parseInt(v, 10));
-                }}
-                placeholder={t("farmSetup.farmAgePlaceholder")}
-              />
             </div>
           </div>
         </Section>

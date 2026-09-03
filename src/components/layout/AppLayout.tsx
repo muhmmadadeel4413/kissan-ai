@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import {
   Link,
   NavLink,
@@ -6,7 +6,7 @@ import {
   useLocation,
   useNavigate,
 } from "react-router-dom";
-import { Menu, Search, Sprout, X } from "lucide-react";
+import { Menu, Sprout, X } from "lucide-react";
 import { useFarm } from "../../context/FarmContext";
 import { useI18n } from "../../context/PreferencesContext";
 import { cn } from "../../lib/utils";
@@ -16,8 +16,6 @@ import { bottomNav, primaryNav, NavItem } from "./nav-items";
 import { NavLinkItem } from "./nav-link-item";
 import { LanguageToggle, ThemeToggle } from "./preference-controls";
 import { LogoutButton } from "../auth/LogoutButton";
-import { GlobalSearchDialog, SearchTrigger } from "./global-search";
-import { NotificationBell } from "./notification-bell";
 
 /** Farm-dependent routes redirect to /farm-setup when no farm exists. */
 const FARM_DEPENDENT_PATHS = new Set([
@@ -27,15 +25,12 @@ const FARM_DEPENDENT_PATHS = new Set([
   "/assistant",
   "/voice",
   "/weather",
-  "/irrigation",
   "/risks",
   "/yield",
   "/actions",
   "/diagnosis-history",
   "/chat-history",
   "/farm-profile",
-  "/expenses",
-  "/crop-calendar",
 ]);
 
 /** Primary AI tools shown first in the sidebar (in order). */
@@ -46,7 +41,6 @@ const TOOL_NAV_PATHS = new Set([
   "/assistant",
   "/voice",
   "/weather",
-  "/irrigation",
   "/risks",
   "/yield",
   "/actions",
@@ -111,10 +105,6 @@ export function AppLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [searchOpen, setSearchOpen] = useState(false);
-
-  const openSearch = useCallback(() => setSearchOpen(true), []);
-  const closeSearch = useCallback(() => setSearchOpen(false), []);
 
   const path = location.pathname;
   const isFarmDependent = FARM_DEPENDENT_PATHS.has(path);
@@ -127,18 +117,6 @@ export function AppLayout() {
       navigate("/farm-setup", { replace: true });
     }
   }, [status, farm, isFarmDependent, navigate]);
-
-  // Global keyboard shortcut for search (Ctrl+K / ⌘K)
-  useEffect(() => {
-    function handleKey(e: KeyboardEvent) {
-      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
-        e.preventDefault();
-        setSearchOpen((prev) => !prev);
-      }
-    }
-    document.addEventListener("keydown", handleKey);
-    return () => document.removeEventListener("keydown", handleKey);
-  }, []);
 
   // While the active farm is being loaded from Supabase, show a loading state
   // instead of redirecting — avoids a flash of the "no farm" screen.
@@ -186,11 +164,8 @@ export function AppLayout() {
     <div className="min-h-screen bg-background">
       {/* Desktop sidebar */}
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-sidebar-border bg-sidebar px-4 py-6 lg:flex">
-        <div className="mb-4 flex items-center justify-between px-1">
+        <div className="mb-7 flex items-center justify-between px-1">
           <Brand />
-        </div>
-        <div className="mb-4 px-1">
-          <SearchTrigger onClick={openSearch} />
         </div>
         <nav className="flex-1 space-y-1 overflow-y-auto" aria-label={t("nav.primary")}>
           <p className="flex items-center gap-2 px-3 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wider text-sidebar-muted">
@@ -234,25 +209,14 @@ export function AppLayout() {
       {/* Mobile header */}
       <header className="sticky top-0 z-30 flex items-center justify-between border-b border-border bg-background/95 px-4 py-3 backdrop-blur lg:hidden">
         <Brand tone="light" />
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            onClick={openSearch}
-            className="flex h-10 w-10 items-center justify-center rounded-xl text-foreground hover:bg-muted transition-colors cursor-pointer"
-            aria-label={t("search.open")}
-          >
-            <Search className="h-5 w-5" aria-hidden="true" />
-          </button>
-          <NotificationBell />
-          <button
-            type="button"
-            onClick={() => setDrawerOpen(true)}
-            className="flex h-11 w-11 items-center justify-center rounded-xl text-foreground hover:bg-muted transition-colors cursor-pointer"
-            aria-label={t("nav.openMenu")}
-          >
-            <Menu className="h-6 w-6" aria-hidden="true" />
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => setDrawerOpen(true)}
+          className="flex h-11 w-11 items-center justify-center rounded-xl text-foreground hover:bg-muted transition-colors cursor-pointer"
+          aria-label={t("nav.openMenu")}
+        >
+          <Menu className="h-6 w-6" aria-hidden="true" />
+        </button>
       </header>
 
       {/* Mobile secondary drawer */}
@@ -301,9 +265,6 @@ export function AppLayout() {
           ))}
         </div>
       </nav>
-
-      {/* Global search dialog */}
-      <GlobalSearchDialog open={searchOpen} onClose={closeSearch} />
     </div>
   );
 }
