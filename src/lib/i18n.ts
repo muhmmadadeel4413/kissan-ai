@@ -29,7 +29,7 @@ const en: Dict = {
   "nav.about": "About",
   "nav.faq": "FAQ",
   "nav.contact": "Contact",
-  "nav.login": "Login",
+  "nav.login": "Log in",
   "nav.getStarted": "Get Started",
   "nav.openMenu": "Open menu",
   "nav.closeMenu": "Close menu",
@@ -78,13 +78,14 @@ const en: Dict = {
   "common.optional": "Optional",
 
   /* ---------- Landing: hero ---------- */
-  "hero.badge": "Your AI Farming Decision Assistant",
-  "hero.titleA": "Understand your farm.",
-  "hero.titleB": "Know what to do today.",
+  "hero.badge": "AI Powered Farming Dashboard",
+  "hero.titleA": "Smart Farming.",
+  "hero.titleB": "Better Decisions.",
+  "hero.titleC": "Higher Yields.",
   "hero.subtitle":
-    "Kissan AI connects your farm's crops, weather, risks, and expected yield into one clear picture — with plain, actionable guidance in your language.",
-  "hero.cta": "Create Your Farm",
-  "hero.explore": "Explore Dashboard",
+    "Kissan AI helps farmers diagnose crop issues, get real-time weather insights, plan irrigation, and receive intelligent AI recommendations.",
+  "hero.cta": "Get Started Free",
+  "hero.explore": "Learn More",
   "hero.h1": "Farm-centric",
   "hero.h1Text":
     "Guidance tailored to your crops, soil, and location — not generic advice.",
@@ -93,6 +94,20 @@ const en: Dict = {
     "Upload a photo of a sick leaf and understand what may be happening.",
   "hero.h3": "Ask in your language",
   "hero.h3Text": "Talk or type in Urdu, English, Punjabi, and more.",
+
+  /* ---------- Landing: hero phone mockup ---------- */
+  "hero.phone.cropDoctor": "AI Crop Doctor",
+  "hero.phone.cropRecommendation": "Crop Recommendation",
+  "hero.phone.irrigation": "Irrigation Advisor",
+  "hero.phone.yield": "Yield Prediction",
+  "hero.phone.history": "Farming History",
+
+  /* ---------- Landing: statistics ---------- */
+  "stats.sectionLabel": "Impact statistics",
+  "stats.farmersLabel": "Farmers Helped",
+  "stats.accuracyLabel": "Accuracy",
+  "stats.cropsLabel": "Crops Supported",
+  "stats.supportLabel": "AI Support",
 
   /* ---------- Landing: problem ---------- */
   "problem.eyebrow": "The Problem",
@@ -851,13 +866,14 @@ const ur: Dict = {
   "common.optional": "اختیاری",
 
   /* ---------- Landing: hero ---------- */
-  "hero.badge": "آپ کا اے آئی فارمنگ فیصلہ اسسٹنٹ",
-  "hero.titleA": "اپنے فارم کو سمجھیں۔",
-  "hero.titleB": "جانیں آج کیا کرنا ہے۔",
+  "hero.badge": "اے آئی سے چلنے والا فارمنگ ڈیش بورڈ",
+  "hero.titleA": "سمارٹ فارمنگ۔",
+  "hero.titleB": "بہتر فیصلے۔",
+  "hero.titleC": "زیادہ پیداوار۔",
   "hero.subtitle":
-    "کسان اے آئی آپ کے فارم کی فصلیں، موسم، خطرات اور متوقع پیداوار کو ایک واضح تصویر میں جوڑتا ہے — سادہ اور قابلِ عمل رہنمائی کے ساتھ، آپ کی زبان میں۔",
-  "hero.cta": "اپنا فارم بنائیں",
-  "hero.explore": "ڈیش بورڈ دیکھیں",
+    "کسان اے آئی کسانوں کو فصل کے مسائل کی تشخیص، براہ راست موسمی معلومات، آبپاشی کی منصوبہ بندی اور ذہین اے آئی تجاویز فراہم کرتا ہے۔",
+  "hero.cta": "مفت شروع کریں",
+  "hero.explore": "مزید جانیں",
   "hero.h1": "فارم مرکوز",
   "hero.h1Text":
     "آپ کی فصلوں، مٹی اور مقام کے مطابق رہنمائی — عام مشورہ نہیں۔",
@@ -866,6 +882,20 @@ const ur: Dict = {
     "بیمار پتے کی تصویر اپ لوڈ کریں اور جانئے کیا ہو سکتا ہے۔",
   "hero.h3": "اپنی زبان میں پوچھیں",
   "hero.h3Text": "اردو، انگریزی، پنجابی اور مزید میں لکھیں یا بولیں۔",
+
+  /* ---------- Landing: hero phone mockup ---------- */
+  "hero.phone.cropDoctor": "اے آئی فصل ڈاکٹر",
+  "hero.phone.cropRecommendation": "فصل کی سفارش",
+  "hero.phone.irrigation": "آبپاشی مشیر",
+  "hero.phone.yield": "پیداوار کی پیش گوئی",
+  "hero.phone.history": "فارمنگ ہسٹری",
+
+  /* ---------- Landing: statistics ---------- */
+  "stats.sectionLabel": "اثرات کے اعداد و شمار",
+  "stats.farmersLabel": "کسانوں کی مدد کی",
+  "stats.accuracyLabel": "درستگی",
+  "stats.cropsLabel": "فصلیں معاون ہیں",
+  "stats.supportLabel": "اے آئی معاونت",
 
   /* ---------- Landing: problem ---------- */
   "problem.eyebrow": "مسئلہ",

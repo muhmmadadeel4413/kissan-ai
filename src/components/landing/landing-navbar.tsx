@@ -8,20 +8,23 @@ import { LanguageToggle, ThemeToggle } from "../layout/preference-controls";
 /**
  * Landing navigation.
  *
- * Desktop navbar (per the cleanup spec): Logo | Home | Features | Problem |
- * Solution | Login | Get Started — no overcrowding, CTA prominent.
+ * Desktop navbar (per the reference design): Logo | Home | Features |
+ * How It Works | Problem | Solution | About | FAQ | Contact | Login |
+ * Get Started. Language / theme toggles appear only on very wide (2xl)
+ * screens so the full link set + CTA never overflows the bar.
  *
- * The hamburger / mobile menu retains the full set of landing anchors
- * (Home, Features, How It Works, Problem, Solution) plus About, FAQ and
- * Contact in the secondary group, alongside Language, Theme, Login and the
- * Get Started CTA — so the About / FAQ / Contact sections stay reachable
- * without cluttering the desktop bar.
+ * The hamburger / mobile menu retains the same anchors in two groups,
+ * alongside Language, Theme, Login and the Get Started CTA.
  */
 const DESKTOP_LINKS = [
   { key: "nav.home", href: "#home" },
   { key: "nav.features", href: "#features" },
+  { key: "nav.howItWorks", href: "#how-it-works" },
   { key: "nav.problem", href: "#problem" },
   { key: "nav.solution", href: "#solution" },
+  { key: "nav.about", href: "#about" },
+  { key: "nav.faq", href: "#faq" },
+  { key: "nav.contact", href: "#contact" },
 ];
 
 const MOBILE_PRIMARY_LINKS = [
@@ -73,13 +76,13 @@ export function LandingNavbar() {
           </span>
         </a>
 
-        {/* Desktop links — the clean, uncrowded final navbar */}
-        <div className="hidden items-center gap-0.5 lg:flex">
+        {/* Desktop links — full reference set */}
+        <div className="hidden items-center gap-0.5 lg:flex xl:gap-1">
           {DESKTOP_LINKS.map((link) => (
             <a
               key={link.href}
               href={link.href}
-              className="whitespace-nowrap rounded-lg px-2.5 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground cursor-pointer"
+              className="whitespace-nowrap rounded-lg px-2.5 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground cursor-pointer xl:px-3"
             >
               {t(link.key)}
             </a>
@@ -88,14 +91,16 @@ export function LandingNavbar() {
 
         {/* Desktop actions + preferences */}
         <div className="hidden items-center gap-2 lg:flex">
-          <LanguageToggle className="hidden xl:flex" />
-          <ThemeToggle className="hidden xl:flex" />
-          <Link
-            to="/login"
-            className="whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium text-foreground transition-colors hover:text-primary cursor-pointer"
+          <LanguageToggle className="hidden 2xl:flex" />
+          <ThemeToggle className="hidden 2xl:flex" />
+          <Button
+            asChild
+            variant="outline"
+            size="sm"
+            className="whitespace-nowrap"
           >
-            {t("nav.login")}
-          </Link>
+            <Link to="/login">{t("nav.login")}</Link>
+          </Button>
           <Button asChild size="sm" className="whitespace-nowrap">
             <Link to="/signup" onClick={close}>
               {t("nav.getStarted")}

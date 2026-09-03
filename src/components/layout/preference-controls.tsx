@@ -37,7 +37,7 @@ export function LanguageToggle({ className }: { className?: string }) {
               aria-checked={selected}
               onClick={() => setLanguage(opt.value as Language)}
               className={cn(
-                "flex items-center rounded-lg px-3 py-1.5 text-sm font-medium transition-colors duration-150 cursor-pointer",
+                "flex items-center rounded-lg px-3 py-1 text-sm font-medium transition-colors duration-150 cursor-pointer",
                 selected
                   ? "bg-primary text-primary-foreground"
                   : "text-sidebar-muted hover:text-sidebar-foreground"
@@ -64,7 +64,7 @@ export function ThemeToggle({ className }: { className?: string }) {
       aria-label={dark ? t("common.light") : t("common.dark")}
       title={dark ? t("common.light") : t("common.dark")}
       className={cn(
-        "flex h-10 items-center gap-2 rounded-xl border border-sidebar-border bg-sidebar-accent px-3 text-sm font-medium text-sidebar-foreground transition-colors duration-150 hover:bg-[#334530] cursor-pointer",
+        "flex h-9 items-center gap-2 rounded-xl border border-sidebar-border bg-sidebar-accent px-3 text-sm font-medium text-sidebar-foreground transition-colors duration-150 hover:bg-[#334530] cursor-pointer",
         className
       )}
     >

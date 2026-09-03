@@ -77,27 +77,27 @@ function DrawerContent({ onNavigate }: { onNavigate: () => void }) {
   const manage = primaryNav.filter((i) => !TOOL_NAV_PATHS.has(i.to));
   return (
     <div className="flex h-full flex-col gap-1">
-      <p className="flex items-center gap-2 px-3 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wider text-sidebar-muted">
+      <p className="flex items-center gap-2 px-3 pb-0.5 pt-0.5 text-[11px] font-semibold uppercase tracking-wider text-sidebar-muted">
         <span className="h-1 w-3 rounded-full bg-accent/70" aria-hidden="true" />
         {t("nav.aiTools")}
       </p>
       {tools.map((item) => (
         <NavLinkItem key={item.to} item={item} onNavigate={onNavigate} />
       ))}
-      <div className="my-3 h-px bg-sidebar-border" />
-      <p className="flex items-center gap-2 px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-sidebar-muted">
+      <div className="my-2 h-px bg-sidebar-border" />
+      <p className="flex items-center gap-2 px-3 pb-0.5 pt-0.5 text-[11px] font-semibold uppercase tracking-wider text-sidebar-muted">
         <span className="h-1 w-3 rounded-full bg-sidebar-muted/50" aria-hidden="true" />
         {t("nav.manage")}
       </p>
       {manage.map((item) => (
         <NavLinkItem key={item.to} item={item} onNavigate={onNavigate} />
       ))}
-      <div className="my-3 h-px bg-sidebar-border" />
-      <div className="flex flex-col gap-2 px-1 py-1">
+      <div className="my-2 h-px bg-sidebar-border" />
+      <div className="flex flex-col gap-1.5 px-1 py-1">
         <LanguageToggle />
         <ThemeToggle />
       </div>
-      <div className="my-3 h-px bg-sidebar-border" />
+      <div className="my-2 h-px bg-sidebar-border" />
       <div className="px-1 py-1">
         <LogoutButton onLogout={onNavigate} />
       </div>
@@ -185,23 +185,23 @@ export function AppLayout() {
   return (
     <div className="min-h-screen bg-background">
       {/* Desktop sidebar */}
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-sidebar-border bg-sidebar px-4 py-6 lg:flex">
-        <div className="mb-4 flex items-center justify-between px-1">
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-sidebar-border bg-sidebar px-4 py-4 lg:flex">
+        <div className="mb-2 flex items-center justify-between px-1">
           <Brand />
         </div>
-        <div className="mb-4 px-1">
+        <div className="mb-2 px-1">
           <SearchTrigger onClick={openSearch} />
         </div>
-        <nav className="flex-1 space-y-1 overflow-y-auto" aria-label={t("nav.primary")}>
-          <p className="flex items-center gap-2 px-3 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wider text-sidebar-muted">
+        <nav className="flex-1 space-y-0.5 overflow-y-auto" aria-label={t("nav.primary")}>
+          <p className="flex items-center gap-2 px-3 pb-0.5 pt-0.5 text-[11px] font-semibold uppercase tracking-wider text-sidebar-muted">
             <span className="h-1 w-3 rounded-full bg-accent/70" aria-hidden="true" />
             {t("nav.aiTools")}
           </p>
           {tools.map((item) => (
             <NavLinkItem key={item.to} item={item} />
           ))}
-          <div className="my-3 h-px bg-sidebar-border" />
-          <p className="flex items-center gap-2 px-3 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wider text-sidebar-muted">
+          <div className="my-2 h-px bg-sidebar-border" />
+          <p className="flex items-center gap-2 px-3 pb-0.5 pt-0.5 text-[11px] font-semibold uppercase tracking-wider text-sidebar-muted">
             <span className="h-1 w-3 rounded-full bg-sidebar-muted/50" aria-hidden="true" />
             {t("nav.manage")}
           </p>
@@ -209,9 +209,9 @@ export function AppLayout() {
             <NavLinkItem key={item.to} item={item} />
           ))}
         </nav>
-        <div className="mt-6 space-y-3 border-t border-sidebar-border pt-4">
+        <div className="mt-2 space-y-1.5 border-t border-sidebar-border pt-2">
           <div className="flex items-center gap-2.5 px-1">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-soft text-sm font-bold text-primary">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-soft text-sm font-bold text-primary">
               {farm ? farm.farmerName.trim().charAt(0).toUpperCase() : "?"}
             </span>
             <div className="min-w-0">
@@ -223,7 +223,7 @@ export function AppLayout() {
               ) : null}
             </div>
           </div>
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-1.5">
             <LanguageToggle />
             <ThemeToggle />
           </div>
