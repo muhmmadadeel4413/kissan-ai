@@ -526,6 +526,11 @@ const en: Dict = {
   "cropDoctor.subtitle": "Diagnose crop problems from a photo",
   "assistant.title": "AI Assistant",
   "assistant.subtitle": "Ask anything about your farm",
+  "assistant.chatTitle": "AI Assistant - Chat ({language})",
+  "assistant.chatSubtitle": "Answers grounded in your farm, crop, and weather",
+  "assistant.placeholder": "Type your question…",
+  "assistant.thinking": "Kissan AI is thinking…",
+  "assistant.newConversation": "New conversation",
   "voice.title": "Voice Assistant",
 
   /* ---------- Smart Crop Recommendation (Prompt 13) ---------- */
@@ -1362,6 +1367,11 @@ const ur: Dict = {
   "cropDoctor.subtitle": "تصویر سے فصل کے مسائل کی تشخیص کریں",
   "assistant.title": "اے آئی اسسٹنٹ",
   "assistant.subtitle": "اپنے فارم کے بارے میں کچھ بھی پوچھیں",
+  "assistant.chatTitle": "اے آئی اسسٹنٹ - چیٹ ({language})",
+  "assistant.chatSubtitle": "جوابات آپ کے فارم، فصل اور موسم کی بنیاد پر",
+  "assistant.placeholder": "اپنا سوال یہاں لکھیں…",
+  "assistant.thinking": "کسان اے آئی سوچ رہا ہے…",
+  "assistant.newConversation": "نئی گفتگو",
   "voice.title": "وائس اسسٹنٹ",
 
   /* ---------- Smart Crop Recommendation (Prompt 13) ---------- */

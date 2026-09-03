@@ -15,9 +15,11 @@ import {
 import { Button } from "../components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Alert, AlertDescription, AlertTitle } from "../components/ui/alert";
-import { PageHeader } from "../components/layout/page-header";
 import { EmptyState } from "../components/layout/empty-state";
+import { NotificationBell } from "../components/layout/notification-bell";
 import { useFarm } from "../context/FarmContext";
+import { useAuth } from "../context/AuthContext";
+import { usePreferences } from "../context/PreferencesContext";
 import { useFarmWeather } from "../hooks/useFarmWeather";
 import { fetchDiagnoses } from "../lib/diagnosis-service";
 import { fetchActiveRisks } from "../lib/risk-service";
@@ -44,6 +46,8 @@ type LanguagePref = (typeof LANGUAGE_OPTIONS)[number]["value"];
 
 export default function AssistantPage() {
   const { farm } = useFarm();
+  const { user } = useAuth();
+  const { t, language: uiLanguage } = usePreferences();
   const { status: weatherStatus, weather } = useFarmWeather();
 
   const [searchParams, setSearchParams] = useSearchParams();
@@ -367,46 +371,102 @@ export default function AssistantPage() {
   const hasContext =
     chatContext && (chatContext.crop.name || chatContext.farm.location || chatContext.growth.stageLabel);
 
+  const farmerName = farm.farmerName.trim();
+  const farmerInitial = farmerName.charAt(0).toUpperCase() || "?";
+  const farmerLocation = farm.location || "";
+  const farmerEmail = user?.email ?? "";
+
+  // The title shows the reply-language mode (English / Urdu) in the app's
+  // active UI language — matching the reference header.
+  const languageName = language === "urdu" ? "اردو" : "English";
+  const headerTitle = t("assistant.chatTitle", { language: languageName });
+  const placeholder =
+    uiLanguage === "ur" ? "اپنا سوال یہاں لکھیں…" : t("assistant.placeholder");
+
   return (
-    <div className="flex h-[calc(100dvh-7rem)] flex-col lg:h-[calc(100dvh-8.5rem)]">
-      {/* Header */}
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <PageHeader
-          title="AI Assistant"
-          subtitle="Ask anything about your farm"
-          className="mb-0"
-        />
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => void handleNewConversation()}
-          disabled={isThinking}
-        >
-          <Plus className="h-4 w-4" aria-hidden="true" />
-          <span className="hidden sm:inline">New conversation</span>
-          <span className="sm:hidden">New</span>
-        </Button>
-      </div>
+    <div className="flex h-[calc(100dvh-4.5rem)] flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-soft card-sheen lg:h-[calc(100dvh-9.5rem)]">
+      {/* ===================== Chat header ===================== */}
+      <header className="flex shrink-0 items-start justify-between gap-3 border-b border-border px-4 py-3.5 sm:px-5">
+        <div className="min-w-0">
+          <h1 className="flex items-center gap-2 font-heading text-lg font-bold tracking-tight text-foreground sm:text-xl">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-primary">
+              <Bot className="h-4.5 w-4.5" aria-hidden="true" />
+            </span>
+            {headerTitle}
+          </h1>
+          <p className="mt-0.5 truncate text-xs text-muted-foreground sm:text-sm">
+            {t("assistant.chatSubtitle")}
+          </p>
+        </div>
+
+        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+          {/* Reply language preference (existing control, restyled) */}
+          <Select value={language} onValueChange={(v) => setLanguage(v as LanguagePref)}>
+            <SelectTrigger
+              className="h-9 w-auto gap-1 rounded-lg px-2 text-xs"
+              aria-label={t("common.language")}
+            >
+              <Languages className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              <SelectValue placeholder={t("common.language")} />
+            </SelectTrigger>
+            <SelectContent>
+              {LANGUAGE_OPTIONS.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void handleNewConversation()}
+            disabled={isThinking}
+            aria-label={t("assistant.newConversation")}
+          >
+            <Plus className="h-4 w-4" aria-hidden="true" />
+            <span className="hidden md:inline">{t("assistant.newConversation")}</span>
+          </Button>
+
+          <NotificationBell />
+
+          {/* Real authenticated farmer/profile info from farm + auth */}
+          <div className="hidden items-center gap-2 rounded-xl border border-border bg-background/60 py-1.5 pl-1.5 pr-3 sm:flex">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-foreground ring-1 ring-inset ring-primary/20">
+              {farmerInitial}
+            </span>
+            <span className="min-w-0 text-left">
+              <span className="block max-w-[9rem] truncate text-sm font-semibold leading-tight text-foreground">
+                {farmerName}
+              </span>
+              <span className="block max-w-[9rem] truncate text-xs leading-tight text-muted-foreground">
+                {farmerLocation || farmerEmail || "Farmer"}
+              </span>
+            </span>
+          </div>
+        </div>
+      </header>
 
       {/* Context indicator — real farm data only */}
       {hasContext ? (
-        <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-border bg-card px-3 py-2 text-xs text-muted-foreground">
+        <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-border/70 bg-background/40 px-4 py-2 text-xs text-muted-foreground sm:px-5">
           <span className="inline-flex items-center gap-1.5 font-medium text-foreground">
             <Sprout className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
             {chatContext!.crop.name || "Your farm"}
           </span>
-          {chatContext!.growth.stageLabel && (
+          {chatContext!.growth.stageLabel ? (
             <>
               <span aria-hidden="true">•</span>
               <span>{chatContext!.growth.stageLabel}</span>
             </>
-          )}
-          {chatContext!.farm.location && (
+          ) : null}
+          {chatContext!.farm.location ? (
             <span className="inline-flex items-center gap-1">
               <MapPin className="h-3 w-3" aria-hidden="true" />
               {chatContext!.farm.location}
             </span>
-          )}
+          ) : null}
           {weatherStatus === "error" ? (
             <span className="text-warning">Weather unavailable</span>
           ) : null}
@@ -414,12 +474,12 @@ export default function AssistantPage() {
       ) : null}
 
       {contextError ? (
-        <p className="mb-2 text-xs text-muted-foreground">{contextError}</p>
+        <p className="shrink-0 px-4 pt-2 text-xs text-muted-foreground sm:px-5">{contextError}</p>
       ) : null}
 
       {/* Error banner */}
       {error ? (
-        <Alert variant="danger" className="mb-3">
+        <Alert variant="danger" className="mx-4 mt-3 shrink-0 sm:mx-5">
           <AlertTitle className="flex items-center gap-2">
             <RefreshCw className="h-4 w-4" aria-hidden="true" />
             {failedMessage ? "Couldn't get an answer" : "Something went wrong"}
@@ -435,8 +495,11 @@ export default function AssistantPage() {
         </Alert>
       ) : null}
 
-      {/* Message history */}
-      <div className="flex-1 space-y-3 overflow-y-auto pb-3" aria-live="polite">
+      {/* ===================== Message history ===================== */}
+      <div
+        className="flex-1 space-y-4 overflow-y-auto px-4 py-4 sm:px-5"
+        aria-live="polite"
+      >
         {initializing ? (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
             <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
@@ -475,8 +538,10 @@ export default function AssistantPage() {
             <span className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-soft text-primary">
               <Bot className="h-4 w-4" aria-hidden="true" />
             </span>
-            <div className="rounded-2xl rounded-bl-sm border border-border bg-card px-4 py-3 shadow-soft">
-              <span className="mr-2 text-xs text-muted-foreground">Kissan AI is thinking…</span>
+            <div className="rounded-2xl rounded-bl-sm border border-border bg-muted px-4 py-3">
+              <span className="mr-2 text-xs text-muted-foreground">
+                {t("assistant.thinking")}
+              </span>
               <span className="inline-flex gap-1 align-middle">
                 <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground" />
                 <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground [animation-delay:100ms]" />
@@ -488,68 +553,53 @@ export default function AssistantPage() {
         <div ref={endRef} />
       </div>
 
-      {/* Input */}
+      {/* ===================== Chat input ===================== */}
       <form
-        className="flex items-end gap-2 border-t border-border pt-3"
+        className="shrink-0 border-t border-border px-4 pb-3 pt-3 sm:px-5"
         onSubmit={(e) => {
           e.preventDefault();
           handleSend();
         }}
       >
-        <div className="min-w-0 flex-1">
-          <label htmlFor="message" className="sr-only">
-            Your message
-          </label>
-          <textarea
-            id="message"
-            ref={inputRef}
-            rows={1}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder={
-              language === "urdu"
-                ? "Apna sawal yahan likhein…"
-                : "Type your question… (Enter to send)"
-            }
-            className="max-h-40 min-h-[52px] w-full resize-none rounded-2xl border border-input bg-card px-4 py-3 text-sm text-foreground shadow-soft placeholder:text-muted-foreground/70 focus:outline-none focus-visible:outline-2 focus-visible:outline-ring"
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                handleSend();
-              }
-            }}
-          />
+        <div className="flex items-end gap-2">
+          <div className="min-w-0 flex-1 rounded-2xl border border-input bg-background px-4 shadow-soft transition-colors duration-150 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/25">
+            <label htmlFor="message" className="sr-only">
+              {placeholder}
+            </label>
+            <textarea
+              id="message"
+              ref={inputRef}
+              rows={1}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder={placeholder}
+              dir="auto"
+              className="max-h-40 min-h-[52px] w-full resize-none bg-transparent py-3.5 text-sm leading-relaxed text-foreground placeholder:text-muted-foreground/70 focus:outline-none"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSend();
+                }
+              }}
+            />
+          </div>
+          <Button
+            type="submit"
+            size="icon"
+            className="h-[52px] w-[52px] shrink-0 rounded-full shadow-soft"
+            disabled={!input.trim() || isThinking}
+            aria-label="Send message"
+          >
+            <Send className="h-5 w-5" />
+          </Button>
         </div>
-        <Button
-          type="submit"
-          size="icon"
-          className="h-[52px] w-[52px] shrink-0"
-          disabled={!input.trim() || isThinking}
-          aria-label="Send message"
-        >
-          <Send className="h-5 w-5" />
-        </Button>
-      </form>
 
-      {/* Language preference */}
-      <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
-        <Languages className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-        <Select value={language} onValueChange={(v) => setLanguage(v as LanguagePref)}>
-          <SelectTrigger className="h-8 w-auto gap-1 rounded-lg px-2 text-xs" aria-label="Language">
-            <SelectValue placeholder="Language" />
-          </SelectTrigger>
-          <SelectContent>
-            {LANGUAGE_OPTIONS.map((opt) => (
-              <SelectItem key={opt.value} value={opt.value}>
-                {opt.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <span className="hidden sm:inline">
-          {activeConversationId ? ` · ${activeConversationTitle}` : ""}
-        </span>
-      </div>
+        {/* Language preference */}
+        <div className="mt-2.5 flex items-center gap-2 text-xs text-muted-foreground">
+          <Languages className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          <span>{activeConversationId ? activeConversationTitle : "New conversation"}</span>
+        </div>
+      </form>
     </div>
   );
 }
@@ -569,12 +619,16 @@ function MessageBubble({
   const content = message.content || reply?.answer || "";
 
   return (
-    <div className={cn("flex items-start gap-2.5", isUser && "justify-end")}>
+    <div className={cn("flex items-start gap-2.5", isUser && "flex-row-reverse")}>
       {!isUser ? (
         <span className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-soft text-primary">
           <Bot className="h-4 w-4" aria-hidden="true" />
         </span>
-      ) : null}
+      ) : (
+        <span className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
+          <User className="h-4 w-4" aria-hidden="true" />
+        </span>
+      )}
 
       <div
         className={cn(
@@ -583,11 +637,12 @@ function MessageBubble({
         )}
       >
         <div
+          dir="auto"
           className={cn(
             "whitespace-pre-wrap break-words rounded-2xl px-4 py-2.5 text-sm leading-relaxed shadow-soft",
             isUser
               ? "bg-primary text-primary-foreground rounded-br-sm"
-              : "border border-border bg-card text-foreground rounded-bl-sm"
+              : "border border-border bg-muted text-foreground rounded-bl-sm"
           )}
         >
           {content}
@@ -614,14 +669,7 @@ function MessageBubble({
             </ol>
           </div>
         ) : null}
-
       </div>
-
-      {isUser ? (
-        <span className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
-          <User className="h-4 w-4" aria-hidden="true" />
-        </span>
-      ) : null}
     </div>
   );
 }
