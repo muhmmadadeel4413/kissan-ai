@@ -1,174 +1,230 @@
 import * as React from "react";
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import { Link } from "react-router-dom";
-import { Wallet, ChevronRight } from "lucide-react";
+import { ArrowRight, Wallet } from "lucide-react";
 import { Button } from "../ui/button";
-import { EmptyState } from "../layout/empty-state";
-import { LoadingState } from "../layout/loading-state";
+import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
+import { Skeleton } from "../ui/skeleton";
 import { useFarm } from "../../context/FarmContext";
-import { usePreferences } from "../../context/PreferencesContext";
-import {
-  fetchExpenses,
-  computeCategoryTotals,
-  computeGrandTotal,
-} from "../../lib/expense-service";
-import type { ExpenseCategoryTotal } from "../../types";
-
-/* ------------------------------------------------------------------ */
-/* Color palette for chart slices                                       */
-/* ------------------------------------------------------------------ */
-
-const COLORS = [
-  "#3b82f6", // blue
-  "#22c55e", // green
-  "#f59e0b", // amber
-  "#ef4444", // red
-  "#8b5cf6", // purple
-  "#06b6d4", // cyan
-  "#f97316", // orange
-  "#64748b", // slate
-  "#ec4899", // pink
-];
-
-/* ------------------------------------------------------------------ */
-/* Expense Breakdown Chart                                              */
-/* ------------------------------------------------------------------ */
+import { useI18n } from "../../context/PreferencesContext";
+import { supabase } from "../../lib/supabase";
+import type { Expense, ExpenseCategory } from "../../types";
+import { cn } from "../../lib/utils";
 
 /**
- * Dashboard widget showing a pie chart of expense category totals. Pulls
- * real data from the `expenses` table via the expense service. Degrades
- * gracefully when no expenses exist.
+ * Expense Breakdown widget (Dashboard Phase 2).
+ *
+ * Summarises the current month's REAL expense records (from the `expenses`
+ * table) as a headline total plus a sorted horizontal bar breakdown by
+ * category. Text labels always accompany amounts — never colour-only — and an
+ * empty month produces an honest, actionable empty state.
  */
-export function ExpenseBreakdownChart() {
-  const { t } = usePreferences();
-  const { farm } = useFarm();
-  const [totals, setTotals] = React.useState<ExpenseCategoryTotal[]>([]);
-  const [grandTotal, setGrandTotal] = React.useState(0);
-  const [status, setStatus] = React.useState<"loading" | "ready" | "error">("loading");
 
-  React.useEffect(() => {
-    if (!farm) return;
-    let cancelled = false;
-    setStatus("loading");
+const CATEGORY_LABEL_KEY: Record<ExpenseCategory, string> = {
+  seeds: "expenses.cat.seeds",
+  fertilizer: "expenses.cat.fertilizer",
+  pesticide: "expenses.cat.pesticide",
+  labor: "expenses.cat.labor",
+  irrigation: "expenses.cat.irrigation",
+  equipment: "expenses.cat.equipment",
+  fuel: "expenses.cat.fuel",
+  transport: "expenses.cat.transport",
+  other: "expenses.cat.other",
+};
 
-    // Fetch current month expenses
-    const now = new Date();
-    const startDate = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
-    const endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10);
+const CATEGORY_BAR: Record<ExpenseCategory, string> = {
+  seeds: "bg-primary",
+  fertilizer: "bg-success",
+  pesticide: "bg-danger",
+  labor: "bg-warning",
+  irrigation: "bg-accent",
+  equipment: "bg-primary/60",
+  fuel: "bg-success/60",
+  transport: "bg-warning/60",
+  other: "bg-muted-foreground/50",
+};
 
-    fetchExpenses(farm.id, { startDate, endDate })
-      .then((rows) => {
-        if (!cancelled) {
-          const catTotals = computeCategoryTotals(rows);
-          setTotals(catTotals);
-          setGrandTotal(computeGrandTotal(rows));
-          setStatus("ready");
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setTotals([]);
-          setGrandTotal(0);
-          setStatus("error");
-        }
-      });
-
-    return () => { cancelled = true; };
-  }, [farm?.id]);
-
-  if (status === "loading") {
-    return <LoadingState rows={3} title={t("dashboard.expensesLoading")} />;
-  }
-
-  if (status === "error" || totals.length === 0) {
-    return (
-      <EmptyState
-        icon={<Wallet className="h-5 w-5" />}
-        title={t("dashboard.expensesEmpty")}
-        description={t("dashboard.expensesEmptyHint")}
-        action={
-          <Button asChild variant="outline" size="sm">
-            <Link to="/expenses">
-              <Wallet className="h-4 w-4" aria-hidden="true" />
-              {t("dashboard.openExpenses")}
-            </Link>
-          </Button>
-        }
-      />
-    );
-  }
-
-  const chartData = totals.map((t, i) => ({
-    name: t.category,
-    value: t.total,
-    color: COLORS[i % COLORS.length],
-  }));
-
-  return (
-    <div className="space-y-4">
-      {/* Total */}
-      <div className="flex items-baseline justify-between">
-        <p className="text-sm font-medium text-muted-foreground">
-          {t("dashboard.expensesTotal")}
-        </p>
-        <p className="font-heading text-2xl font-bold text-foreground">
-          {formatCurrency(grandTotal)}
-        </p>
-      </div>
-
-      {/* Pie chart */}
-      <div className="h-48">
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie
-              data={chartData}
-              cx="50%"
-              cy="50%"
-              innerRadius={50}
-              outerRadius={80}
-              paddingAngle={2}
-              dataKey="value"
-            >
-              {chartData.map((entry, index) => (
-                <Cell key={`cell-${index}`} fill={entry.color} />
-              ))}
-            </Pie>
-            <Tooltip
-              formatter={(value) => formatCurrency(Number(value))}
-              contentStyle={{
-                borderRadius: "0.75rem",
-                border: "1px solid var(--border)",
-                backgroundColor: "var(--card)",
-                fontSize: "0.75rem",
-              }}
-            />
-          </PieChart>
-        </ResponsiveContainer>
-      </div>
-
-      {/* Legend */}
-      <div className="flex flex-wrap gap-3">
-        {chartData.slice(0, 5).map((entry) => (
-          <div key={entry.name} className="flex items-center gap-1.5">
-            <span
-              className="h-2.5 w-2.5 rounded-full"
-              style={{ backgroundColor: entry.color }}
-            />
-            <span className="text-xs text-muted-foreground">{entry.name}</span>
-          </div>
-        ))}
-      </div>
-
-      <Button asChild variant="ghost" size="sm" className="w-full">
-        <Link to="/expenses">
-          {t("dashboard.viewAllExpenses")}
-          <ChevronRight className="h-4 w-4" aria-hidden="true" />
-        </Link>
-      </Button>
-    </div>
-  );
+function monthKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
-function formatCurrency(amount: number): string {
-  return `Rs ${amount.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+function formatMoney(amount: number): string {
+  return `Rs ${amount.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+}
+
+export function ExpenseBreakdownChart() {
+  const { t } = useI18n();
+  const { farm } = useFarm();
+  const [expenses, setExpenses] = React.useState<Expense[]>([]);
+  const [status, setStatus] = React.useState<"loading" | "ready" | "error">("loading");
+  const [reloadKey, setReloadKey] = React.useState(0);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    if (!farm) {
+      setExpenses([]);
+      setStatus("ready");
+      return;
+    }
+    setStatus("loading");
+    supabase
+      .from("expenses")
+      .select("id, farm_id, category, amount, description, expense_date, created_at")
+      .eq("farm_id", farm.id)
+      .order("expense_date", { ascending: false })
+      .limit(500)
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) {
+          console.error("expense-breakdown-chart:", error.message);
+          setExpenses([]);
+          setStatus("error");
+          return;
+        }
+        const rows = (data ?? []) as Array<{
+          id: string;
+          farm_id: string;
+          category: ExpenseCategory;
+          amount: number;
+          description: string | null;
+          expense_date: string;
+          created_at: string;
+        }>;
+        setExpenses(
+          rows.map((r) => ({
+            id: r.id,
+            farmId: r.farm_id,
+            category: r.category,
+            amount: r.amount,
+            description: r.description ?? undefined,
+            expenseDate: r.expense_date,
+            createdAt: r.created_at,
+          }))
+        );
+        setStatus("ready");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [farm, reloadKey]);
+
+  const month = monthKey(new Date());
+  const monthExpenses = expenses.filter((e) => monthKey(new Date(e.expenseDate)) === month);
+
+  const totals = React.useMemo(() => {
+    const map = new Map<ExpenseCategory, number>();
+    for (const e of monthExpenses) {
+      map.set(e.category, (map.get(e.category) ?? 0) + e.amount);
+    }
+    return Array.from(map.entries())
+      .map(([category, total]) => ({ category, total, count: 0 }))
+      .sort((a, b) => b.total - a.total);
+  }, [monthExpenses]);
+
+  const grandTotal = totals.reduce((sum, x) => sum + x.total, 0);
+  const maxTotal = totals[0]?.total ?? 1;
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2">
+          <Wallet className="h-5 w-5 text-primary" aria-hidden="true" />
+          {t("dashboard.expenseBreakdown")}
+        </CardTitle>
+        <p className="text-xs text-muted-foreground">
+          {t("dashboard.expenseBreakdownSub")}
+        </p>
+      </CardHeader>
+
+      {status === "loading" ? (
+        <CardContent className="space-y-3 py-2" role="status">
+          <span className="sr-only">{t("dashboard.expensesLoading")}</span>
+          <Skeleton className="h-10 w-40" />
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="space-y-1.5">
+              <Skeleton className="h-3.5 w-24" />
+              <Skeleton className="h-2.5 w-full" />
+            </div>
+          ))}
+        </CardContent>
+      ) : status === "error" ? (
+        <CardContent className="py-2">
+          <div className="flex items-start gap-3 rounded-xl border border-border bg-background/40 p-4">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-foreground">
+                {t("dashboard.expensesLoading")}
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                We couldn't load your expense summary.
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-2"
+                onClick={() => setReloadKey((k) => k + 1)}
+              >
+                {t("common.retry")}
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      ) : totals.length === 0 ? (
+        <CardContent className="py-2">
+          <div className="flex items-start gap-3 rounded-xl border border-border bg-background/40 p-4">
+            <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-success-soft text-success">
+              <Wallet className="h-4 w-4" aria-hidden="true" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-foreground">
+                {t("dashboard.expensesEmpty")}
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {t("dashboard.expensesEmptyHint")}
+              </p>
+              <Button asChild variant="outline" size="sm" className="mt-2">
+                <Link to="/expenses">{t("dashboard.openExpenses")}</Link>
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      ) : (
+        <CardContent className="space-y-4 py-2">
+          {/* Summary metric first, then the detail */}
+          <div>
+            <p className="text-xs font-medium text-muted-foreground">
+              {t("dashboard.expensesTotal")}
+            </p>
+            <p className="font-heading text-3xl font-bold tracking-tight text-foreground">
+              {formatMoney(grandTotal)}
+            </p>
+          </div>
+
+          <ul className="space-y-3" aria-label={t("dashboard.expenseBreakdown")}>
+            {totals.slice(0, 6).map(({ category, total }) => (
+              <li key={category} className="space-y-1.5">
+                <div className="flex items-center justify-between gap-3 text-xs">
+                  <span className="font-medium text-foreground">
+                    {t(CATEGORY_LABEL_KEY[category] ?? "expenses.cat.other")}
+                  </span>
+                  <span className="text-muted-foreground">{formatMoney(total)}</span>
+                </div>
+                <div className="h-2.5 overflow-hidden rounded-full bg-muted" role="img">
+                  <div
+                    className={cn("h-full rounded-full", CATEGORY_BAR[category])}
+                    style={{ width: `${Math.max(4, (total / maxTotal) * 100)}%` }}
+                  />
+                </div>
+              </li>
+            ))}
+          </ul>
+
+          <Button asChild variant="ghost" size="sm" className="w-full">
+            <Link to="/expenses">
+              {t("dashboard.viewAllExpenses")}
+              <ArrowRight className="h-4 w-4" aria-hidden="true" />
+            </Link>
+          </Button>
+        </CardContent>
+      )}
+    </Card>
+  );
 }

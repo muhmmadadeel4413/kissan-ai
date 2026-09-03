@@ -1,24 +1,29 @@
 import * as React from "react";
+import { Link } from "react-router-dom";
 import {
-  Plus,
-  Pencil,
-  Trash2,
   CalendarDays,
+  Check,
   ChevronLeft,
   ChevronRight,
-  CheckCircle2,
+  ListChecks,
+  Plus,
   SkipForward,
-  Droplets,
-  Sprout,
-  Bug,
-  Search,
-  Wheat,
-  ClipboardCheck,
-  MoreHorizontal,
+  Trash2,
+  X,
 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Card, CardContent } from "../components/ui/card";
-import { Badge } from "../components/ui/badge";
+import { Input } from "../components/ui/input";
+import { Label } from "../components/ui/label";
+import { Textarea } from "../components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "../components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -26,46 +31,29 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../components/ui/select";
+import { Badge } from "../components/ui/badge";
 import { PageHeader, SectionHeader } from "../components/layout/page-header";
-import { StatCard } from "../components/layout/stat-card";
 import { EmptyState } from "../components/layout/empty-state";
 import { LoadingState } from "../components/layout/loading-state";
 import { ErrorState } from "../components/layout/error-state";
-import { CalendarEventForm } from "../components/calendar/calendar-event-form";
+import { StatCard } from "../components/layout/stat-card";
 import { useFarm } from "../context/FarmContext";
-import { usePreferences } from "../context/PreferencesContext";
-import {
-  fetchEvents,
-  createEvent,
-  updateEvent,
-  deleteEvent,
-  completeEvent,
-  skipEvent,
-  groupEventsByDate,
-} from "../lib/calendar-service";
-import type { FarmEvent, FarmEventInput, FarmEventType } from "../types";
+import { useI18n } from "../context/PreferencesContext";
+import { supabase } from "../lib/supabase";
+import type { FarmEvent, FarmEventStatus, FarmEventType } from "../types";
 import { cn } from "../lib/utils";
 
-/* ------------------------------------------------------------------ */
-/* Event-type meta (icons + badge variants)                             */
-/* ------------------------------------------------------------------ */
-
-type BadgeVariant = "default" | "success" | "warning" | "danger" | "neutral" | "outline";
-
-const EVENT_TYPE_META: Record<
-  FarmEventType,
-  { icon: React.ComponentType<{ className?: string }>; variant: BadgeVariant; dotColor: string }
-> = {
-  irrigation: { icon: Droplets, variant: "default", dotColor: "bg-blue-500" },
-  fertilizer: { icon: Sprout, variant: "success", dotColor: "bg-green-500" },
-  pesticide: { icon: Bug, variant: "warning", dotColor: "bg-amber-500" },
-  pest_monitoring: { icon: Search, variant: "neutral", dotColor: "bg-purple-500" },
-  harvest: { icon: Wheat, variant: "success", dotColor: "bg-emerald-600" },
-  inspection: { icon: ClipboardCheck, variant: "default", dotColor: "bg-indigo-500" },
-  other: { icon: MoreHorizontal, variant: "neutral", dotColor: "bg-gray-400" },
+const TYPE_LABEL_KEY: Record<FarmEventType, string> = {
+  irrigation: "calendar.type.irrigation",
+  fertilizer: "calendar.type.fertilizer",
+  pesticide: "calendar.type.pesticide",
+  pest_monitoring: "calendar.type.pest_monitoring",
+  harvest: "calendar.type.harvest",
+  inspection: "calendar.type.inspection",
+  other: "calendar.type.other",
 };
 
-const ALL_EVENT_TYPES: FarmEventType[] = [
+const TYPES: FarmEventType[] = [
   "irrigation",
   "fertilizer",
   "pesticide",
@@ -75,579 +63,519 @@ const ALL_EVENT_TYPES: FarmEventType[] = [
   "other",
 ];
 
-/* ------------------------------------------------------------------ */
-/* Calendar helpers                                                     */
-/* ------------------------------------------------------------------ */
+const STATUS_BADGE: Record<FarmEventStatus, "default" | "success" | "neutral"> = {
+  scheduled: "default",
+  completed: "success",
+  skipped: "neutral",
+};
 
-function toISODate(year: number, month: number, day: number): string {
-  const m = String(month + 1).padStart(2, "0");
-  const d = String(day).padStart(2, "0");
-  return `${year}-${m}-${d}`;
+function toDateInputValue(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+    d.getDate()
+  ).padStart(2, "0")}`;
 }
 
-function todayISO(): string {
-  const now = new Date();
-  return toISODate(now.getFullYear(), now.getMonth(), now.getDate());
+interface FormState {
+  eventType: FarmEventType | "";
+  title: string;
+  description: string;
+  scheduledDate: string;
 }
 
-/**
- * Build a 6-week grid (42 cells) for the given month. Each cell is either a
- * date string (ISO) or null for padding days outside the month.
- */
-function buildMonthGrid(year: number, month: number): (string | null)[] {
-  const firstDay = new Date(year, month, 1).getDay(); // 0=Sun
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const cells: (string | null)[] = [];
-
-  // Padding before month starts
-  for (let i = 0; i < firstDay; i++) {
-    cells.push(null);
-  }
-  // Month days
-  for (let d = 1; d <= daysInMonth; d++) {
-    cells.push(toISODate(year, month, d));
-  }
-  // Padding after to fill 42 cells (6 rows)
-  while (cells.length < 42) {
-    cells.push(null);
-  }
-  return cells;
-}
-
-const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-
-const MONTH_NAMES = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
-];
-
-/* ------------------------------------------------------------------ */
-/* Page                                                                 */
-/* ------------------------------------------------------------------ */
+const EMPTY_FORM: FormState = { eventType: "", title: "", description: "", scheduledDate: "" };
 
 export default function CropCalendarPage() {
-  const { t } = usePreferences();
+  const { t } = useI18n();
   const { farm } = useFarm();
 
-  const today = todayISO();
-  const now = new Date();
-  const activeFarmId = farm?.id ?? null;
-
-  // Calendar navigation state
-  const [viewYear, setViewYear] = React.useState(now.getFullYear());
-  const [viewMonth, setViewMonth] = React.useState(now.getMonth());
-
-  // Data state
   const [events, setEvents] = React.useState<FarmEvent[]>([]);
-  const [status, setStatus] = React.useState<"idle" | "loading" | "ready" | "error">("idle");
-  const [error, setError] = React.useState<string | null>(null);
+  const [status, setStatus] = React.useState<"loading" | "ready" | "error">("loading");
+  const [loadError, setLoadError] = React.useState<string | null>(null);
   const [reloadKey, setReloadKey] = React.useState(0);
 
-  // UI state
-  const [selectedDate, setSelectedDate] = React.useState<string | null>(today);
-  const [typeFilter, setTypeFilter] = React.useState<string>("all");
+  const [dialogOpen, setDialogOpen] = React.useState(false);
+  const [editing, setEditing] = React.useState<FarmEvent | null>(null);
+  const [form, setForm] = React.useState<FormState>(EMPTY_FORM);
+  const [formError, setFormError] = React.useState<string | null>(null);
+  const [saving, setSaving] = React.useState(false);
 
-  // Form state
-  const [formOpen, setFormOpen] = React.useState(false);
-  const [editingEvent, setEditingEvent] = React.useState<FarmEvent | null>(null);
-  const [formDefaultDate, setFormDefaultDate] = React.useState<string | undefined>();
+  const [monthOffset, setMonthOffset] = React.useState(0);
 
-  /* ---------- data loading ---------- */
+  const load = React.useCallback(async () => {
+    if (!farm) return;
+    setStatus("loading");
+    setLoadError(null);
+    try {
+      const { data, error } = await supabase
+        .from("farm_events")
+        .select(
+          "id, farm_id, event_type, title, description, scheduled_date, status, completed_at, created_at"
+        )
+        .eq("farm_id", farm.id)
+        .order("scheduled_date", { ascending: true });
+      if (error) throw error;
+      const rows = (data ?? []) as Array<{
+        id: string;
+        farm_id: string;
+        event_type: FarmEventType;
+        title: string;
+        description: string | null;
+        scheduled_date: string;
+        status: FarmEventStatus;
+        completed_at: string | null;
+        created_at: string;
+      }>;
+      setEvents(
+        rows.map((r) => ({
+          id: r.id,
+          farmId: r.farm_id,
+          eventType: r.event_type,
+          title: r.title,
+          description: r.description ?? undefined,
+          scheduledDate: r.scheduled_date,
+          status: r.status,
+          completedAt: r.completed_at ?? undefined,
+          createdAt: r.created_at,
+        }))
+      );
+      setStatus("ready");
+    } catch (err) {
+      console.error("calendar-page:", err);
+      setLoadError("We couldn't load your calendar events. Please try again.");
+      setStatus("error");
+    }
+  }, [farm]);
 
   React.useEffect(() => {
-    if (!activeFarmId) return;
-    let cancelled = false;
+    void load();
+  }, [load, reloadKey]);
 
-    async function load() {
-      if (!activeFarmId) return;
-      const fid: string = activeFarmId;
-      setStatus("loading");
-      setError(null);
-      try {
-        // Fetch the full month range + a buffer for events that might span
-        const grid = buildMonthGrid(viewYear, viewMonth);
-        const firstDate = grid.find((d) => d !== null) as string;
-        const lastDate = [...grid].reverse().find((d) => d !== null) as string;
+  const anchor = React.useMemo(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth() + monthOffset, 1);
+  }, [monthOffset]);
 
-        const opts: { startDate: string; endDate: string; eventType?: FarmEventType } = {
-          startDate: firstDate,
-          endDate: lastDate,
-        };
-        if (typeFilter !== "all") {
-          opts.eventType = typeFilter as FarmEventType;
-        }
+  const monthKey = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 
-        const data = await fetchEvents(fid, opts);
-        if (!cancelled) {
-          setEvents(data);
-          setStatus("ready");
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : t("calendar.loadError"));
-          setStatus("error");
-        }
-      }
+  const visibleMonth = monthKey(anchor);
+
+  const grouped = React.useMemo(() => {
+    const map = new Map<string, FarmEvent[]>();
+    for (const e of events) {
+      const key = e.scheduledDate.slice(0, 7);
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(e);
     }
-
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, [activeFarmId, viewYear, viewMonth, typeFilter, reloadKey, t]);
-
-  /* ---------- navigation ---------- */
-
-  function goToPrevMonth() {
-    if (viewMonth === 0) {
-      setViewMonth(11);
-      setViewYear((y) => y - 1);
-    } else {
-      setViewMonth((m) => m - 1);
+    for (const list of map.values()) {
+      list.sort((a, b) => a.scheduledDate.localeCompare(b.scheduledDate));
     }
-  }
+    return map;
+  }, [events]);
 
-  function goToNextMonth() {
-    if (viewMonth === 11) {
-      setViewMonth(0);
-      setViewYear((y) => y + 1);
-    } else {
-      setViewMonth((m) => m + 1);
-    }
-  }
+  const monthEvents = grouped.get(visibleMonth) ?? [];
 
-  function goToToday() {
-    const n = new Date();
-    setViewYear(n.getFullYear());
-    setViewMonth(n.getMonth());
-    setSelectedDate(todayISO());
-  }
-
-  /* ---------- event actions ---------- */
-
-  const eventsByDate = groupEventsByDate(events);
-  const grid = buildMonthGrid(viewYear, viewMonth);
-
-  function handleAddEvent(date?: string) {
-    setEditingEvent(null);
-    setFormDefaultDate(date ?? todayISO());
-    setFormOpen(true);
-  }
-
-  function handleEditEvent(ev: FarmEvent) {
-    setEditingEvent(ev);
-    setFormDefaultDate(undefined);
-    setFormOpen(true);
-  }
-
-  async function handleSave(input: FarmEventInput) {
-    if (editingEvent) {
-      await updateEvent(editingEvent.id, input);
-    } else {
-      await createEvent(input);
-    }
-    setReloadKey((k) => k + 1);
-  }
-
-  async function handleDelete(id: string) {
-    await deleteEvent(id);
-    setReloadKey((k) => k + 1);
-  }
-
-  async function handleComplete(id: string) {
-    await completeEvent(id);
-    setReloadKey((k) => k + 1);
-  }
-
-  async function handleSkip(id: string) {
-    await skipEvent(id);
-    setReloadKey((k) => k + 1);
-  }
-
-  /* ---------- stats ---------- */
-
-  const monthEvents = events;
-  const completedCount = monthEvents.filter((e) => e.status === "completed").length;
-  const upcomingCount = monthEvents.filter(
-    (e) => e.status === "scheduled" && e.scheduledDate >= today
+  const today = toDateInputValue(new Date());
+  const upcomingCount = events.filter((e) => e.status === "scheduled").length;
+  const completedThisMonth = events.filter(
+    (e) => e.status === "completed" && e.scheduledDate.slice(0, 7) === visibleMonth
   ).length;
+  const totalThisMonth = monthEvents.length;
 
-  /* ---------- no farm guard ---------- */
+  function openAdd() {
+    setEditing(null);
+    setForm({ ...EMPTY_FORM, scheduledDate: today });
+    setFormError(null);
+    setDialogOpen(true);
+  }
 
-  if (!activeFarmId) {
+  function openEdit(event: FarmEvent) {
+    setEditing(event);
+    setForm({
+      eventType: event.eventType,
+      title: event.title,
+      description: event.description ?? "",
+      scheduledDate: event.scheduledDate,
+    });
+    setFormError(null);
+    setDialogOpen(true);
+  }
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    if (!farm) return;
+    if (!form.title.trim()) {
+      setFormError(t("calendar.errTitle"));
+      return;
+    }
+    if (!form.scheduledDate) {
+      setFormError(t("calendar.errDate"));
+      return;
+    }
+    if (!form.eventType) {
+      setFormError("Please select an event type.");
+      return;
+    }
+
+    setSaving(true);
+    setFormError(null);
+    const payload = {
+      farm_id: farm.id,
+      event_type: form.eventType,
+      title: form.title.trim(),
+      description: form.description.trim() || null,
+      scheduled_date: form.scheduledDate,
+    };
+    try {
+      const { error } = editing
+        ? await supabase.from("farm_events").update(payload).eq("id", editing.id)
+        : await supabase.from("farm_events").insert(payload);
+      if (error) throw error;
+      setDialogOpen(false);
+      setReloadKey((k) => k + 1);
+    } catch (err) {
+      console.error("calendar-page save:", err);
+      setFormError(t("calendar.saveError"));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function setEventStatus(event: FarmEvent, statusToSet: FarmEventStatus) {
+    try {
+      const { error } = await supabase
+        .from("farm_events")
+        .update({
+          status: statusToSet,
+          completed_at: statusToSet === "completed" ? new Date().toISOString() : null,
+        })
+        .eq("id", event.id);
+      if (error) throw error;
+      setReloadKey((k) => k + 1);
+    } catch (err) {
+      console.error("calendar-page status:", err);
+    }
+  }
+
+  async function handleDelete(event: FarmEvent) {
+    if (!window.confirm(`Delete "${event.title}"?`)) return;
+    try {
+      const { error } = await supabase.from("farm_events").delete().eq("id", event.id);
+      if (error) throw error;
+      setReloadKey((k) => k + 1);
+    } catch (err) {
+      console.error("calendar-page delete:", err);
+    }
+  }
+
+  if (!farm) {
     return (
-      <div className="space-y-6">
-        <PageHeader title={t("page.cropCalendar")} />
+      <div className="mx-auto max-w-xl">
         <EmptyState
           icon={<CalendarDays className="h-6 w-6" />}
-          title={t("farm.noFarmTitle")}
-          description={t("farm.noFarmDescription")}
+          title={t("page.cropCalendar")}
+          description={t("farmProfile.noFarmDesc")}
+          action={
+            <Button asChild>
+              <Link to="/farm-setup">{t("farmSetup.createTitle")}</Link>
+            </Button>
+          }
         />
       </div>
     );
   }
-
-  /* ---------- loading / error states ---------- */
-
-  if (status === "loading" && events.length === 0) {
-    return (
-      <div className="space-y-6">
-        <PageHeader title={t("page.cropCalendar")} />
-        <LoadingState />
-      </div>
-    );
-  }
-
-  if (status === "error") {
-    return (
-      <div className="space-y-6">
-        <PageHeader title={t("page.cropCalendar")} />
-        <ErrorState
-          message={error ?? t("calendar.loadError")}
-          onRetry={() => setReloadKey((k) => k + 1)}
-        />
-      </div>
-    );
-  }
-
-  /* ---------- selected date events ---------- */
-
-  const selectedEvents = selectedDate ? (eventsByDate[selectedDate] ?? []) : [];
-
-  /* ---------- render ---------- */
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
+    <div className="space-y-8">
       <PageHeader
         title={t("page.cropCalendar")}
         subtitle={t("calendar.subtitle")}
         action={
-          <Button onClick={() => handleAddEvent(selectedDate ?? todayISO())} size="sm">
+          <Button onClick={openAdd}>
             <Plus className="h-4 w-4" aria-hidden="true" />
             {t("calendar.addEvent")}
           </Button>
         }
       />
 
-      {/* Stat cards */}
-      <div className="grid gap-4 sm:grid-cols-3">
-        <StatCard
-          icon={CalendarDays}
-          label={t("calendar.statUpcoming")}
-          value={upcomingCount}
-          hint={t("calendar.statUpcomingHint")}
-        />
-        <StatCard
-          icon={CheckCircle2}
-          label={t("calendar.statCompleted")}
-          value={completedCount}
-          hint={t("calendar.statCompletedHint")}
-        />
-        <StatCard
-          icon={MoreHorizontal}
-          label={t("calendar.statTotal")}
-          value={monthEvents.length}
-          hint={t("calendar.statTotalHint")}
-        />
-      </div>
+      <section aria-label={t("calendar.filterAll")}>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <StatCard
+            label={t("calendar.statUpcoming")}
+            value={upcomingCount}
+            hint={t("calendar.statUpcomingHint")}
+            icon={ListChecks}
+            iconClassName="bg-primary-soft text-primary"
+          />
+          <StatCard
+            label={t("calendar.statCompleted")}
+            value={completedThisMonth}
+            hint={t("calendar.statCompletedHint")}
+            icon={Check}
+            iconClassName="bg-success-soft text-success"
+          />
+          <StatCard
+            label={t("calendar.statTotal")}
+            value={totalThisMonth}
+            hint={t("calendar.statTotalHint")}
+            icon={CalendarDays}
+          />
+        </div>
+      </section>
 
-      {/* Calendar controls */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        {/* Month navigation */}
+      {/* Month navigation */}
+      <section className="flex items-center justify-between gap-3">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setMonthOffset((o) => o - 1)}
+          aria-label={t("calendar.prevMonth")}
+          className="cursor-pointer"
+        >
+          <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+          {t("calendar.prevMonth")}
+        </Button>
+        <h2 className="font-heading text-lg font-bold tracking-tight text-foreground">
+          {anchor.toLocaleDateString(undefined, { month: "long", year: "numeric" })}
+        </h2>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" onClick={goToPrevMonth} aria-label={t("calendar.prevMonth")}>
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <span className="min-w-[140px] text-center font-heading text-lg font-semibold text-foreground">
-            {MONTH_NAMES[viewMonth]} {viewYear}
-          </span>
-          <Button variant="outline" size="icon" onClick={goToNextMonth} aria-label={t("calendar.nextMonth")}>
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-          <Button variant="ghost" size="sm" onClick={goToToday}>
-            {t("calendar.today")}
+          {monthOffset !== 0 ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setMonthOffset(0)}
+              className="cursor-pointer"
+            >
+              {t("calendar.today")}
+            </Button>
+          ) : null}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setMonthOffset((o) => o + 1)}
+            aria-label={t("calendar.nextMonth")}
+            className="cursor-pointer"
+          >
+            {t("calendar.nextMonth")}
+            <ChevronRight className="h-4 w-4" aria-hidden="true" />
           </Button>
         </div>
+      </section>
 
-        {/* Event type filter */}
-        <Select value={typeFilter} onValueChange={setTypeFilter}>
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder={t("calendar.filterAll")} />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">{t("calendar.filterAll")}</SelectItem>
-            {ALL_EVENT_TYPES.map((et) => (
-              <SelectItem key={et} value={et}>
-                {t(`calendar.type.${et}`)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      {/* Calendar grid */}
-      <Card>
-        <CardContent className="p-4">
-          {/* Day-of-week headers */}
-          <div className="mb-2 grid grid-cols-7 gap-1">
-            {DAY_LABELS.map((day) => (
-              <div
-                key={day}
-                className="py-2 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground"
-              >
-                {day}
-              </div>
-            ))}
-          </div>
-
-          {/* Date cells */}
-          <div className="grid grid-cols-7 gap-1">
-            {grid.map((dateISO, idx) => {
-              if (!dateISO) {
-                return <div key={`empty-${idx}`} className="aspect-square" />;
-              }
-
-              const dayNum = parseInt(dateISO.split("-")[2], 10);
-              const dayEvents = eventsByDate[dateISO] ?? [];
-              const isToday = dateISO === today;
-              const isSelected = dateISO === selectedDate;
-
-              return (
-                <button
-                  key={dateISO}
-                  type="button"
-                  onClick={() => setSelectedDate(dateISO)}
-                  onDoubleClick={() => handleAddEvent(dateISO)}
-                  className={cn(
-                    "relative flex flex-col items-start rounded-lg px-1.5 py-1.5 text-sm transition-all duration-150",
-                    "min-h-[3rem] sm:min-h-[4rem]",
-                    "hover:bg-accent/50",
-                    isToday && !isSelected && "ring-2 ring-primary/40",
-                    isSelected && "bg-primary/10 ring-2 ring-primary",
-                    !isToday && !isSelected && "text-foreground"
-                  )}
-                >
+      {status === "loading" ? (
+        <LoadingState rows={3} title={t("calendar.loadError")} />
+      ) : status === "error" ? (
+        <ErrorState
+          title={t("calendar.loadError")}
+          message={loadError ?? undefined}
+          onRetry={() => setReloadKey((k) => k + 1)}
+        />
+      ) : monthEvents.length === 0 ? (
+        <EmptyState
+          icon={<CalendarDays className="h-6 w-6" />}
+          title={t("calendar.noEvents")}
+          description={t("calendar.noEventsHint")}
+          action={
+            <Button onClick={openAdd}>
+              <Plus className="h-4 w-4" aria-hidden="true" />
+              {t("calendar.addEvent")}
+            </Button>
+          }
+        />
+      ) : (
+        <section className="space-y-3">
+          <SectionHeader
+            title={`${monthEvents.length} ${t("calendar.eventsLabel")}`}
+            subtitle={t("calendar.filterAll")}
+          />
+          <div className="space-y-2.5">
+            {monthEvents.map((event) => (
+              <Card key={event.id}>
+                <CardContent className="flex flex-wrap items-center gap-3 py-4">
                   <span
                     className={cn(
-                      "flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold",
-                      isToday && "bg-primary text-primary-foreground"
+                      "flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-xl",
+                      event.status === "completed"
+                        ? "bg-success-soft text-success"
+                        : "bg-primary-soft text-primary"
                     )}
                   >
-                    {dayNum}
+                    <span className="text-sm font-bold leading-none">
+                      {new Date(event.scheduledDate + "T00:00:00").getDate()}
+                    </span>
+                    <span className="text-[10px] uppercase leading-none">
+                      {new Date(event.scheduledDate + "T00:00:00").toLocaleDateString(undefined, {
+                        month: "short",
+                      })}
+                    </span>
                   </span>
-                  {/* Event dots */}
-                  {dayEvents.length > 0 ? (
-                    <div className="mt-1 flex flex-wrap gap-0.5">
-                      {dayEvents.slice(0, 3).map((ev) => (
-                        <span
-                          key={ev.id}
-                          className={cn(
-                            "h-1.5 w-1.5 rounded-full",
-                            ev.status === "completed"
-                              ? "bg-green-500"
-                              : ev.status === "skipped"
-                                ? "bg-gray-300"
-                                : EVENT_TYPE_META[ev.eventType].dotColor
-                          )}
-                          title={ev.title}
-                        />
-                      ))}
-                      {dayEvents.length > 3 ? (
-                        <span className="text-[9px] text-muted-foreground">
-                          +{dayEvents.length - 3}
-                        </span>
-                      ) : null}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p
+                        className={cn(
+                          "text-sm font-semibold text-foreground",
+                          event.status === "completed" && "line-through opacity-70"
+                        )}
+                      >
+                        {event.title}
+                      </p>
+                      <Badge variant={STATUS_BADGE[event.status]}>
+                        {event.status === "completed"
+                          ? t("calendar.statusCompleted")
+                          : event.status === "skipped"
+                            ? t("calendar.statusSkipped")
+                            : t(TYPE_LABEL_KEY[event.eventType])}
+                      </Badge>
                     </div>
-                  ) : null}
-                </button>
-              );
-            })}
+                    {event.description ? (
+                      <p className="mt-1 truncate text-xs text-muted-foreground">
+                        {event.description}
+                      </p>
+                    ) : null}
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    {event.status !== "completed" ? (
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() => void setEventStatus(event, "completed")}
+                        aria-label={t("calendar.markComplete")}
+                        className="cursor-pointer text-success"
+                      >
+                        <Check className="h-4 w-4" aria-hidden="true" />
+                      </Button>
+                    ) : null}
+                    {event.status === "scheduled" ? (
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() => void setEventStatus(event, "skipped")}
+                        aria-label={t("calendar.markSkip")}
+                        className="cursor-pointer text-muted-foreground"
+                      >
+                        <SkipForward className="h-4 w-4" aria-hidden="true" />
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() => void setEventStatus(event, "scheduled")}
+                        aria-label={t("calendar.markSkip")}
+                        className="cursor-pointer text-muted-foreground"
+                      >
+                        <X className="h-4 w-4" aria-hidden="true" />
+                      </Button>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => openEdit(event)}
+                      aria-label={t("calendar.editTitle")}
+                      className="cursor-pointer"
+                    >
+                      <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => void handleDelete(event)}
+                      aria-label={t("expenses.deleteBtn")}
+                      className="cursor-pointer text-danger hover:text-danger"
+                    >
+                      <Trash2 className="h-4 w-4" aria-hidden="true" />
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
           </div>
-        </CardContent>
-      </Card>
+        </section>
+      )}
 
-      {/* Selected date events */}
-      {selectedDate ? (
-        <div className="space-y-3">
-          <SectionHeader
-            title={formatDateLabel(selectedDate)}
-            subtitle={
-              selectedEvents.length > 0
-                ? `${selectedEvents.length} ${t("calendar.eventsLabel")}`
-                : undefined
-            }
-            action={
-              <Button variant="outline" size="sm" onClick={() => handleAddEvent(selectedDate)}>
-                <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-                {t("calendar.addEvent")}
-              </Button>
-            }
-          />
-
-          {selectedEvents.length === 0 ? (
-            <EmptyState
-              icon={<CalendarDays className="h-5 w-5" />}
-              title={t("calendar.noEvents")}
-              description={t("calendar.noEventsHint")}
-              action={
-                <Button variant="outline" size="sm" onClick={() => handleAddEvent(selectedDate)}>
-                  <Plus className="h-4 w-4" aria-hidden="true" />
-                  {t("calendar.addEvent")}
-                </Button>
-              }
-            />
-          ) : (
-            <div className="space-y-2">
-              {selectedEvents.map((ev) => (
-                <EventCard
-                  key={ev.id}
-                  event={ev}
-                  onEdit={() => handleEditEvent(ev)}
-                  onDelete={() => handleDelete(ev.id)}
-                  onComplete={() => handleComplete(ev.id)}
-                  onSkip={() => handleSkip(ev.id)}
-                />
-              ))}
+      {/* Add / Edit dialog */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editing ? t("calendar.editTitle") : t("calendar.addTitle")}</DialogTitle>
+            <DialogDescription>{t("calendar.formSubtitle")}</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={(e) => void handleSave(e)} className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="event-type-field">{t("calendar.eventType")} *</Label>
+              <Select
+                value={form.eventType}
+                onValueChange={(v) => setForm((f) => ({ ...f, eventType: v as FarmEventType }))}
+              >
+                <SelectTrigger id="event-type-field">
+                  <SelectValue placeholder={t("calendar.selectType")} />
+                </SelectTrigger>
+                <SelectContent>
+                  {TYPES.map((type) => (
+                    <SelectItem key={type} value={type}>
+                      {t(TYPE_LABEL_KEY[type])}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-          )}
-        </div>
-      ) : null}
 
-      {/* Event form dialog */}
-      <CalendarEventForm
-        open={formOpen}
-        onOpenChange={setFormOpen}
-        farmId={activeFarmId}
-        event={editingEvent}
-        defaultDate={formDefaultDate}
-        onSave={handleSave}
-      />
+            <div className="space-y-1.5">
+              <Label htmlFor="event-title-field">{t("calendar.title")} *</Label>
+              <Input
+                id="event-title-field"
+                placeholder={t("calendar.titlePlaceholder")}
+                value={form.title}
+                onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="event-date-field">{t("calendar.date")} *</Label>
+              <Input
+                id="event-date-field"
+                type="date"
+                value={form.scheduledDate}
+                onChange={(e) => setForm((f) => ({ ...f, scheduledDate: e.target.value }))}
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="event-desc-field">{t("calendar.description")}</Label>
+              <Textarea
+                id="event-desc-field"
+                placeholder={t("calendar.descriptionPlaceholder")}
+                rows={3}
+                value={form.description}
+                onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+              />
+            </div>
+
+            {formError ? (
+              <p role="alert" className="text-sm text-danger">
+                {formError}
+              </p>
+            ) : null}
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setDialogOpen(false)}
+                disabled={saving}
+              >
+                {t("common.cancel")}
+              </Button>
+              <Button type="submit" disabled={saving}>
+                {saving
+                  ? t("calendar.saving")
+                  : editing
+                    ? t("calendar.updateBtn")
+                    : t("calendar.saveBtn")}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
-}
-
-/* ------------------------------------------------------------------ */
-/* Event card                                                           */
-/* ------------------------------------------------------------------ */
-
-function EventCard({
-  event,
-  onEdit,
-  onDelete,
-  onComplete,
-  onSkip,
-}: {
-  event: FarmEvent;
-  onEdit: () => void;
-  onDelete: () => void;
-  onComplete: () => void;
-  onSkip: () => void;
-}) {
-  const { t } = usePreferences();
-  const meta = EVENT_TYPE_META[event.eventType];
-  const Icon = meta.icon;
-  const isScheduled = event.status === "scheduled";
-  const isCompleted = event.status === "completed";
-  const isSkipped = event.status === "skipped";
-
-  return (
-    <Card className={cn(isSkipped && "opacity-60")}>
-      <CardContent className="flex items-center gap-4 p-4">
-        {/* Icon */}
-        <span
-          className={cn(
-            "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ring-1 ring-inset",
-            isCompleted
-              ? "bg-green-50 text-green-600 ring-green-200"
-              : isSkipped
-                ? "bg-gray-50 text-gray-400 ring-gray-200"
-                : "bg-primary-soft text-primary ring-primary/10"
-          )}
-        >
-          <Icon className="h-5 w-5" aria-hidden="true" />
-        </span>
-
-        {/* Content */}
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <p
-              className={cn(
-                "truncate text-sm font-semibold text-foreground",
-                isCompleted && "line-through"
-              )}
-            >
-              {event.title}
-            </p>
-            <Badge variant={meta.variant}>
-              {t(`calendar.type.${event.eventType}`)}
-            </Badge>
-            {isCompleted ? (
-              <Badge variant="success">{t("calendar.statusCompleted")}</Badge>
-            ) : isSkipped ? (
-              <Badge variant="neutral">{t("calendar.statusSkipped")}</Badge>
-            ) : null}
-          </div>
-          {event.description ? (
-            <p className="mt-0.5 truncate text-xs text-muted-foreground">
-              {event.description}
-            </p>
-          ) : null}
-        </div>
-
-        {/* Actions */}
-        <div className="flex shrink-0 items-center gap-1">
-          {isScheduled ? (
-            <>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={onComplete}
-                aria-label={t("calendar.markComplete")}
-                className="text-green-600 hover:text-green-700 hover:bg-green-50"
-              >
-                <CheckCircle2 className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={onSkip}
-                aria-label={t("calendar.markSkip")}
-                className="text-muted-foreground hover:text-amber-600 hover:bg-amber-50"
-              >
-                <SkipForward className="h-4 w-4" />
-              </Button>
-            </>
-          ) : null}
-          <Button variant="ghost" size="icon" onClick={onEdit} aria-label={t("common.edit")}>
-            <Pencil className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={onDelete}
-            aria-label={t("common.delete")}
-            className="text-muted-foreground hover:text-danger hover:bg-danger-soft"
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/* Utilities                                                            */
-/* ------------------------------------------------------------------ */
-
-function formatDateLabel(iso: string): string {
-  const d = new Date(iso + "T00:00:00");
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString(undefined, {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  });
 }

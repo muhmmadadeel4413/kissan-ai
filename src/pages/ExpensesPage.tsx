@@ -1,20 +1,19 @@
 import * as React from "react";
 import { Link } from "react-router-dom";
-import {
-  Plus,
-  Loader2,
-  Pencil,
-  Trash2,
-  Wallet,
-  Sprout,
-  TrendingDown,
-  CalendarDays,
-  ChevronDown,
-  ChevronUp,
-} from "lucide-react";
+import { Plus, Trash2, Wallet, Pencil } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Card, CardContent } from "../components/ui/card";
-import { Badge } from "../components/ui/badge";
+import { Input } from "../components/ui/input";
+import { Label } from "../components/ui/label";
+import { Textarea } from "../components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "../components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -22,80 +21,227 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../components/ui/select";
+import { Badge } from "../components/ui/badge";
 import { PageHeader, SectionHeader } from "../components/layout/page-header";
-import { StatCard } from "../components/layout/stat-card";
 import { EmptyState } from "../components/layout/empty-state";
 import { LoadingState } from "../components/layout/loading-state";
 import { ErrorState } from "../components/layout/error-state";
-import { ExpenseForm } from "../components/expenses/expense-form";
+import { StatCard } from "../components/layout/stat-card";
 import { useFarm } from "../context/FarmContext";
-import { usePreferences } from "../context/PreferencesContext";
-import {
-  fetchExpenses,
-  createExpense,
-  updateExpense,
-  deleteExpense,
-  computeCategoryTotals,
-  computeGrandTotal,
-} from "../lib/expense-service";
-import type { Expense, ExpenseCategory, ExpenseInput } from "../types";
+import { useI18n } from "../context/PreferencesContext";
+import { supabase } from "../lib/supabase";
+import type { Expense, ExpenseCategory } from "../types";
 import { cn } from "../lib/utils";
 
-/* ------------------------------------------------------------------ */
-/* Category meta (icons + color variants)                              */
-/* ------------------------------------------------------------------ */
-
-const CATEGORY_META: Record<
-  ExpenseCategory,
-  { icon: React.ComponentType<{ className?: string }>; variant: "default" | "success" | "warning" | "danger" | "neutral" }
-> = {
-  seeds: { icon: Sprout, variant: "success" },
-  fertilizer: { icon: TrendingDown, variant: "default" },
-  pesticide: { icon: Sprout, variant: "warning" },
-  labor: { icon: Wallet, variant: "neutral" },
-  irrigation: { icon: Wallet, variant: "default" },
-  equipment: { icon: Wallet, variant: "neutral" },
-  fuel: { icon: Wallet, variant: "danger" },
-  transport: { icon: Wallet, variant: "neutral" },
-  other: { icon: Wallet, variant: "neutral" },
+const CATEGORY_LABEL_KEY: Record<ExpenseCategory, string> = {
+  seeds: "expenses.cat.seeds",
+  fertilizer: "expenses.cat.fertilizer",
+  pesticide: "expenses.cat.pesticide",
+  labor: "expenses.cat.labor",
+  irrigation: "expenses.cat.irrigation",
+  equipment: "expenses.cat.equipment",
+  fuel: "expenses.cat.fuel",
+  transport: "expenses.cat.transport",
+  other: "expenses.cat.other",
 };
 
-function formatDate(iso: string): string {
-  const d = new Date(iso + "T00:00:00");
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+const CATEGORIES: ExpenseCategory[] = [
+  "seeds",
+  "fertilizer",
+  "pesticide",
+  "labor",
+  "irrigation",
+  "equipment",
+  "fuel",
+  "transport",
+  "other",
+];
+
+function toDateInputValue(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+    d.getDate()
+  ).padStart(2, "0")}`;
 }
 
-function formatCurrency(amount: number): string {
-  return amount.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+function formatMoney(amount: number): string {
+  return `Rs ${amount.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 }
 
-/** Default date range: current month. */
-function currentMonthRange(): { start: string; end: string } {
-  const now = new Date();
-  const start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
-  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10);
-  return { start, end };
+interface FormState {
+  category: ExpenseCategory | "";
+  amount: string;
+  description: string;
+  expenseDate: string;
 }
 
-/* ------------------------------------------------------------------ */
-/* Page                                                                */
-/* ------------------------------------------------------------------ */
+const EMPTY_FORM: FormState = { category: "", amount: "", description: "", expenseDate: "" };
 
 export default function ExpensesPage() {
+  const { t } = useI18n();
   const { farm } = useFarm();
-  const { t } = usePreferences();
+
+  const [expenses, setExpenses] = React.useState<Expense[]>([]);
+  const [status, setStatus] = React.useState<"loading" | "ready" | "error">("loading");
+  const [loadError, setLoadError] = React.useState<string | null>(null);
+  const [reloadKey, setReloadKey] = React.useState(0);
+
+  const [dialogOpen, setDialogOpen] = React.useState(false);
+  const [editing, setEditing] = React.useState<Expense | null>(null);
+  const [form, setForm] = React.useState<FormState>(EMPTY_FORM);
+  const [formError, setFormError] = React.useState<string | null>(null);
+  const [saving, setSaving] = React.useState(false);
+
+  // Month filter (defaults to the current month).
+  const [month, setMonth] = React.useState(toDateInputValue(new Date()).slice(0, 7));
+  const [categoryFilter, setCategoryFilter] = React.useState<ExpenseCategory | "all">("all");
+
+  const load = React.useCallback(async () => {
+    if (!farm) return;
+    setStatus("loading");
+    setLoadError(null);
+    try {
+      const { data, error } = await supabase
+        .from("expenses")
+        .select("id, farm_id, category, amount, description, expense_date, created_at")
+        .eq("farm_id", farm.id)
+        .order("expense_date", { ascending: false });
+      if (error) throw error;
+      const rows = (data ?? []) as Array<{
+        id: string;
+        farm_id: string;
+        category: ExpenseCategory;
+        amount: number;
+        description: string | null;
+        expense_date: string;
+        created_at: string;
+      }>;
+      setExpenses(
+        rows.map((r) => ({
+          id: r.id,
+          farmId: r.farm_id,
+          category: r.category,
+          amount: r.amount,
+          description: r.description ?? undefined,
+          expenseDate: r.expense_date,
+          createdAt: r.created_at,
+        }))
+      );
+      setStatus("ready");
+    } catch (err) {
+      console.error("expenses-page:", err);
+      setLoadError("We couldn't load your expenses. Please try again.");
+      setStatus("error");
+    }
+  }, [farm]);
+
+  React.useEffect(() => {
+    void load();
+  }, [load, reloadKey]);
+
+  const filtered = React.useMemo(() => {
+    return expenses.filter(
+      (e) =>
+        e.expenseDate.slice(0, 7) === month &&
+        (categoryFilter === "all" || e.category === categoryFilter)
+    );
+  }, [expenses, month, categoryFilter]);
+
+  const totalSpent = React.useMemo(
+    () => filtered.reduce((sum, e) => sum + e.amount, 0),
+    [filtered]
+  );
+
+  const breakdown = React.useMemo(() => {
+    const map = new Map<ExpenseCategory, number>();
+    for (const e of filtered) map.set(e.category, (map.get(e.category) ?? 0) + e.amount);
+    return Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
+  }, [filtered]);
+
+  const topCategory = breakdown[0]?.[0] ?? null;
+  const maxTotal = breakdown[0]?.[1] ?? 1;
+
+  function openAdd() {
+    setEditing(null);
+    setForm({ ...EMPTY_FORM, expenseDate: toDateInputValue(new Date()) });
+    setFormError(null);
+    setDialogOpen(true);
+  }
+
+  function openEdit(expense: Expense) {
+    setEditing(expense);
+    setForm({
+      category: expense.category,
+      amount: String(expense.amount),
+      description: expense.description ?? "",
+      expenseDate: expense.expenseDate,
+    });
+    setFormError(null);
+    setDialogOpen(true);
+  }
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    if (!farm) return;
+
+    const amount = Number(form.amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setFormError(t("expenses.errAmount"));
+      return;
+    }
+    if (!form.expenseDate) {
+      setFormError(t("expenses.errDate"));
+      return;
+    }
+    if (!form.category) {
+      setFormError("Please select a category.");
+      return;
+    }
+
+    setSaving(true);
+    setFormError(null);
+    const payload = {
+      farm_id: farm.id,
+      category: form.category,
+      amount,
+      description: form.description.trim() || null,
+      expense_date: form.expenseDate,
+    };
+    try {
+      const { error } = editing
+        ? await supabase.from("expenses").update(payload).eq("id", editing.id)
+        : await supabase.from("expenses").insert(payload);
+      if (error) throw error;
+      setDialogOpen(false);
+      setReloadKey((k) => k + 1);
+    } catch (err) {
+      console.error("expenses-page save:", err);
+      setFormError(t("expenses.saveError"));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete(expense: Expense) {
+    if (!window.confirm(`Delete "${expense.description || t("expenses.title")}"?`)) return;
+    try {
+      const { error } = await supabase.from("expenses").delete().eq("id", expense.id);
+      if (error) throw error;
+      setReloadKey((k) => k + 1);
+    } catch (err) {
+      console.error("expenses-page delete:", err);
+    }
+  }
 
   if (!farm) {
     return (
       <div className="mx-auto max-w-xl">
         <EmptyState
-          icon={<Sprout className="h-6 w-6" />}
-          title={t("dashboard.setupTitle")}
-          description={t("dashboard.setupDesc")}
+          icon={<Wallet className="h-6 w-6" />}
+          title={t("expenses.title")}
+          description={t("farmProfile.noFarmDesc")}
           action={
-            <Button asChild size="lg">
-              <Link to="/farm-setup">{t("farmSetup.createBtn")}</Link>
+            <Button asChild>
+              <Link to="/farm-setup">{t("farmSetup.createTitle")}</Link>
             </Button>
           }
         />
@@ -103,385 +249,288 @@ export default function ExpensesPage() {
     );
   }
 
-  const defaultRange = currentMonthRange();
-
-  /* ---- State ---------------------------------------------------- */
-  const [expenses, setExpenses] = React.useState<Expense[]>([]);
-  const [status, setStatus] = React.useState<"loading" | "ready" | "error">("loading");
-  const [error, setError] = React.useState<string | null>(null);
-  const [reload, setReload] = React.useState(0);
-
-  // Filters
-  const [startDate, setStartDate] = React.useState(defaultRange.start);
-  const [endDate, setEndDate] = React.useState(defaultRange.end);
-  const [filterCategory, setFilterCategory] = React.useState<"all" | ExpenseCategory>("all");
-
-  // Form dialog
-  const [formOpen, setFormOpen] = React.useState(false);
-  const [editingExpense, setEditingExpense] = React.useState<Expense | null>(null);
-
-  // Delete confirmation
-  const [deletingId, setDeletingId] = React.useState<string | null>(null);
-  const [expandedId, setExpandedId] = React.useState<string | null>(null);
-
-  /* ---- Fetch ---------------------------------------------------- */
-  React.useEffect(() => {
-    let cancelled = false;
-    setStatus("loading");
-    setError(null);
-
-    fetchExpenses(farm.id, {
-      startDate,
-      endDate,
-      category: filterCategory === "all" ? undefined : filterCategory,
-    })
-      .then((rows) => {
-        if (!cancelled) {
-          setExpenses(rows);
-          setStatus("ready");
-        }
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          setExpenses([]);
-          setError(err instanceof Error ? err.message : t("expenses.loadError"));
-          setStatus("error");
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [farm.id, startDate, endDate, filterCategory, reload]);
-
-  /* ---- Handlers ------------------------------------------------- */
-  const handleSave = async (input: ExpenseInput) => {
-    if (editingExpense) {
-      await updateExpense(editingExpense.id, {
-        category: input.category,
-        amount: input.amount,
-        description: input.description,
-        expenseDate: input.expenseDate,
-      });
-    } else {
-      await createExpense(input);
-    }
-    setReload((k) => k + 1);
-  };
-
-  const handleDelete = async (id: string) => {
-    setDeletingId(id);
-    try {
-      await deleteExpense(id);
-      setExpenses((prev) => prev.filter((e) => e.id !== id));
-    } catch {
-      // Error already shown via friendlyError in service
-    } finally {
-      setDeletingId(null);
-    }
-  };
-
-  const openAdd = () => {
-    setEditingExpense(null);
-    setFormOpen(true);
-  };
-
-  const openEdit = (expense: Expense) => {
-    setEditingExpense(expense);
-    setFormOpen(true);
-  };
-
-  /* ---- Derived data --------------------------------------------- */
-  const totals = computeCategoryTotals(expenses);
-  const grandTotal = computeGrandTotal(expenses);
-  const topCategory = totals[0];
-
-  /* ---- Render --------------------------------------------------- */
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <PageHeader
         title={t("expenses.title")}
         subtitle={t("expenses.subtitle")}
         action={
-          <Button size="lg" onClick={openAdd}>
+          <Button onClick={openAdd}>
             <Plus className="h-4 w-4" aria-hidden="true" />
             {t("expenses.addBtn")}
           </Button>
         }
       />
 
-      {/* Date range + category filters */}
+      {/* Summary stats */}
+      <section aria-label={t("expenses.summary")}>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <StatCard
+            label={t("expenses.totalSpent")}
+            value={formatMoney(totalSpent)}
+            icon={Wallet}
+            iconClassName="bg-success-soft text-success"
+          />
+          <StatCard
+            label={t("expenses.expensesCount")}
+            value={filtered.length}
+            icon={Wallet}
+          />
+          <StatCard
+            label={t("expenses.topCategory")}
+            value={topCategory ? t(CATEGORY_LABEL_KEY[topCategory]) : "—"}
+            icon={Wallet}
+          />
+        </div>
+      </section>
+
+      {/* Filters */}
       <section className="flex flex-wrap items-end gap-3">
         <div className="space-y-1.5">
-          <label className="text-xs font-medium text-muted-foreground" htmlFor="exp-start">
-            {t("expenses.fromDate")}
-          </label>
-          <input
-            id="exp-start"
-            type="date"
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-            className="h-10 rounded-xl border border-input bg-card px-3 text-sm text-foreground shadow-soft focus-visible:outline-2 focus-visible:outline-ring"
+          <Label htmlFor="expense-month">{t("expenses.fromDate")}</Label>
+          <Input
+            id="expense-month"
+            type="month"
+            value={month}
+            onChange={(e) => setMonth(e.target.value)}
+            className="w-44"
           />
         </div>
         <div className="space-y-1.5">
-          <label className="text-xs font-medium text-muted-foreground" htmlFor="exp-end">
-            {t("expenses.toDate")}
-          </label>
-          <input
-            id="exp-end"
-            type="date"
-            value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
-            className="h-10 rounded-xl border border-input bg-card px-3 text-sm text-foreground shadow-soft focus-visible:outline-2 focus-visible:outline-ring"
-          />
-        </div>
-        <div className="space-y-1.5">
-          <label className="text-xs font-medium text-muted-foreground">
-            {t("expenses.category")}
-          </label>
+          <Label htmlFor="expense-category">{t("expenses.category")}</Label>
           <Select
-            value={filterCategory}
-            onValueChange={(v) => setFilterCategory(v as "all" | ExpenseCategory)}
+            value={categoryFilter}
+            onValueChange={(v) => setCategoryFilter(v as ExpenseCategory | "all")}
           >
-            <SelectTrigger className="w-44">
-              <SelectValue />
+            <SelectTrigger id="expense-category" className="w-52">
+              <SelectValue placeholder={t("expenses.allCategories")} />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">{t("expenses.allCategories")}</SelectItem>
-              {Object.keys(CATEGORY_META).map((cat) => (
-                <SelectItem key={cat} value={cat}>
-                  {t(`expenses.cat.${cat}`)}
+              {CATEGORIES.map((c) => (
+                <SelectItem key={c} value={c}>
+                  {t(CATEGORY_LABEL_KEY[c])}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
         <Button
-          variant="outline"
+          variant="ghost"
           size="sm"
           onClick={() => {
-            const range = currentMonthRange();
-            setStartDate(range.start);
-            setEndDate(range.end);
-            setFilterCategory("all");
+            setMonth(toDateInputValue(new Date()).slice(0, 7));
+            setCategoryFilter("all");
           }}
         >
           {t("expenses.resetFilters")}
         </Button>
       </section>
 
-      {/* Summary stat cards */}
-      <section aria-label={t("expenses.summary")}>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <StatCard
-            label={t("expenses.totalSpent")}
-            value={formatCurrency(grandTotal)}
-            hint={`${expenses.length} ${t("expenses.expenseCount")}`}
-            icon={Wallet}
-          />
-          <StatCard
-            label={t("expenses.topCategory")}
-            value={topCategory ? t(`expenses.cat.${topCategory.category}`) : "—"}
-            hint={topCategory ? formatCurrency(topCategory.total) : ""}
-            icon={CATEGORY_META[topCategory?.category ?? "other"].icon}
-          />
-          <StatCard
-            label={t("expenses.categoriesUsed")}
-            value={totals.length}
-            hint={t("expenses.categoriesHint")}
-            icon={CalendarDays}
-          />
-        </div>
-      </section>
-
-      {/* Category breakdown */}
-      {totals.length > 0 ? (
-        <section className="space-y-3">
-          <SectionHeader
-            title={t("expenses.breakdownTitle")}
-            subtitle={t("expenses.breakdownSub")}
-          />
-          <Card>
-            <CardContent className="space-y-3 py-5">
-              {totals.map((t2) => {
-                const meta = CATEGORY_META[t2.category];
-                const Icon = meta.icon;
-                const pct = grandTotal > 0 ? (t2.total / grandTotal) * 100 : 0;
-                return (
-                  <div key={t2.category} className="space-y-1.5">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2.5">
-                        <span className={cn(
-                          "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg",
-                          meta.variant === "default" && "bg-primary-soft text-primary",
-                          meta.variant === "success" && "bg-success/10 text-success",
-                          meta.variant === "warning" && "bg-warning/10 text-warning",
-                          meta.variant === "danger" && "bg-danger-soft text-danger",
-                          meta.variant === "neutral" && "bg-muted text-muted-foreground",
-                        )}>
-                          <Icon className="h-4 w-4" aria-hidden="true" />
-                        </span>
-                        <div>
-                          <p className="text-sm font-semibold text-foreground">
-                            {t(`expenses.cat.${t2.category}`)}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {t2.count} {t2.count === 1 ? t("expenses.expenseCount") : t("expenses.expensesCount")}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm font-semibold text-foreground">
-                          {formatCurrency(t2.total)}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {pct.toFixed(0)}%
-                        </p>
-                      </div>
-                    </div>
-                    {/* Progress bar */}
-                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
-                      <div
-                        className={cn(
-                          "h-full rounded-full transition-all",
-                          meta.variant === "default" && "bg-primary",
-                          meta.variant === "success" && "bg-success",
-                          meta.variant === "warning" && "bg-warning",
-                          meta.variant === "danger" && "bg-danger",
-                          meta.variant === "neutral" && "bg-muted-foreground/40",
-                        )}
-                        style={{ width: `${Math.min(100, pct)}%` }}
-                        aria-hidden="true"
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-            </CardContent>
-          </Card>
-        </section>
-      ) : null}
-
-      {/* Expense list */}
-      <section className="space-y-3">
-        <SectionHeader
-          title={t("expenses.listTitle")}
-          subtitle={t("expenses.listSub")}
+      {status === "loading" ? (
+        <LoadingState rows={3} title={t("expenses.loadError")} />
+      ) : status === "error" ? (
+        <ErrorState
+          title={t("expenses.loadError")}
+          message={loadError ?? undefined}
+          onRetry={() => setReloadKey((k) => k + 1)}
         />
+      ) : (
+        <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
+          {/* Breakdown */}
+          <section className="space-y-3 lg:col-span-1">
+            <SectionHeader title={t("expenses.breakdownTitle")} subtitle={t("expenses.breakdownSub")} />
+            {breakdown.length === 0 ? (
+              <Card>
+                <CardContent className="py-6 text-sm text-muted-foreground">
+                  {t("expenses.emptyDesc")}
+                </CardContent>
+              </Card>
+            ) : (
+              <Card>
+                <CardContent className="space-y-3 py-5">
+                  {breakdown.map(([category, total]) => (
+                    <div key={category} className="space-y-1.5">
+                      <div className="flex items-center justify-between gap-3 text-xs">
+                        <span className="font-medium text-foreground">
+                          {t(CATEGORY_LABEL_KEY[category])}
+                        </span>
+                        <span className="text-muted-foreground">{formatMoney(total)}</span>
+                      </div>
+                      <div className="h-2 overflow-hidden rounded-full bg-muted">
+                        <div
+                          className="h-full rounded-full bg-primary"
+                          style={{ width: `${Math.max(4, (total / maxTotal) * 100)}%` }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            )}
+          </section>
 
-        {status === "loading" ? (
-          <LoadingState rows={3} title={t("common.loading")} />
-        ) : status === "error" ? (
-          <ErrorState
-            title={t("expenses.loadError")}
-            message={error ?? t("common.error")}
-            onRetry={() => setReload((k) => k + 1)}
-          />
-        ) : expenses.length === 0 ? (
-          <EmptyState
-            icon={<Wallet className="h-6 w-6" />}
-            title={t("expenses.emptyTitle")}
-            description={t("expenses.emptyDesc")}
-            action={
-              <Button onClick={openAdd}>
-                <Plus className="h-4 w-4" aria-hidden="true" />
-                {t("expenses.addBtn")}
-              </Button>
-            }
-          />
-        ) : (
-          <div className="space-y-2">
-            {expenses.map((exp) => {
-              const meta = CATEGORY_META[exp.category];
-              const Icon = meta.icon;
-              const isExpanded = expandedId === exp.id;
-              const isDeleting = deletingId === exp.id;
-
-              return (
-                <Card key={exp.id} className="overflow-hidden">
-                  <CardContent className="p-0">
-                    <button
-                      type="button"
-                      onClick={() => setExpandedId(isExpanded ? null : exp.id)}
-                      className="flex w-full items-center gap-3 p-4 text-left cursor-pointer transition-colors hover:bg-muted/40"
-                      aria-expanded={isExpanded}
-                    >
-                      <span className={cn(
-                        "flex h-10 w-10 shrink-0 items-center justify-center rounded-full",
-                        meta.variant === "default" && "bg-primary-soft text-primary",
-                        meta.variant === "success" && "bg-success/10 text-success",
-                        meta.variant === "warning" && "bg-warning/10 text-warning",
-                        meta.variant === "danger" && "bg-danger-soft text-danger",
-                        meta.variant === "neutral" && "bg-muted text-muted-foreground",
-                      )}>
-                        <Icon className="h-5 w-5" aria-hidden="true" />
+          {/* Expense list */}
+          <section className="space-y-3 lg:col-span-2">
+            <SectionHeader title={t("expenses.listTitle")} subtitle={t("expenses.listSub")} />
+            {filtered.length === 0 ? (
+              <EmptyState
+                icon={<Wallet className="h-6 w-6" />}
+                title={t("expenses.emptyTitle")}
+                description={t("expenses.emptyDesc")}
+                action={
+                  <Button onClick={openAdd}>
+                    <Plus className="h-4 w-4" aria-hidden="true" />
+                    {t("expenses.addBtn")}
+                  </Button>
+                }
+              />
+            ) : (
+              <div className="space-y-2.5">
+                {filtered.map((expense) => (
+                  <Card key={expense.id}>
+                    <CardContent className="flex items-center gap-3 py-4">
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary-soft text-primary">
+                        <Wallet className="h-5 w-5" aria-hidden="true" />
                       </span>
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
-                          <p className="truncate text-sm font-semibold text-foreground">
-                            {t(`expenses.cat.${exp.category}`)}
-                          </p>
-                          <Badge variant={meta.variant}>
-                            {formatCurrency(exp.amount)}
+                          <Badge variant="outline">
+                            {t(CATEGORY_LABEL_KEY[expense.category])}
                           </Badge>
+                          <span className="text-xs text-muted-foreground">
+                            {new Date(expense.expenseDate + "T00:00:00").toLocaleDateString(
+                              undefined,
+                              { day: "numeric", month: "short", year: "numeric" }
+                            )}
+                          </span>
                         </div>
-                        <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                          {formatDate(exp.expenseDate)}
-                          {exp.description ? ` · ${exp.description}` : ""}
-                        </p>
+                        {expense.description ? (
+                          <p className="mt-1 truncate text-sm font-medium text-foreground">
+                            {expense.description}
+                          </p>
+                        ) : null}
                       </div>
-                      <span className="shrink-0 text-muted-foreground">
-                        {isExpanded ? (
-                          <ChevronUp className="h-4 w-4" aria-hidden="true" />
-                        ) : (
-                          <ChevronDown className="h-4 w-4" aria-hidden="true" />
-                        )}
-                      </span>
-                    </button>
-
-                    {isExpanded ? (
-                      <div className="flex items-center gap-2 border-t border-border bg-muted/20 px-4 py-3">
+                      <div className="flex shrink-0 items-center gap-2">
+                        <span className="text-sm font-semibold text-foreground">
+                          {formatMoney(expense.amount)}
+                        </span>
                         <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => openEdit(exp)}
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => openEdit(expense)}
+                          aria-label={t("expenses.editBtn")}
+                          className={cn("cursor-pointer")}
                         >
-                          <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
-                          {t("expenses.editBtn")}
+                          <Pencil className="h-4 w-4" aria-hidden="true" />
                         </Button>
                         <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleDelete(exp.id)}
-                          disabled={isDeleting}
-                          className="text-danger hover:bg-danger-soft"
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => void handleDelete(expense)}
+                          aria-label={t("expenses.deleteBtn")}
+                          className="cursor-pointer text-danger hover:text-danger"
                         >
-                          {isDeleting ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-                          ) : (
-                            <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                          )}
-                          {t("expenses.deleteBtn")}
+                          <Trash2 className="h-4 w-4" aria-hidden="true" />
                         </Button>
                       </div>
-                    ) : null}
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        )}
-      </section>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </section>
+        </div>
+      )}
 
       {/* Add / Edit dialog */}
-      <ExpenseForm
-        open={formOpen}
-        onOpenChange={setFormOpen}
-        farmId={farm.id}
-        expense={editingExpense}
-        onSave={handleSave}
-      />
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editing ? t("expenses.editTitle") : t("expenses.addTitle")}</DialogTitle>
+            <DialogDescription>{t("expenses.formSubtitle")}</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={(e) => void handleSave(e)} className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="expense-category-field">{t("expenses.category")} *</Label>
+              <Select
+                value={form.category}
+                onValueChange={(v) => setForm((f) => ({ ...f, category: v as ExpenseCategory }))}
+              >
+                <SelectTrigger id="expense-category-field">
+                  <SelectValue placeholder={t("expenses.selectCategory")} />
+                </SelectTrigger>
+                <SelectContent>
+                  {CATEGORIES.map((c) => (
+                    <SelectItem key={c} value={c}>
+                      {t(CATEGORY_LABEL_KEY[c])}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="expense-amount-field">{t("expenses.amount")} *</Label>
+              <Input
+                id="expense-amount-field"
+                type="number"
+                min="0"
+                step="any"
+                inputMode="decimal"
+                placeholder={t("expenses.amountPlaceholder")}
+                value={form.amount}
+                onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="expense-date-field">{t("expenses.date")} *</Label>
+              <Input
+                id="expense-date-field"
+                type="date"
+                value={form.expenseDate}
+                onChange={(e) => setForm((f) => ({ ...f, expenseDate: e.target.value }))}
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="expense-desc-field">{t("expenses.description")}</Label>
+              <Textarea
+                id="expense-desc-field"
+                placeholder={t("expenses.descriptionPlaceholder")}
+                rows={3}
+                value={form.description}
+                onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+              />
+            </div>
+
+            {formError ? (
+              <p role="alert" className="text-sm text-danger">
+                {formError}
+              </p>
+            ) : null}
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setDialogOpen(false)}
+                disabled={saving}
+              >
+                {t("common.cancel")}
+              </Button>
+              <Button type="submit" disabled={saving}>
+                {saving
+                  ? t("expenses.saving")
+                  : editing
+                    ? t("expenses.updateBtn")
+                    : t("expenses.saveBtn")}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -1,155 +1,186 @@
 import {
-  CloudSun,
   Cloud,
-  CloudRain,
-  CloudDrizzle,
-  CloudLightning,
-  CloudSnow,
-  Sun,
   CloudFog,
+  CloudLightning,
+  CloudRain,
+  CloudSnow,
+  CloudSun,
+  Droplets,
+  Sun,
+  Wind,
+  type LucideIcon,
 } from "lucide-react";
 import { Card, CardContent } from "../ui/card";
+import { Skeleton } from "../ui/skeleton";
 import { useFarmWeather } from "../../hooks/useFarmWeather";
-import { usePreferences } from "../../context/PreferencesContext";
-import { LoadingState } from "../layout/loading-state";
-import type { WeatherData } from "../../lib/weather-service";
-
-/* ------------------------------------------------------------------ */
-/* 5-day forecast strip                                                 */
-/* ------------------------------------------------------------------ */
+import { useI18n } from "../../context/PreferencesContext";
+import type { WeatherForecastDay } from "../../lib/weather-service";
+import { cn } from "../../lib/utils";
 
 /**
- * Compact 5-day weather forecast strip for the dashboard. Extracts daily
- * forecast data from the weather service (if available) and renders a
- * horizontal strip of day cards with icon, min/max temps, and rain chance.
+ * 5-day forecast strip (Dashboard Phase 2 widget).
  *
- * Falls back to a single "current conditions" card when the weather API
- * doesn't provide a multi-day forecast.
+ * Renders REAL forecast data from the farm-aware weather hook — never
+ * fabricated. Conditions use an icon PLUS a text label (never colour-only),
+ * and loading / unavailable states are explicit.
  */
+
+const CONDITION_ICON: Record<string, LucideIcon> = {
+  Clear: Sun,
+  Clouds: CloudSun,
+  Cloud: Cloud,
+  Rain: CloudRain,
+  Drizzle: CloudRain,
+  Thunderstorm: CloudLightning,
+  Snow: CloudSnow,
+  Mist: CloudFog,
+  Fog: CloudFog,
+  Haze: CloudFog,
+  Smoke: CloudFog,
+  Dust: CloudFog,
+  Sand: CloudFog,
+  Ash: CloudFog,
+  Squall: CloudLightning,
+  Tornado: CloudLightning,
+};
+
+function DayIcon({ conditionCode, className }: { conditionCode?: string; className?: string }) {
+  const Icon = (conditionCode && CONDITION_ICON[conditionCode]) || CloudSun;
+  return <Icon className={className} aria-hidden="true" />;
+}
+
+function formatDay(iso: string): { weekday: string; date: string } {
+  const d = new Date(iso + "T00:00:00");
+  if (Number.isNaN(d.getTime())) return { weekday: iso, date: "" };
+  return {
+    weekday: d.toLocaleDateString(undefined, { weekday: "short" }),
+    date: d.toLocaleDateString(undefined, { day: "numeric", month: "short" }),
+  };
+}
+
 export function ForecastStrip() {
-  const { t } = usePreferences();
-  const { status, weather } = useFarmWeather();
+  const { t } = useI18n();
+  const { status, weather, error, retry } = useFarmWeather();
 
   if (status === "loading" || status === "idle") {
-    return <LoadingState rows={1} title={t("dashboard.forecastLoading")} />;
+    return (
+      <Card>
+        <CardContent className="grid grid-cols-2 gap-3 py-4 sm:grid-cols-5" role="status">
+          <span className="sr-only">{t("dashboard.forecastLoading")}</span>
+          {[0, 1, 2, 3, 4].map((i) => (
+            <div key={i} className="flex flex-col items-center gap-1.5">
+              <Skeleton className="h-3 w-10" />
+              <Skeleton className="h-8 w-8 rounded-full" />
+              <Skeleton className="h-3 w-8" />
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+    );
   }
 
   if (status === "error" || !weather) {
-    return null; // Graceful degradation
-  }
-
-  // The weather API may return daily forecasts in different shapes.
-  // Try to extract a daily_forecast array if present.
-  const dailyForecast = extractDailyForecast(weather);
-
-  if (dailyForecast.length === 0) {
-    // Fallback: show current conditions as a single card
-    const current = weather.current;
     return (
       <Card>
-        <CardContent className="flex items-center gap-4 p-4">
-          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary-soft text-primary">
-            <CloudSun className="h-6 w-6" aria-hidden="true" />
-          </span>
-          <div className="min-w-0 flex-1">
-            <p className="font-heading text-2xl font-bold text-foreground">
-              {current.temperature != null ? `${Math.round(current.temperature)}°C` : "—"}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {current.condition ?? t("dashboard.currentConditions")}
-            </p>
+        <CardContent className="flex items-center justify-between gap-3 py-4">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <CloudSun className="h-4 w-4" aria-hidden="true" />
+            <span>{error ?? "Weather is currently unavailable."}</span>
           </div>
+          <button
+            type="button"
+            onClick={retry}
+            className="shrink-0 rounded-lg border border-border bg-card px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-muted cursor-pointer"
+          >
+            {t("common.retry")}
+          </button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const days: WeatherForecastDay[] = weather.forecast?.slice(0, 5) ?? [];
+
+  if (days.length === 0) {
+    return (
+      <Card>
+        <CardContent className="py-4 text-xs text-muted-foreground">
+          {t("dashboard.forecastLoading")}
         </CardContent>
       </Card>
     );
   }
 
   return (
-    <div className="flex gap-2 overflow-x-auto pb-1">
-      {dailyForecast.slice(0, 5).map((day, i) => (
-        <div
-          key={i}
-          className="flex min-w-[90px] flex-1 flex-col items-center gap-1.5 rounded-xl border border-border bg-card p-3 text-center"
-        >
-          <p className="text-xs font-medium text-muted-foreground">
-            {i === 0 ? t("dashboard.todayShort") : formatDayLabel(day.date)}
-          </p>
-          <WeatherIcon condition={day.condition} className="h-6 w-6 text-primary" />
-          <p className="text-sm font-bold text-foreground">
-            {day.tempMax != null ? `${Math.round(day.tempMax)}°` : "—"}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            {day.tempMin != null ? `${Math.round(day.tempMin)}°` : ""}
-          </p>
-          {day.rainChance != null && day.rainChance > 0 ? (
-            <p className="text-[10px] text-blue-500">{day.rainChance}%</p>
-          ) : null}
-        </div>
-      ))}
-    </div>
+    <Card>
+      <CardContent className="grid grid-cols-2 gap-3 py-4 sm:grid-cols-5">
+        {days.map((day, i) => {
+          const { weekday, date } = formatDay(day.date);
+          const isToday = i === 0;
+          return (
+            <div
+              key={day.date}
+              className={cn(
+                "flex flex-col items-center gap-1 rounded-xl border border-transparent px-1 py-2 text-center",
+                isToday && "border-border bg-background/40"
+              )}
+            >
+              <p className="text-xs font-semibold text-foreground">
+                {isToday ? t("dashboard.todayShort") : weekday}
+              </p>
+              <DayIcon
+                conditionCode={day.conditionCode}
+                className={cn(
+                  "h-8 w-8",
+                  day.rainProbability >= 50 ? "text-primary" : "text-muted-foreground"
+                )}
+              />
+              <p className="text-xs font-semibold text-foreground">
+                {Math.round(day.temperatureMax)}°{" "}
+                <span className="font-normal text-muted-foreground">
+                  {Math.round(day.temperatureMin)}°
+                </span>
+              </p>
+              <p className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                <Droplets className="h-3 w-3" aria-hidden="true" />
+                {Math.round(day.rainProbability)}%
+              </p>
+              <p className="sr-only">{day.condition}</p>
+              <p className="text-[10px] text-muted-foreground" aria-hidden="true">
+                {date}
+              </p>
+            </div>
+          );
+        })}
+      </CardContent>
+    </Card>
   );
 }
 
-/* ------------------------------------------------------------------ */
-/* Helpers                                                              */
-/* ------------------------------------------------------------------ */
+/** Small current-conditions row used by the dashboard weather summary. */
+export function CurrentConditionsStrip() {
+  const { t } = useI18n();
+  const { status, weather } = useFarmWeather();
 
-interface DayForecast {
-  date: string;
-  condition: string;
-  tempMax: number | null;
-  tempMin: number | null;
-  rainChance: number | null;
-}
+  if (status !== "ready" || !weather) return null;
 
-function extractDailyForecast(weather: WeatherData): DayForecast[] {
-  const daily = weather.forecast;
-  if (!Array.isArray(daily)) return [];
-
-  return daily.slice(0, 5).map((d) => ({
-    date: d.date ?? "",
-    condition: d.condition ?? "",
-    tempMax: d.temperatureMax ?? null,
-    tempMin: d.temperatureMin ?? null,
-    rainChance: d.rainProbability ?? null,
-  }));
-}
-
-function formatDayLabel(iso: string): string {
-  if (!iso) return "";
-  const d = new Date(iso + "T00:00:00");
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleDateString(undefined, { weekday: "short" });
-}
-
-function WeatherIcon({
-  condition,
-  className,
-}: {
-  condition: string;
-  className?: string;
-}) {
-  const lower = (condition ?? "").toLowerCase();
-  if (lower.includes("thunder") || lower.includes("storm")) {
-    return <CloudLightning className={className} />;
-  }
-  if (lower.includes("snow")) {
-    return <CloudSnow className={className} />;
-  }
-  if (lower.includes("rain") || lower.includes("shower")) {
-    return <CloudRain className={className} />;
-  }
-  if (lower.includes("drizzle")) {
-    return <CloudDrizzle className={className} />;
-  }
-  if (lower.includes("fog") || lower.includes("mist") || lower.includes("haze")) {
-    return <CloudFog className={className} />;
-  }
-  if (lower.includes("cloud") || lower.includes("overcast")) {
-    return <Cloud className={className} />;
-  }
-  if (lower.includes("clear") || lower.includes("sunny")) {
-    return <Sun className={className} />;
-  }
-  return <CloudSun className={className} />;
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+      <span className="flex items-center gap-1.5">
+        <Sun className="h-3.5 w-3.5 text-warning" aria-hidden="true" />
+        <span className="font-semibold text-foreground">
+          {Math.round(weather.current.temperature)}°C
+        </span>
+        {t("dashboard.currentConditions")}
+      </span>
+      <span className="flex items-center gap-1.5">
+        <Wind className="h-3.5 w-3.5" aria-hidden="true" />
+        {Math.round(weather.current.windSpeed)} km/h
+      </span>
+      <span className="flex items-center gap-1.5">
+        <Droplets className="h-3.5 w-3.5" aria-hidden="true" />
+        {Math.round(weather.current.rainProbability)}%
+      </span>
+    </div>
+  );
 }
