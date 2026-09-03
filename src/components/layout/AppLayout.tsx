@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import {
   Link,
   NavLink,
@@ -6,7 +6,15 @@ import {
   useLocation,
   useNavigate,
 } from "react-router-dom";
-import { Menu, Search, Sprout, X } from "lucide-react";
+import {
+  ChevronDown,
+  Menu,
+  Search,
+  Settings,
+  Sprout,
+  User,
+  X,
+} from "lucide-react";
 import { useFarm } from "../../context/FarmContext";
 import { useI18n } from "../../context/PreferencesContext";
 import { cn } from "../../lib/utils";
@@ -105,6 +113,122 @@ function DrawerContent({ onNavigate }: { onNavigate: () => void }) {
   );
 }
 
+/** Desktop top-bar profile menu (avatar, name, location, dropdown). */
+function ProfileMenu() {
+  const { t } = useI18n();
+  const { farm } = useFarm();
+  const [open, setOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+
+  const close = useCallback(() => {
+    setOpen(false);
+    buttonRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        close();
+      }
+    }
+    function onPointerDown(e: PointerEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("pointerdown", onPointerDown);
+    };
+  }, [open, close]);
+
+  const name = farm ? farm.farmerName : t("app.nav.noFarm");
+  const location = farm?.location ?? "";
+  const initial = (farm?.farmerName ?? "?").trim().charAt(0).toUpperCase() || "?";
+
+  return (
+    <div className="relative" ref={menuRef}>
+      <button
+        ref={buttonRef}
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={`Account — ${name}`}
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-2.5 rounded-xl px-2 py-1.5 transition-colors duration-150 hover:bg-muted cursor-pointer"
+      >
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-soft text-sm font-bold text-primary ring-1 ring-inset ring-primary/15">
+          {initial}
+        </span>
+        <span className="hidden min-w-0 text-left md:block">
+          <span className="block truncate text-sm font-semibold leading-tight text-foreground">
+            {name}
+          </span>
+          {location ? (
+            <span className="block truncate text-xs leading-tight text-muted-foreground">
+              {location}
+            </span>
+          ) : null}
+        </span>
+        <ChevronDown
+          className={cn(
+            "hidden h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 md:block",
+            open && "rotate-180"
+          )}
+          aria-hidden="true"
+        />
+      </button>
+
+      {open ? (
+        <div
+          role="menu"
+          aria-label="Account menu"
+          className="absolute right-0 top-full z-50 mt-2 w-56 overflow-hidden rounded-2xl border border-border bg-background p-1.5 shadow-pop animate-slide-in"
+        >
+          <div className="border-b border-border px-2.5 py-2.5">
+            <p className="truncate text-sm font-semibold text-foreground">{name}</p>
+            {location ? (
+              <p className="truncate text-xs text-muted-foreground">{location}</p>
+            ) : null}
+          </div>
+          <div className="p-1">
+            <Link
+              to="/farm-profile"
+              role="menuitem"
+              onClick={close}
+              className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm font-medium text-foreground transition-colors duration-150 hover:bg-muted cursor-pointer"
+            >
+              <User className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+              Farm Profile
+            </Link>
+            <Link
+              to="/settings"
+              role="menuitem"
+              onClick={close}
+              className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm font-medium text-foreground transition-colors duration-150 hover:bg-muted cursor-pointer"
+            >
+              <Settings className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+              Settings
+            </Link>
+          </div>
+          <div className="my-1 h-px bg-border" />
+          <div className="p-1">
+            <LogoutButton
+              onLogout={close}
+              className="w-full justify-start rounded-lg px-2.5 py-2 text-sm"
+            />
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function AppLayout() {
   const { farm, status, error, retry } = useFarm();
   const { t } = useI18n();
@@ -178,24 +302,36 @@ export function AppLayout() {
   }
 
   const closeDrawer = () => setDrawerOpen(false);
+  const tools = primaryNav.filter((i) => TOOL_NAV_PATHS.has(i.to));
+  const manage = primaryNav.filter((i) => !TOOL_NAV_PATHS.has(i.to));
 
   return (
     <div className="min-h-screen bg-background">
       {/* Desktop sidebar — matches the reference: dark shell, logo, compact
-          flat nav, profile + preferences + logout pinned at the bottom. */}
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-[212px] flex-col border-r border-sidebar-border bg-sidebar px-3 py-4 lg:flex">
-        <div className="flex items-center justify-between px-1.5 pb-4">
+          grouped nav (AI tools / management), profile pinned at the bottom. */}
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-[220px] flex-col border-r border-sidebar-border bg-sidebar px-3 py-4 lg:flex">
+        <div className="flex items-center justify-between px-1.5 pb-3">
           <Brand />
         </div>
         <nav
           className="flex-1 space-y-0.5 overflow-y-auto scrollbar-thin"
           aria-label={t("nav.primary")}
         >
-          {primaryNav.map((item) => (
+          <p className="px-2.5 pb-1 pt-0.5 text-[10px] font-semibold uppercase tracking-wider text-sidebar-muted">
+            {t("nav.aiTools")}
+          </p>
+          {tools.map((item) => (
+            <NavLinkItem key={item.to} item={item} />
+          ))}
+          <div className="my-1.5 h-px bg-sidebar-border" />
+          <p className="px-2.5 pb-1 pt-0.5 text-[10px] font-semibold uppercase tracking-wider text-sidebar-muted">
+            {t("nav.manage")}
+          </p>
+          {manage.map((item) => (
             <NavLinkItem key={item.to} item={item} />
           ))}
         </nav>
-        <div className="mt-3 space-y-1.5 border-t border-sidebar-border pt-3">
+        <div className="mt-2 space-y-1.5 border-t border-sidebar-border pt-2.5">
           <div className="flex items-center gap-2.5 px-1.5">
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-soft text-sm font-bold text-primary ring-1 ring-inset ring-white/10">
               {farm ? farm.farmerName.trim().charAt(0).toUpperCase() : "?"}
@@ -217,64 +353,89 @@ export function AppLayout() {
         </div>
       </aside>
 
-      {/* Mobile header */}
-      <header className="sticky top-0 z-30 flex items-center justify-between border-b border-border bg-background/95 px-4 py-3 backdrop-blur lg:hidden">
-        <Brand tone="light" />
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            onClick={openSearch}
-            className="flex h-10 w-10 items-center justify-center rounded-xl text-foreground hover:bg-muted transition-colors cursor-pointer"
-            aria-label={t("search.open")}
-          >
-            <Search className="h-5 w-5" aria-hidden="true" />
-          </button>
-          <NotificationBell />
-          <button
-            type="button"
-            onClick={() => setDrawerOpen(true)}
-            className="flex h-11 w-11 items-center justify-center rounded-xl text-foreground hover:bg-muted transition-colors cursor-pointer"
-            aria-label={t("nav.openMenu")}
-          >
-            <Menu className="h-6 w-6" aria-hidden="true" />
-          </button>
-        </div>
-      </header>
-
-      {/* Mobile secondary drawer */}
-      {drawerOpen ? (
-        <div className="fixed inset-0 z-50 lg:hidden">
-          <button
-            type="button"
-            className="absolute inset-0 bg-foreground/40 backdrop-blur-sm"
-            onClick={closeDrawer}
-            aria-label={t("nav.closeMenu")}
-          />
-          <div className="absolute inset-y-0 left-0 flex w-72 max-w-[85vw] flex-col bg-sidebar p-4 shadow-pop animate-slide-in rtl:left-auto rtl:right-0">
-            <div className="mb-6 flex items-center justify-between">
-              <Brand />
-              <button
-                type="button"
-                onClick={closeDrawer}
-                className="flex h-11 w-11 items-center justify-center rounded-xl text-sidebar-foreground hover:bg-sidebar-accent transition-colors cursor-pointer"
-                aria-label={t("nav.closeMenu")}
-              >
-                <X className="h-6 w-6" aria-hidden="true" />
-              </button>
+      <div className="lg:pl-[220px]">
+        {/* Desktop top bar — search, notifications, farmer profile (reference) */}
+        <header className="sticky top-0 z-20 hidden border-b border-border bg-background/90 backdrop-blur lg:block">
+          <div className="mx-auto flex h-16 w-full max-w-[1060px] items-center gap-3 px-6">
+            <button
+              type="button"
+              onClick={openSearch}
+              className="flex h-10 w-full max-w-sm items-center gap-2.5 rounded-xl border border-border bg-background px-3.5 text-sm text-muted-foreground transition-colors duration-150 hover:border-primary/40 hover:text-foreground cursor-pointer"
+              aria-label={t("search.open")}
+            >
+              <Search className="h-4 w-4 shrink-0" aria-hidden="true" />
+              <span className="flex-1 text-left">Search your farm…</span>
+              <kbd className="hidden rounded-md border border-border bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground sm:inline">
+                ⌘K
+              </kbd>
+            </button>
+            <div className="ml-auto flex items-center gap-1.5">
+              <NotificationBell />
+              <div className="mx-1.5 h-6 w-px bg-border" aria-hidden="true" />
+              <ProfileMenu />
             </div>
-            <nav className="flex-1 overflow-y-auto" aria-label={t("nav.main")}>
-              <DrawerContent onNavigate={closeDrawer} />
-            </nav>
           </div>
-        </div>
-      ) : null}
+        </header>
 
-      {/* Main content */}
-      <main className="px-4 pb-24 pt-6 sm:px-6 lg:ml-[212px] lg:px-6 lg:pb-10 lg:pt-6">
-        <div className="mx-auto w-full max-w-[1060px]">
-          <Outlet />
-        </div>
-      </main>
+        {/* Mobile header */}
+        <header className="sticky top-0 z-30 flex items-center justify-between border-b border-border bg-background/95 px-4 py-3 backdrop-blur lg:hidden">
+          <Brand tone="light" />
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={openSearch}
+              className="flex h-10 w-10 items-center justify-center rounded-xl text-foreground hover:bg-muted transition-colors cursor-pointer"
+              aria-label={t("search.open")}
+            >
+              <Search className="h-5 w-5" aria-hidden="true" />
+            </button>
+            <NotificationBell />
+            <button
+              type="button"
+              onClick={() => setDrawerOpen(true)}
+              className="flex h-11 w-11 items-center justify-center rounded-xl text-foreground hover:bg-muted transition-colors cursor-pointer"
+              aria-label={t("nav.openMenu")}
+            >
+              <Menu className="h-6 w-6" aria-hidden="true" />
+            </button>
+          </div>
+        </header>
+
+        {/* Mobile secondary drawer */}
+        {drawerOpen ? (
+          <div className="fixed inset-0 z-50 lg:hidden">
+            <button
+              type="button"
+              className="absolute inset-0 bg-foreground/40 backdrop-blur-sm"
+              onClick={closeDrawer}
+              aria-label={t("nav.closeMenu")}
+            />
+            <div className="absolute inset-y-0 left-0 flex w-72 max-w-[85vw] flex-col bg-sidebar p-4 shadow-pop animate-slide-in rtl:left-auto rtl:right-0">
+              <div className="mb-6 flex items-center justify-between">
+                <Brand />
+                <button
+                  type="button"
+                  onClick={closeDrawer}
+                  className="flex h-11 w-11 items-center justify-center rounded-xl text-sidebar-foreground hover:bg-sidebar-accent transition-colors cursor-pointer"
+                  aria-label={t("nav.closeMenu")}
+                >
+                  <X className="h-6 w-6" aria-hidden="true" />
+                </button>
+              </div>
+              <nav className="flex-1 overflow-y-auto" aria-label={t("nav.main")}>
+                <DrawerContent onNavigate={closeDrawer} />
+              </nav>
+            </div>
+          </div>
+        ) : null}
+
+        {/* Main content */}
+        <main className="px-4 pb-24 pt-6 sm:px-6 lg:px-6 lg:pb-10 lg:pt-6">
+          <div className="mx-auto w-full max-w-[1060px]">
+            <Outlet />
+          </div>
+        </main>
+      </div>
 
       {/* Mobile bottom nav */}
       <nav
