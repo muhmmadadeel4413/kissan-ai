@@ -29,6 +29,8 @@ export interface STTCallbacks {
   onPartial: (text: string) => void;
   onFinal: (text: string) => void;
   onError: (message: string) => void;
+  /** Optional real-time mic level (0..1 RMS) for voice visualisations. */
+  onLevel?: (level: number) => void;
 }
 
 const WSS_ENDPOINT = "wss://eu.rt.speechmatics.com/v2";
@@ -60,7 +62,15 @@ class KissanPcmCapture extends AudioWorkletProcessor {
     if (this.chunk.length >= ${Math.floor(SAMPLE_RATE / 10)}) {
       const buf = new Int16Array(this.chunk).buffer;
       this.chunk = [];
-      this.port.postMessage(buf, [buf]);
+      // Real RMS of this 100ms slice (0..1) for live voice visualisation.
+      const samples = new Int16Array(buf);
+      let sum = 0;
+      for (let i = 0; i < samples.length; i++) {
+        const v = samples[i] / 32768;
+        sum += v * v;
+      }
+      const level = Math.sqrt(sum / samples.length);
+      this.port.postMessage({ buffer: buf, level }, [buf]);
     }
     return true;
   }
@@ -213,8 +223,11 @@ export async function startSTT(
     );
     if (capture) {
       capture.port.onmessage = (e) => {
-        if (!stopped && ws?.readyState === WebSocket.OPEN) {
-          ws.send(e.data as ArrayBuffer);
+        if (stopped) return;
+        const msg = e.data as { buffer?: ArrayBuffer; level?: number };
+        if (msg && msg.buffer) {
+          if (ws?.readyState === WebSocket.OPEN) ws.send(msg.buffer);
+          if (typeof msg.level === "number") callbacks.onLevel?.(msg.level);
         }
       };
     }

@@ -2,6 +2,7 @@ import * as React from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
   Bot,
+  Languages,
   Loader2,
   MapPin,
   Mic,
@@ -27,7 +28,6 @@ import {
 } from "../components/ui/select";
 import { Alert, AlertDescription, AlertTitle } from "../components/ui/alert";
 import { Badge } from "../components/ui/badge";
-import { PageHeader } from "../components/layout/page-header";
 import { EmptyState } from "../components/layout/empty-state";
 import { useFarm } from "../context/FarmContext";
 import { useFarmWeather } from "../hooks/useFarmWeather";
@@ -119,6 +119,13 @@ const LANG_CONFIG: Record<
   },
 };
 
+/** The three main voice languages shown as pills (reference). */
+const MAIN_LANGS: { key: VoiceLang; label: string; native: string }[] = [
+  { key: "urdu", label: "Urdu", native: "اردو" },
+  { key: "punjabi", label: "Punjabi", native: "پنجابی" },
+  { key: "saraiki", label: "Saraiki", native: "سرائیکی" },
+];
+
 type VoiceState =
   | "idle"
   | "requesting_permission"
@@ -129,6 +136,79 @@ type VoiceState =
   | "error";
 
 type TtsState = "idle" | "playing" | "paused";
+
+/* ------------------------------------------------------------------ */
+/* Waveform — driven by REAL mic level while listening, otherwise by   */
+/* the actual voice state (no fake looping activity when idle).        */
+/* ------------------------------------------------------------------ */
+
+function VoiceWaveform({
+  state,
+  level,
+  className,
+}: {
+  state: VoiceState;
+  level: number;
+  className?: string;
+}) {
+  const bars = 44;
+  // Deterministic, stationary base pattern (not an activity simulation).
+  const pattern = React.useMemo(
+    () =>
+      Array.from({ length: bars }, (_, i) => {
+        const t = i / bars;
+        return (
+          0.22 + 0.5 * Math.abs(Math.sin(t * Math.PI * 3.1 + 0.6) * Math.cos(t * 0.9))
+        );
+      }),
+    [bars]
+  );
+
+  const isListening = state === "listening";
+  const isSpeaking = state === "speaking";
+  const isProcessing = state === "transcribing" || state === "thinking";
+
+  return (
+    <div
+      className={cn(
+        "flex h-12 max-w-sm items-center justify-center gap-[3px]",
+        className
+      )}
+      aria-hidden="true"
+    >
+      {pattern.map((p, i) => {
+        let height: number;
+        if (isListening) {
+          // Real mic RMS — bars grow with actual voice input.
+          height = Math.max(5, Math.round(p * level * 44 + 5));
+        } else if (isSpeaking) {
+          // TTS is genuinely playing — a gentle equaliser reflects that state.
+          height = Math.round(p * 34 + 8);
+        } else if (isProcessing) {
+          height = Math.round(p * 16 + 4);
+        } else {
+          // Idle: calm, near-flat bars. No fake activity.
+          height = Math.round(p * 9 + 3);
+        }
+        return (
+          <span
+            key={i}
+            className={cn(
+              "w-[3px] rounded-full origin-center transition-[height] duration-150 ease-out",
+              isSpeaking ? "animate-voice-bar bg-primary" : "bg-primary/50",
+              isListening && "bg-primary",
+              isProcessing && "bg-primary/60"
+            )}
+            style={{
+              height: `${height}px`,
+              animationDelay: isSpeaking ? `${(i % 10) * 90}ms` : undefined,
+            }}
+          />
+        );
+      })}
+    </div>
+  );
+}
 
 /* ------------------------------------------------------------------ */
 /* Page                                                                */
@@ -150,6 +230,7 @@ export default function VoicePage() {
   const [reply, setReply] = React.useState<ChatReply | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [ttsUnavailable, setTtsUnavailable] = React.useState(false);
+  const [micLevel, setMicLevel] = React.useState(0);
 
   const [activeConversationId, setActiveConversationId] = React.useState<
     string | null
@@ -167,6 +248,7 @@ export default function VoicePage() {
   const sttRef = React.useRef<Awaited<ReturnType<typeof startSTT>> | null>(null);
   const finalTimerRef = React.useRef<number | null>(null);
   const gotFinalRef = React.useRef(false);
+  const levelRef = React.useRef(0);
 
   /* Farm context — real saved data + existing Weather + Diagnoses + Risks + Today's Actions. */
   const chatContext = React.useMemo(() => {
@@ -339,6 +421,8 @@ export default function VoicePage() {
     setTtsUnavailable(false);
     setLanguage(next);
     setError(null);
+    levelRef.current = 0;
+    setMicLevel(0);
   }
 
   /* ---------------- Mic flow ---------------- */
@@ -377,6 +461,8 @@ export default function VoicePage() {
     stopSpeech();
     setTtsState("idle");
     setVoiceState("requesting_permission");
+    levelRef.current = 0;
+    setMicLevel(0);
 
     try {
       const session = await startSTT(cfg.stt, {
@@ -390,6 +476,8 @@ export default function VoicePage() {
           setTranscript(t);
           setPartial("");
           setVoiceState("idle");
+          levelRef.current = 0;
+          setMicLevel(0);
         },
         onError: (m) => {
           gotFinalRef.current = true;
@@ -400,6 +488,13 @@ export default function VoicePage() {
           sttRef.current = null;
           setVoiceState("error");
           setError(m);
+          levelRef.current = 0;
+          setMicLevel(0);
+        },
+        onLevel: (v) => {
+          // Exponential smoothing — ~10 Hz updates become a fluid visual.
+          levelRef.current = levelRef.current * 0.6 + Math.min(1, v * 1.5) * 0.4;
+          setMicLevel(levelRef.current);
         },
       });
       sttRef.current = session;
@@ -556,71 +651,120 @@ export default function VoicePage() {
   const showTranscript = transcript.trim().length > 0;
   const liveText = partial || transcript;
 
+  const statusText =
+    voiceState === "idle" && "Tap to speak"
+    || voiceState === "requesting_permission" && "Requesting microphone…"
+    || voiceState === "listening" && "Listening… tap to stop"
+    || voiceState === "transcribing" && "Finishing your question…"
+    || voiceState === "thinking" && "Kissan AI is thinking…"
+    || voiceState === "speaking" && "Playing response"
+    || "Let's try that again";
+
   return (
-    <div className="mx-auto max-w-2xl space-y-5">
-      <PageHeader
-        title="Voice Assistant"
-        subtitle="Speak in your language, hear the answer aloud"
-      />
+    <div className="mx-auto max-w-3xl space-y-8">
+      {/* Header — centered voice-assistant heading with language support line */}
+      <header className="text-center">
+        <h1 className="font-heading text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+          Voice Assistant
+        </h1>
+        <p className="mx-auto mt-2 max-w-xl text-sm leading-relaxed text-muted-foreground">
+          Supports{" "}
+          <span className="font-medium text-foreground">Urdu</span>
+          {" "}•{" "}
+          <span className="font-medium text-foreground">Punjabi</span>
+          {" "}•{" "}
+          <span className="font-medium text-foreground">Saraiki</span>
+          {" "}— speak in your language, hear the answer aloud.
+        </p>
+      </header>
 
-      {/* Language selector + farm context */}
-      <Card>
-        <CardContent className="space-y-3 py-4">
-          <div className="flex flex-wrap items-center gap-2">
-            <label
-              htmlFor="voice-language"
-              className="text-sm font-semibold text-foreground"
+      {/* Farm context — real saved data */}
+      <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+        <span className="inline-flex items-center gap-1.5 font-medium text-foreground">
+          <Sprout className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
+          {farm.currentCrop || "Your farm"}
+        </span>
+        {chatContext?.growth.stageLabel ? (
+          <>
+            <span aria-hidden="true">•</span>
+            <span>{chatContext.growth.stageLabel}</span>
+          </>
+        ) : null}
+        {farm.location ? (
+          <span className="inline-flex items-center gap-1">
+            <MapPin className="h-3 w-3" aria-hidden="true" />
+            {farm.location}
+          </span>
+        ) : null}
+        {weatherStatus === "error" ? (
+          <span className="text-warning">Weather unavailable</span>
+        ) : null}
+      </div>
+
+      {/* Language selector — three main pills wired to the existing
+          language state; Auto/English stay reachable in a compact control. */}
+      <section
+        aria-label="Voice language"
+        className="flex flex-col items-center gap-3"
+      >
+        <div className="flex flex-wrap items-center justify-center gap-2.5">
+          {MAIN_LANGS.map((lang) => {
+            const active = language === lang.key;
+            return (
+              <button
+                key={lang.key}
+                type="button"
+                onClick={() => handleLanguageChange(lang.key)}
+                aria-pressed={active}
+                aria-label={`Use ${lang.label} for voice`}
+                className={cn(
+                  "flex h-11 cursor-pointer items-center gap-2 rounded-full border px-5 text-sm font-semibold transition-all duration-150 ease-out active:scale-[0.97]",
+                  active
+                    ? "border-primary bg-primary text-primary-foreground shadow-soft ring-2 ring-primary/20"
+                    : "border-input bg-card text-foreground hover:border-primary/40 hover:bg-muted"
+                )}
+              >
+                <span className="leading-none">{lang.native}</span>
+                <span
+                  className={cn(
+                    "leading-none",
+                    active ? "text-primary-foreground/80" : "text-muted-foreground"
+                  )}
+                >
+                  {lang.label}
+                </span>
+              </button>
+            );
+          })}
+
+          {/* Compact Auto/English control — existing recognition modes */}
+          <Select
+            value={
+              language === "auto" || language === "english" ? language : undefined
+            }
+            onValueChange={(v) => handleLanguageChange(v as VoiceLang)}
+          >
+            <SelectTrigger
+              aria-label="Recognition mode: Auto or English"
+              className="h-11 w-auto gap-1.5 rounded-full border border-input bg-card px-4 text-sm font-medium shadow-soft"
             >
-              Language
-            </label>
-            <Select
-              value={language}
-              onValueChange={(v) => handleLanguageChange(v as VoiceLang)}
-            >
-              <SelectTrigger id="voice-language" className="w-52" aria-label="Language">
-                <SelectValue placeholder="Language" />
-              </SelectTrigger>
-              <SelectContent>
-                {(Object.keys(LANG_CONFIG) as VoiceLang[]).map((key) => (
-                  <SelectItem key={key} value={key}>
-                    <span className="font-semibold">{LANG_CONFIG[key].native}</span>
-                    <span className="text-muted-foreground">
-                      {" "}
-                      · {LANG_CONFIG[key].label}
-                    </span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+              <Languages className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+              <SelectValue placeholder="Auto / English" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="auto">
+                <span className="font-semibold">Auto</span>
+                <span className="text-muted-foreground"> · خودکار</span>
+              </SelectItem>
+              <SelectItem value="english">English</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
 
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-            <span className="inline-flex items-center gap-1.5 font-medium text-foreground">
-              <Sprout className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
-              {farm.currentCrop || "Your farm"}
-            </span>
-            {chatContext?.growth.stageLabel ? (
-              <>
-                <span aria-hidden="true">•</span>
-                <span>{chatContext.growth.stageLabel}</span>
-              </>
-            ) : null}
-            {farm.location ? (
-              <span className="inline-flex items-center gap-1">
-                <MapPin className="h-3 w-3" aria-hidden="true" />
-                {farm.location}
-              </span>
-            ) : null}
-            {weatherStatus === "error" ? (
-              <span className="text-warning">Weather unavailable</span>
-            ) : null}
-          </div>
-
-          {cfg.note ? (
-            <p className="text-xs text-muted-foreground">{cfg.note}</p>
-          ) : null}
-        </CardContent>
-      </Card>
+        {cfg.note ? (
+          <p className="text-xs text-muted-foreground">{cfg.note}</p>
+        ) : null}
+      </section>
 
       {/* Error banner */}
       {error ? (
@@ -639,72 +783,107 @@ export default function VoicePage() {
         </Alert>
       ) : null}
 
-      {/* Mic control */}
-      <Card className="flex flex-col items-center gap-4 px-6 py-8 text-center">
-        <div aria-live="polite" aria-atomic="true" className="contents">
-          <button
-            type="button"
-            onClick={() => void handleMicTap()}
-            disabled={isBusy || initializing}
-            aria-pressed={voiceState === "listening" || voiceState === "requesting_permission"}
-            aria-label={
-              voiceState === "listening"
-                ? "Stop recording"
-                : cfg.sttSupported
-                ? "Tap to speak"
-                : "Voice not available for this language"
-            }
-            className={cn(
-              "relative flex h-24 w-24 items-center justify-center rounded-full shadow-pop transition-transform active:scale-95 disabled:opacity-60 cursor-pointer",
-              voiceState === "listening"
-                ? "bg-danger text-white hover:bg-danger-hover"
-                : voiceState === "speaking"
-                ? "bg-accent text-accent-foreground hover:bg-accent-hover"
-                : "bg-primary text-primary-foreground hover:bg-primary-hover"
-            )}
-          >
-            {voiceState === "listening" ? (
-              <span className="absolute inset-0 animate-ping rounded-full bg-danger/40" />
-            ) : null}
-            {voiceState === "listening" ? (
-              <Square className="h-8 w-8" aria-hidden="true" />
-            ) : voiceState === "speaking" ? (
-              <Volume2 className="h-9 w-9" aria-hidden="true" />
-            ) : (
-              <Mic className="h-10 w-10" aria-hidden="true" />
-            )}
-          </button>
+      {/* Central voice stage — large mic with soft concentric rings */}
+      <section aria-label="Voice control" className="flex flex-col items-center pt-2">
+        <div className="relative flex h-64 w-64 items-center justify-center sm:h-72 sm:w-72">
+          {/* Soft concentric rings (reference) */}
+          <span
+            className="absolute inset-0 rounded-full border border-primary/10"
+            aria-hidden="true"
+          />
+          <span
+            className="absolute inset-4 rounded-full border border-primary/10"
+            aria-hidden="true"
+          />
+          <span
+            className="absolute inset-8 rounded-full border border-primary/15"
+            aria-hidden="true"
+          />
+          <span
+            className="absolute inset-12 rounded-full border border-primary/20 bg-primary/[0.03]"
+            aria-hidden="true"
+          />
+
+          {/* Real pulse rings while the mic is live */}
+          {voiceState === "listening" ? (
+            <>
+              <span
+                className="absolute inset-0 animate-ping rounded-full border-2 border-primary/20"
+                style={{ animationDuration: "2.2s" }}
+                aria-hidden="true"
+              />
+              <span
+                className="absolute inset-0 animate-ping rounded-full border-2 border-primary/15"
+                style={{ animationDuration: "2.2s", animationDelay: "0.7s" }}
+                aria-hidden="true"
+              />
+            </>
+          ) : null}
+          {voiceState === "requesting_permission" ? (
+            <span
+              className="absolute inset-0 animate-ping rounded-full border-2 border-primary/30"
+              style={{ animationDuration: "1.3s" }}
+              aria-hidden="true"
+            />
+          ) : null}
+
+          <div aria-live="polite" aria-atomic="true" className="contents">
+            <button
+              type="button"
+              onClick={() => void handleMicTap()}
+              disabled={isBusy || initializing}
+              aria-pressed={voiceState === "listening" || voiceState === "requesting_permission"}
+              aria-label={
+                voiceState === "listening"
+                  ? "Stop recording"
+                  : cfg.sttSupported
+                  ? "Tap to speak"
+                  : "Voice not available for this language"
+              }
+              className={cn(
+                "relative z-10 flex h-24 w-24 cursor-pointer items-center justify-center rounded-full shadow-pop ring-4 ring-primary/15 transition-all duration-150 ease-out active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60 sm:h-28 sm:w-28",
+                voiceState === "speaking"
+                  ? "bg-accent text-accent-foreground hover:bg-accent-hover"
+                  : "bg-primary text-primary-foreground hover:bg-primary-hover"
+              )}
+            >
+              {voiceState === "listening" ? (
+                <Square className="h-8 w-8 sm:h-9 sm:w-9" aria-hidden="true" />
+              ) : voiceState === "speaking" ? (
+                <Volume2 className="h-9 w-9 sm:h-10 sm:w-10" aria-hidden="true" />
+              ) : voiceState === "transcribing" || voiceState === "thinking" ? (
+                <Loader2 className="h-8 w-8 animate-spin sm:h-9 sm:w-9" aria-hidden="true" />
+              ) : (
+                <Mic className="h-9 w-9 sm:h-10 sm:w-10" aria-hidden="true" />
+              )}
+            </button>
+          </div>
         </div>
 
-        <div>
-          <p className="text-base font-semibold text-foreground">
-            {voiceState === "idle" && "Tap to speak"}
-            {voiceState === "requesting_permission" && "Requesting microphone…"}
-            {voiceState === "listening" && "Listening… tap to stop"}
-            {voiceState === "transcribing" && "Finishing your question…"}
-            {voiceState === "thinking" && "Kissan AI is thinking…"}
-            {voiceState === "speaking" && "Playing response"}
-            {voiceState === "error" && "Let's try that again"}
-          </p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {voiceState === "speaking"
-              ? ttsUnavailable
-                ? "Voice playback isn't available for this language on this device, but here's the answer."
-                : "Playing response"
-              : `I'll use ${cfg.label} for voice.`}
-          </p>
-        </div>
+        {/* State text */}
+        <p
+          aria-live="polite"
+          className="mt-6 text-base font-semibold text-foreground sm:text-lg"
+        >
+          {statusText}
+        </p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {voiceState === "speaking"
+            ? ttsUnavailable
+              ? "Voice playback isn't available for this language on this device, but here's the answer."
+              : "Playing response"
+            : `I'll use ${cfg.label} for voice.`}
+        </p>
 
-        {/* Status chips */}
-        <div className="flex flex-wrap items-center justify-center gap-2">
+        {/* Status chips — same real states as before */}
+        <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
           {voiceState === "listening" ? (
             <Badge variant="danger">
               <MicOff className="h-3 w-3" aria-hidden="true" />
               Recording
             </Badge>
           ) : null}
-          {voiceState === "transcribing" ||
-          voiceState === "thinking" ? (
+          {voiceState === "transcribing" || voiceState === "thinking" ? (
             <Badge variant="default">
               <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
               Processing
@@ -717,7 +896,15 @@ export default function VoicePage() {
             </Badge>
           ) : null}
         </div>
-      </Card>
+
+        {/* Real-data waveform */}
+        <VoiceWaveform state={voiceState} level={micLevel} className="mt-6" />
+
+        {/* Bottom info text */}
+        <p className="mt-8 max-w-md text-center text-sm leading-relaxed text-muted-foreground">
+          You can ask about crops, diseases, irrigation, weather and more.
+        </p>
+      </section>
 
       {/* Transcription — editable before sending */}
       {showTranscript || partial ? (
