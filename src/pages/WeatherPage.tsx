@@ -8,23 +8,33 @@ import {
   CloudSnow,
   CloudSun,
   Droplets,
-  Loader2,
+  MapPin,
   Sprout,
   Sun,
   Thermometer,
+  Umbrella,
   Wind,
 } from "lucide-react";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+import { Card, CardContent } from "../components/ui/card";
 import { Skeleton } from "../components/ui/skeleton";
 import { PageHeader, SectionHeader } from "../components/layout/page-header";
 import { EmptyState } from "../components/layout/empty-state";
 import { ErrorState } from "../components/layout/error-state";
 import { useFarm } from "../context/FarmContext";
 import { useFarmWeather } from "../hooks/useFarmWeather";
-import { buildWeatherInsights } from "../lib/weather-insights";
-import type { CurrentWeather, WeatherForecastDay } from "../lib/weather-service";
+import {
+  buildWeatherInsights,
+  type InsightLevel,
+  type WeatherInsight,
+} from "../lib/weather-insights";
+import type {
+  CurrentWeather,
+  WeatherForecastDay,
+  WeatherLocation,
+} from "../lib/weather-service";
+import { cn } from "../lib/utils";
 
 /* ------------------------------------------------------------------ */
 /* Condition icon mapping (OpenWeatherMap condition codes)             */
@@ -54,97 +64,220 @@ function ConditionIcon({ code, className }: { code: string; className?: string }
 }
 
 /* ------------------------------------------------------------------ */
-/* Current conditions tile                                             */
+/* Today's Weather — hero card                                         */
 /* ------------------------------------------------------------------ */
 
-function StatTile({
-  icon,
-  label,
-  value,
-  unit,
+function TodayWeather({
+  current,
+  location,
 }: {
-  icon: React.ReactNode;
-  label: string;
-  value?: number;
-  unit?: string;
+  current: CurrentWeather;
+  location: WeatherLocation;
 }) {
+  const updated = new Date(current.capturedAt).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  const stats = [
+    {
+      icon: <Thermometer className="h-5 w-5" aria-hidden="true" />,
+      label: "Feels like",
+      value: `${Math.round(current.feelsLike)}°C`,
+    },
+    {
+      icon: <Droplets className="h-5 w-5" aria-hidden="true" />,
+      label: "Humidity",
+      value: `${current.humidity}%`,
+    },
+    {
+      icon: <Wind className="h-5 w-5" aria-hidden="true" />,
+      label: "Wind",
+      value: `${current.windSpeed} km/h`,
+    },
+    {
+      icon: <Umbrella className="h-5 w-5" aria-hidden="true" />,
+      label: "Rain chance",
+      value: `${current.rainProbability}%`,
+    },
+  ];
+
   return (
-    <Card className="p-4">
-      <div className="flex items-center gap-2 text-muted-foreground">
-        {icon}
-        <span className="text-xs font-medium">{label}</span>
+    <Card className="overflow-hidden">
+      {/* Hero band */}
+      <div className="bg-gradient-to-br from-primary-soft via-secondary/70 to-card p-6 sm:p-8">
+        <div className="flex flex-col justify-between gap-6 sm:flex-row sm:items-center">
+          <div className="flex items-center gap-5">
+            <span className="flex h-20 w-20 shrink-0 items-center justify-center rounded-3xl bg-card text-primary shadow-lift ring-1 ring-primary/10 sm:h-24 sm:w-24">
+              <ConditionIcon
+                code={current.conditionCode}
+                className="h-12 w-12 sm:h-14 sm:w-14"
+              />
+            </span>
+            <div>
+              <p className="font-heading text-6xl font-extrabold leading-none tracking-tight text-foreground sm:text-7xl">
+                {Math.round(current.temperature)}
+                <span className="text-3xl font-bold text-primary sm:text-4xl">°C</span>
+              </p>
+              <p className="mt-2 text-base font-semibold capitalize text-foreground">
+                {current.condition}
+              </p>
+              <p className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+                <MapPin className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                <span className="truncate">
+                  {location.name}
+                  {location.country ? `, ${location.country}` : ""} · Updated {updated}
+                </span>
+              </p>
+            </div>
+          </div>
+          <Badge
+            variant="success"
+            className="w-fit shrink-0 bg-card text-success ring-success/20"
+          >
+            <span className="relative flex h-2 w-2" aria-hidden="true">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-60" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-success" />
+            </span>
+            Live conditions
+          </Badge>
+        </div>
       </div>
-      <p className="mt-1.5 font-heading text-2xl font-bold text-foreground">
-        {value !== undefined ? (
-          <>
-            {value}
-            {unit ? (
-              <span className="ml-0.5 text-sm font-medium text-muted-foreground">{unit}</span>
-            ) : null}
-          </>
-        ) : (
-          "—"
-        )}
-      </p>
+
+      {/* Stat row */}
+      <div className="grid grid-cols-2 gap-px border-t border-border bg-border lg:grid-cols-4">
+        {stats.map((stat) => (
+          <div
+            key={stat.label}
+            className="flex items-center gap-3 bg-card p-4 sm:px-5"
+          >
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-soft text-primary">
+              {stat.icon}
+            </span>
+            <div className="min-w-0">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                {stat.label}
+              </p>
+              <p className="font-heading text-lg font-bold leading-tight text-foreground">
+                {stat.value}
+              </p>
+            </div>
+          </div>
+        ))}
+      </div>
     </Card>
   );
 }
 
-function CurrentConditions({ current }: { current: CurrentWeather }) {
+/* ------------------------------------------------------------------ */
+/* Farming Impact — green recommendation card                          */
+/* ------------------------------------------------------------------ */
+
+function InsightBadge({ level }: { level: InsightLevel }) {
+  const config: Record<InsightLevel, { label: string; variant: "success" | "warning" | "danger" }> = {
+    high: { label: "Action recommended", variant: "danger" },
+    medium: { label: "Keep an eye on", variant: "warning" },
+    low: { label: "Good conditions", variant: "success" },
+  };
+  const { label, variant } = config[level];
+  return <Badge variant={variant}>{label}</Badge>;
+}
+
+function FarmingImpact({ insights }: { insights: WeatherInsight[] }) {
+  if (insights.length === 0) {
+    return (
+      <EmptyState
+        icon={<CloudSun className="h-6 w-6" />}
+        title="No weather notes right now"
+        description="Conditions look balanced — no urgent farm actions based on the current weather."
+      />
+    );
+  }
+
+  // Surface the most important insight as the headline recommendation.
+  const priority: Record<InsightLevel, number> = { high: 0, medium: 1, low: 2 };
+  const primary = [...insights].sort(
+    (a, b) => priority[a.level] - priority[b.level]
+  )[0];
+  const rest = insights.filter((insight) => insight !== primary);
+
   return (
-    <>
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatTile icon={<Thermometer className="h-4 w-4" />} label="Temperature" value={current.temperature} unit="°C" />
-        <StatTile icon={<Droplets className="h-4 w-4" />} label="Humidity" value={current.humidity} unit="%" />
-        <StatTile icon={<CloudRain className="h-4 w-4" />} label="Rain probability" value={current.rainProbability} unit="%" />
-        <StatTile icon={<Wind className="h-4 w-4" />} label="Wind speed" value={current.windSpeed} unit="km/h" />
-      </div>
-      <Card>
-        <CardContent className="flex flex-wrap items-center gap-4 py-5">
-          <span className="flex h-12 w-12 items-center justify-center rounded-full bg-primary-soft text-primary">
-            <ConditionIcon code={current.conditionCode} className="h-6 w-6" />
-          </span>
-          <div>
-            <p className="text-lg font-semibold text-foreground">{current.condition}</p>
-            <p className="text-xs text-muted-foreground">
-              Feels like {current.feelsLike}°C · Updated{" "}
-              {new Date(current.capturedAt).toLocaleTimeString([], {
-                hour: "2-digit",
-                minute: "2-digit",
-              })}
-            </p>
+    <div className="space-y-3">
+      <Card className="overflow-hidden border-success/20 bg-success-soft/40 shadow-lift">
+        <CardContent className="p-5 sm:p-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:gap-5">
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-success text-success-foreground shadow-soft">
+              <Sprout className="h-6 w-6" aria-hidden="true" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <InsightBadge level={primary.level} />
+              </div>
+              <p className="mt-2 font-heading text-base font-bold text-foreground">
+                {primary.title}
+              </p>
+              <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+                {primary.message}
+              </p>
+            </div>
           </div>
         </CardContent>
       </Card>
-    </>
+
+      {rest.length > 0 ? (
+        <div className="space-y-2">
+          {rest.map((insight, i) => (
+            <Card key={i} className="p-4">
+              <div className="flex items-start gap-3">
+                <InsightBadge level={insight.level} />
+                <div>
+                  <p className="text-sm font-semibold text-foreground">{insight.title}</p>
+                  <p className="mt-0.5 text-sm text-muted-foreground">{insight.message}</p>
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
 /* ------------------------------------------------------------------ */
-/* Forecast card                                                       */
+/* 5 Day Forecast                                                      */
 /* ------------------------------------------------------------------ */
 
-function ForecastCard({ day }: { day: WeatherForecastDay }) {
+function ForecastDayCard({ day, index }: { day: WeatherForecastDay; index: number }) {
   const date = new Date(day.date + "T00:00:00");
+  const isToday = index === 0;
+  const label = isToday
+    ? "Today"
+    : index === 1
+      ? "Tomorrow"
+      : date.toLocaleDateString(undefined, { weekday: "short" });
+
   return (
-    <Card className="p-4 text-center">
-      <p className="text-xs font-semibold text-foreground">
-        {date.toLocaleDateString(undefined, { weekday: "short" })}
-      </p>
+    <Card
+      className={cn(
+        "p-4 text-center transition-colors duration-200",
+        isToday && "border-primary/30 bg-primary-soft/40 shadow-lift"
+      )}
+    >
+      <p className="text-sm font-bold text-foreground">{label}</p>
       <p className="text-[11px] text-muted-foreground">
         {date.toLocaleDateString(undefined, { day: "numeric", month: "short" })}
       </p>
-      <div className="my-2 flex justify-center text-accent">
-        <ConditionIcon code={day.conditionCode ?? ""} className="h-8 w-8" />
+      <div className="my-3 flex justify-center text-primary">
+        <ConditionIcon code={day.conditionCode ?? ""} className="h-9 w-9" />
       </div>
-      <p className="text-sm font-bold text-foreground">
-        {day.temperatureMax}°
-        <span className="ml-1 text-xs font-medium text-muted-foreground">
-          {day.temperatureMin}°
+      <p className="font-heading text-lg font-bold text-foreground">
+        {Math.round(day.temperatureMax)}°
+        <span className="ml-1 text-sm font-medium text-muted-foreground">
+          {Math.round(day.temperatureMin)}°
         </span>
       </p>
-      <p className="mt-1 inline-flex items-center gap-1 text-[11px] text-muted-foreground">
-        <Droplets className="h-3 w-3" aria-hidden="true" />
+      <p className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
+        <Droplets className="h-3 w-3 text-primary" aria-hidden="true" />
         {day.rainProbability}% rain
       </p>
     </Card>
@@ -177,16 +310,13 @@ export default function WeatherPage() {
   }
 
   const insights = weather ? buildWeatherInsights(weather) : [];
+  const loading = status === "loading" || status === "idle";
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Weather Intelligence"
-        subtitle={
-          farm
-            ? `Live conditions for ${farm.location}`
-            : "Live conditions for your farm"
-        }
+        subtitle={`Live conditions for ${farm.location}`}
       />
 
       {status === "error" ? (
@@ -197,24 +327,54 @@ export default function WeatherPage() {
         />
       ) : null}
 
-      {/* Current conditions */}
+      {/* Today's Weather */}
       <section className="space-y-3">
-        <SectionHeader title="Current Conditions" subtitle="What's happening right now" />
-        {status === "loading" || status === "idle" ? (
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <Skeleton key={i} className="h-28 rounded-2xl" />
-            ))}
-          </div>
+        <SectionHeader title="Today's Weather" subtitle="What's happening right now" />
+        {loading ? (
+          <Card className="overflow-hidden">
+            <div className="space-y-5 p-6">
+              <div className="flex items-center gap-5">
+                <Skeleton className="h-20 w-20 shrink-0 rounded-3xl" />
+                <div className="space-y-2">
+                  <Skeleton className="h-12 w-36" />
+                  <Skeleton className="h-4 w-44" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <Skeleton key={i} className="h-16 rounded-xl" />
+                ))}
+              </div>
+            </div>
+          </Card>
         ) : weather ? (
-          <CurrentConditions current={weather.current} />
+          <TodayWeather current={weather.current} location={weather.location} />
         ) : null}
       </section>
 
-      {/* Forecast */}
+      {/* Farming Impact */}
       <section className="space-y-3">
-        <SectionHeader title="Forecast" subtitle="Next few days" />
-        {status === "loading" || status === "idle" ? (
+        <SectionHeader
+          title="Farming Impact"
+          subtitle="What this weather means for your farm"
+        />
+        {loading ? (
+          <div className="space-y-2">
+            <Skeleton className="h-32 rounded-2xl" />
+            <Skeleton className="h-20 rounded-2xl" />
+          </div>
+        ) : weather ? (
+          <FarmingImpact insights={insights} />
+        ) : null}
+      </section>
+
+      {/* 5 Day Forecast */}
+      <section className="space-y-3">
+        <SectionHeader
+          title="5 Day Forecast"
+          subtitle="The week ahead for your farm"
+        />
+        {loading ? (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
             {Array.from({ length: 5 }).map((_, i) => (
               <Skeleton key={i} className="h-40 rounded-2xl" />
@@ -222,68 +382,16 @@ export default function WeatherPage() {
           </div>
         ) : weather && weather.forecast.length > 0 ? (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-            {weather.forecast.map((day) => (
-              <ForecastCard key={day.date} day={day} />
+            {weather.forecast.map((day, i) => (
+              <ForecastDayCard key={day.date} day={day} index={i} />
             ))}
           </div>
         ) : null}
       </section>
 
-      {/* Agricultural insight */}
-      <section className="space-y-3">
-        <SectionHeader
-          title="Agricultural Insight"
-          subtitle="What this weather means for your farm"
-        />
-        {status === "loading" || status === "idle" ? (
-          <Card>
-            <CardContent className="flex items-center justify-center gap-2 py-8 text-sm font-medium text-muted-foreground">
-              <Loader2 className="h-5 w-5 animate-spin text-primary" aria-hidden="true" />
-              Building your weather insight…
-            </CardContent>
-          </Card>
-        ) : weather ? (
-          insights.length > 0 ? (
-            <div className="space-y-3">
-              {insights.map((insight, i) => (
-                <Card key={i} className="p-4">
-                  <div className="flex items-start gap-3">
-                    <Badge
-                      variant={
-                        insight.level === "high"
-                          ? "danger"
-                          : insight.level === "medium"
-                            ? "warning"
-                            : "success"
-                      }
-                      className="mt-0.5 shrink-0"
-                    >
-                      {insight.level}
-                    </Badge>
-                    <div>
-                      <p className="text-sm font-semibold text-foreground">{insight.title}</p>
-                      <p className="mt-0.5 text-sm text-muted-foreground">{insight.message}</p>
-                    </div>
-                  </div>
-                </Card>
-              ))}
-            </div>
-          ) : (
-            <EmptyState
-              icon={<CloudSun className="h-6 w-6" />}
-              title="No weather notes right now"
-              description="Conditions look balanced — no urgent farm actions based on the current weather."
-            />
-          )
-        ) : null}
-      </section>
-
       {status === "error" ? (
         <Card className="bg-muted/50">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Why is weather unavailable?</CardTitle>
-          </CardHeader>
-          <CardContent className="text-xs text-muted-foreground">
+          <CardContent className="py-4 text-xs text-muted-foreground">
             Live weather needs the weather provider to be configured on the server. You can
             try again, or check your farm location is spelled correctly on the Farm Profile.
           </CardContent>
