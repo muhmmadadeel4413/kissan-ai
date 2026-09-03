@@ -801,6 +801,22 @@ const en: Dict = {
   "auth.redirDashboard": "Taking you to your dashboard…",
   "auth.redirectLogin": "Back to Login",
   "auth.signupApproach": "Create your farm after you're signed in.",
+
+  /* ---------- Login page split-screen visual panel ---------- */
+  "auth.welcomeBack": "Welcome Back!",
+  "auth.visualSubtitle":
+    "Your farm, your weather, and your decisions — all in one place. Sign in to continue.",
+  "auth.featCropDiagnosis": "AI Crop Diagnosis",
+  "auth.featWeather": "Real-time Weather",
+  "auth.featRecommendations": "Smart Recommendations",
+  "auth.featFarmManagement": "Farm Management",
+  "auth.orContinueWith": "or continue with",
+  "auth.continueWithGoogle": "Continue with Google",
+  "auth.continueWithApple": "Continue with Apple",
+  "auth.googleUnavailable":
+    "Google sign-in isn't set up for this app yet. Please use your email and password.",
+  "auth.appleUnavailable":
+    "Apple sign-in isn't set up for this app yet. Please use your email and password.",
 };
 
 const ur: Dict = {
@@ -1589,6 +1605,19 @@ const ur: Dict = {
   "auth.redirDashboard": "آپ کو ڈیش بورڈ پر لے جا رہے ہیں…",
   "auth.redirectLogin": "لاگ ان پر واپس",
   "auth.signupApproach": "سائن ان کے بعد اپنا فارم بنائیں۔",
+
+  /* ---------- Login page split-screen visual panel ---------- */
+  "auth.welcomeBack": "خوش آمدید!",
+  "auth.visualSubtitle": "آپ کا فارم، آپ کا موسم، اور آپ کے فیصلے — سب ایک جگہ۔ سائن ان کرتے رہیں۔",
+  "auth.featCropDiagnosis": "اے آئی فصل کی تشخیص",
+  "auth.featWeather": "ریئل ٹائم موسم",
+  "auth.featRecommendations": "اسمارٹ سفارشات",
+  "auth.featFarmManagement": "فارم مینجمنٹ",
+  "auth.orContinueWith": "یا اس کے ساتھ جاری رکھیں",
+  "auth.continueWithGoogle": "گوگل کے ساتھ جاری رکھیں",
+  "auth.continueWithApple": "ایپل کے ساتھ جاری رکھیں",
+  "auth.googleUnavailable": "اس ایپ میں گوگل سائن ان ابھی فعال نہیں ہے۔ براہ کرم اپنا ای میل اور پاس ورڈ استعمال کریں۔",
+  "auth.appleUnavailable": "اس ایپ میں ایپل سائن ان ابھی فعال نہیں ہے۔ براہ کرم اپنا ای میل اور پاس ورڈ استعمال کریں۔",
 };
 
 export const translations: Record<Language, Dict> = { en, ur };
