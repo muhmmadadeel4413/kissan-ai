@@ -202,39 +202,8 @@ export default function DashboardPage() {
         </div>
       </section>
 
-      {/* Row 2 — today's plan, growth stage, yield.
-          Each column is a flex column (header on top) and the card below it
-          grows via flex-1 to fill the full row height, so the three cards
-          always share one consistent height and align flush at the top and
-          bottom at every breakpoint. The [&>div:last-child] selector targets
-          the card's single root Card element directly after the header. */}
-      <section aria-label="Today's plan and outlook">
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
-          <div className="flex flex-col gap-3 [&>div:last-child]:flex-1">
-            <SectionHeader
-              title="What Should I Do Today?"
-              subtitle="Your decision plan, built from real farm data"
-            />
-            <TodayActionsCard />
-          </div>
-          <div className="flex flex-col gap-3 [&>div:last-child]:flex-1">
-            <SectionHeader
-              title="Crop Growth Stage"
-              subtitle="Crop age and current stage"
-            />
-            <GrowthStageCard growth={farmContext.growth} />
-          </div>
-          <div className="flex flex-col gap-3 [&>div:last-child]:flex-1 md:col-span-2 xl:col-span-1">
-            <SectionHeader
-              title="AI Yield Prediction"
-              subtitle="Estimate range and confidence"
-            />
-            <YieldPredictionCard farm={farm} />
-          </div>
-        </div>
-      </section>
-
-      {/* Row 3 — intelligence, diagnoses, irrigation, tasks */}
+      {/* Row 2 — intelligence, diagnoses, irrigation, tasks.
+          This four-card row now sits directly below the top stat cards. */}
       <section aria-label="Farm intelligence">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <FarmIntelligenceCard input={healthInput} />
@@ -245,6 +214,39 @@ export default function DashboardPage() {
           />
           <IrrigationAdvisorCard farm={farm} growth={farmContext.growth} />
           <UpcomingTasksCard />
+        </div>
+      </section>
+
+      {/* Row 3 — today's plan, growth stage, yield.
+          Each column is a flex column (header on top) and the card below it
+          grows via flex-1 to fill the full row height, so the three compact
+          cards always share one consistent height and align flush at the top
+          and bottom at every breakpoint. The [&>div:last-child] selector
+          targets the card's single root Card element directly after the
+          header. The cards use their compact variant so the row stays short. */}
+      <section aria-label="Today's plan and outlook">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <div className="flex flex-col gap-3 [&>div:last-child]:flex-1">
+            <SectionHeader
+              title="What Should I Do Today?"
+              subtitle="Your decision plan, built from real farm data"
+            />
+            <TodayActionsCard compact />
+          </div>
+          <div className="flex flex-col gap-3 [&>div:last-child]:flex-1">
+            <SectionHeader
+              title="Crop Growth Stage"
+              subtitle="Crop age and current stage"
+            />
+            <GrowthStageCard growth={farmContext.growth} compact />
+          </div>
+          <div className="flex flex-col gap-3 [&>div:last-child]:flex-1 md:col-span-2 xl:col-span-1">
+            <SectionHeader
+              title="AI Yield Prediction"
+              subtitle="Estimate range and confidence"
+            />
+            <YieldPredictionCard farm={farm} compact />
+          </div>
         </div>
       </section>
     </div>

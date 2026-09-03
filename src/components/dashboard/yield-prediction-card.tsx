@@ -12,15 +12,26 @@ import type { Farm } from "../../types";
  * that honesty: it displays the real crop name from the farm profile and an
  * explicit "not available yet" state with a clear path to the Yield page.
  */
-export function YieldPredictionCard({ farm }: { farm: Farm }) {
+export function YieldPredictionCard({
+  farm,
+  compact = false,
+}: {
+  farm: Farm;
+  compact?: boolean;
+}) {
   return (
     <Card className="h-full">
-      <CardContent className="flex h-full flex-col gap-3 p-5">
+      <CardContent className={compact ? "flex h-full flex-col gap-2 p-4" : "flex h-full flex-col gap-3 p-5"}>
         <div className="flex items-start justify-between gap-2">
           <p className="text-sm font-semibold text-muted-foreground">
             AI Yield Prediction
           </p>
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary-soft text-primary shadow-soft ring-1 ring-inset ring-primary/15">
+          <span
+            className={
+              "flex shrink-0 items-center justify-center rounded-xl bg-primary-soft text-primary shadow-soft ring-1 ring-inset ring-primary/15" +
+              (compact ? " h-9 w-9" : " h-11 w-11")
+            }
+          >
             <TrendingUp className="h-5 w-5" aria-hidden="true" />
           </span>
         </div>

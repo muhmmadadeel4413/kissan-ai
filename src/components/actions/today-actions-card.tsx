@@ -55,7 +55,7 @@ const SOURCE_LABEL: Record<ActionSource, string> = {
   history: "History",
 };
 
-export function TodayActionsCard() {
+export function TodayActionsCard({ compact = false }: { compact?: boolean }) {
   const {
     actions,
     summary,
@@ -75,18 +75,25 @@ export function TodayActionsCard() {
   if (status === "loading") {
     return (
       <Card>
-        <CardHeader className="pb-3">
+        <CardHeader className={compact ? "pb-2" : "pb-3"}>
           <CardTitle className="flex items-center gap-2">
             <ListChecks className="h-5 w-5 text-primary" aria-hidden="true" />
             What Should I Do Today?
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3" role="status" aria-label="Loading today's actions">
+        <CardContent
+          className={compact ? "space-y-2" : "space-y-3"}
+          role="status"
+          aria-label="Loading today's actions"
+        >
           <span className="sr-only">Loading today's actions</span>
           {[0, 1, 2].map((i) => (
             <div
               key={i}
-              className="space-y-2 rounded-xl border border-border bg-background/40 p-4"
+              className={
+                "space-y-2 rounded-xl border border-border bg-background/40" +
+                (compact ? " p-3" : " p-4")
+              }
             >
               <div className="flex items-center justify-between gap-3">
                 <Skeleton className="h-4 w-1/2" />
@@ -105,7 +112,7 @@ export function TodayActionsCard() {
   if (insufficientData) {
     return (
       <Card>
-        <CardHeader className="pb-3">
+        <CardHeader className={compact ? "pb-2" : "pb-3"}>
           <CardTitle className="flex items-center gap-2">
             <ListChecks className="h-5 w-5 text-primary" aria-hidden="true" />
             What Should I Do Today?
@@ -135,13 +142,13 @@ export function TodayActionsCard() {
   if (status === "error" && actions.length === 0) {
     return (
       <Card>
-        <CardHeader className="pb-3">
+        <CardHeader className={compact ? "pb-2" : "pb-3"}>
           <CardTitle className="flex items-center gap-2">
             <ListChecks className="h-5 w-5 text-primary" aria-hidden="true" />
             What Should I Do Today?
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3 py-2">
+        <CardContent className={compact ? "space-y-2 py-2" : "space-y-3 py-2"}>
           <div className="flex items-start gap-3 rounded-xl border border-border bg-background/40 p-4">
             <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-danger-soft text-danger">
               <RefreshCw className="h-4 w-4" aria-hidden="true" />
@@ -168,7 +175,7 @@ export function TodayActionsCard() {
   if (actions.length === 0) {
     return (
       <Card>
-        <CardHeader className="pb-3">
+        <CardHeader className={compact ? "pb-2" : "pb-3"}>
           <CardTitle className="flex items-center gap-2">
             <ListChecks className="h-5 w-5 text-primary" aria-hidden="true" />
             What Should I Do Today?
@@ -202,7 +209,7 @@ export function TodayActionsCard() {
   /* ----- Ready: real persisted actions --------------------------------- */
   return (
     <Card>
-      <CardHeader className="pb-3">
+      <CardHeader className={compact ? "pb-2" : "pb-3"}>
         <div className="flex items-start justify-between gap-3">
           <CardTitle className="flex items-center gap-2">
             <ListChecks className="h-5 w-5 text-primary" aria-hidden="true" />
@@ -229,7 +236,7 @@ export function TodayActionsCard() {
         ) : null}
       </CardHeader>
 
-      <CardContent className="space-y-3 py-2">
+      <CardContent className={compact ? "space-y-2 py-2" : "space-y-3 py-2"}>
         {/* Refresh failed but previous actions remain visible */}
         {error ? (
           <div
@@ -245,11 +252,11 @@ export function TodayActionsCard() {
         ) : null}
 
         {pending.map((action) => (
-          <ActionRow key={action.id} action={action} onToggle={markDone} />
+          <ActionRow key={action.id} action={action} onToggle={markDone} compact={compact} />
         ))}
 
         {completedCount > 0 ? (
-          <div className="pt-1">
+          <div className={compact ? "pt-0.5" : "pt-1"}>
             <p className="mb-2 text-xs font-medium text-muted-foreground">
               Completed ({completedCount})
             </p>
@@ -261,6 +268,7 @@ export function TodayActionsCard() {
                     key={action.id}
                     action={action}
                     onToggle={markDone}
+                    compact={compact}
                   />
                 ))}
             </div>
@@ -278,9 +286,11 @@ export function TodayActionsCard() {
 function ActionRow({
   action,
   onToggle,
+  compact = false,
 }: {
   action: ActionItem;
   onToggle: (id: string, completed: boolean) => Promise<unknown>;
+  compact?: boolean;
 }) {
   const [busy, setBusy] = React.useState(false);
   const meta = PRIORITY_META[action.priority];
@@ -300,7 +310,8 @@ function ActionRow({
   return (
     <div
       className={cn(
-        "rounded-xl border border-border bg-background/40 p-4 transition-opacity",
+        "rounded-xl border border-border bg-background/40 transition-opacity",
+        compact ? "p-3" : "p-4",
         action.completed && "opacity-70"
       )}
     >
@@ -331,14 +342,24 @@ function ActionRow({
           <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
             {action.description}
           </p>
-          <p className="mt-2 text-xs leading-relaxed text-foreground/80">
+          <p
+            className={
+              "text-xs leading-relaxed text-foreground/80" +
+              (compact ? " mt-1" : " mt-2")
+            }
+          >
             <span className="font-semibold text-foreground">Why: </span>
             {action.reason}
           </p>
         </div>
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2">
+      <div
+        className={
+          "flex flex-wrap items-center gap-x-3 gap-y-2" +
+          (compact ? " mt-2" : " mt-3")
+        }
+      >
         {action.timing ? (
           <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
             <Clock className="h-3.5 w-3.5" aria-hidden="true" />

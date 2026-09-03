@@ -25,17 +25,28 @@ function stageVariant(stage: CropGrowthStage): BadgeProps["variant"] {
  * saved farm profile. Never invents values: unknown / not-started / unavailable
  * states are rendered explicitly.
  */
-export function GrowthStageCard({ growth }: { growth: CropGrowthInfo }) {
+export function GrowthStageCard({
+  growth,
+  compact = false,
+}: {
+  growth: CropGrowthInfo;
+  compact?: boolean;
+}) {
   const unavailable =
     growth.growthStage === "unknown" || growth.growthStage === "not_started";
   const ageKnown = growth.cropAgeDays !== null;
 
   return (
     <Card>
-      <CardContent className="space-y-4 py-5">
+      <CardContent className={compact ? "space-y-3 py-4" : "space-y-4 py-5"}>
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-primary-soft text-primary">
+            <span
+              className={
+                "flex items-center justify-center rounded-full bg-primary-soft text-primary" +
+                (compact ? " h-9 w-9" : " h-10 w-10")
+              }
+            >
               <Sprout className="h-5 w-5" aria-hidden="true" />
             </span>
             <div>
@@ -55,9 +66,19 @@ export function GrowthStageCard({ growth }: { growth: CropGrowthInfo }) {
           )}
         </div>
 
-        <div className="flex items-center justify-between gap-4 border-t border-border pt-4">
+        <div
+          className={
+            "flex items-center justify-between gap-4 border-t border-border" +
+            (compact ? " pt-3" : " pt-4")
+          }
+        >
           <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-muted-foreground">
+            <span
+              className={
+                "flex items-center justify-center rounded-full bg-muted text-muted-foreground" +
+                (compact ? " h-9 w-9" : " h-10 w-10")
+              }
+            >
               <CalendarClock className="h-5 w-5" aria-hidden="true" />
             </span>
             <div>
