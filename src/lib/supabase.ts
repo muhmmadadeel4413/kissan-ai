@@ -26,7 +26,7 @@ import { createClient } from "@supabase/supabase-js";
 function readRequiredEnv(name: string, raw: string | undefined): string {
   if (typeof raw !== "string" || raw.trim().length === 0) {
     throw new Error(
-      `Supabase is not configured. Add ${name} in the Environment settings panel (it must use the VITE_ prefix to be exposed to the browser).`
+      `${name} is not set in this app bundle. If the variable is already listed in the Environment settings panel (with the VITE_ prefix), the running preview server is stale: stop and restart the preview so Vite re-reads the env vars — file edits alone don't reload them (HMR is disabled). If it is not listed at all, add ${name} in the Environment settings panel.`
     );
   }
   return raw.trim();
