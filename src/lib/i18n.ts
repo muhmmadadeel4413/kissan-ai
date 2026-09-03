@@ -534,7 +534,7 @@ const en: Dict = {
   "voice.title": "Voice Assistant",
 
   /* ---------- Smart Crop Recommendation (Prompt 13) ---------- */
-  "cropRec.title": "Smart Crop Recommendation",
+  "cropRec.title": "Crop Recommendation",
   "cropRec.subtitle":
     "Discover crops that may be suitable for your farm based on your soil, location, irrigation, weather, and farm conditions.",
   "cropRec.myFarm": "My Farm",
@@ -547,6 +547,22 @@ const en: Dict = {
   "cropRec.variety": "Variety",
   "cropRec.plantingDate": "Planting date",
   "cropRec.growthStage": "Growth stage",
+  "cropRec.conditionsTitle": "Your Conditions",
+  "cropRec.conditionsSub": "The farm conditions we use to tailor these recommendations",
+  "cropRec.topRecsTitle": "Top Recommended Crops",
+  "cropRec.topRecsSub": "Ranked by how well each crop fits your farm, soil, and weather",
+  "cropRec.viewFull": "View Full Recommendations",
+  "cropRec.soilType": "Soil Type",
+  "cropRec.waterAvailability": "Water Availability",
+  "cropRec.currentSeason": "Current Season",
+  "cropRec.farmHistory": "Farm History",
+  "cropRec.farmAgeYears": "{n} years",
+  "cropRec.generateTitle": "Get AI-powered crop recommendations",
+  "cropRec.generateDesc":
+    "We'll analyze your soil, irrigation, weather, and farm history to suggest crops that may suit your farm.",
+  "cropRec.noRecommendations": "No recommendations available yet",
+  "cropRec.noRecommendationsDesc":
+    "We couldn't find crops that clearly suit your farm right now. Try generating again or update your farm profile.",
   "cropRec.getRecommendations": "Get Crop Recommendations",
   "cropRec.gettingRecommendations": "Getting your recommendations…",
   "cropRec.analyzing": "Analyzing your farm conditions…",
@@ -1375,7 +1391,7 @@ const ur: Dict = {
   "voice.title": "وائس اسسٹنٹ",
 
   /* ---------- Smart Crop Recommendation (Prompt 13) ---------- */
-  "cropRec.title": "اسمارٹ فصل کی سفارش",
+  "cropRec.title": "فصل کی سفارش",
   "cropRec.subtitle":
     "اپنی مٹی، مقام، آبپاشی، موسم اور فارم کے حالات کی بنیاد پر ایسی فصلیں دریافت کریں جو آپ کے فارم کے لیے موزوں ہو سکتی ہیں۔",
   "cropRec.myFarm": "میرا فارم",
@@ -1388,6 +1404,22 @@ const ur: Dict = {
   "cropRec.variety": "قسم",
   "cropRec.plantingDate": "بونے کی تاریخ",
   "cropRec.growthStage": "نشوونما کا مرحلہ",
+  "cropRec.conditionsTitle": "آپ کے حالات",
+  "cropRec.conditionsSub": "وہ فارم حالات جو ہم ان سفارشات کے لیے استعمال کرتے ہیں",
+  "cropRec.topRecsTitle": "سب سے موزوں فصلیں",
+  "cropRec.topRecsSub": "ہر فصل آپ کے فارم، مٹی اور موسم کے مطابق کیسے ہے اس کی بنیاد پر درجہ بند",
+  "cropRec.viewFull": "مکمل سفارشات دیکھیں",
+  "cropRec.soilType": "مٹی کی قسم",
+  "cropRec.waterAvailability": "پانی کی دستیابی",
+  "cropRec.currentSeason": "موجودہ سیزن",
+  "cropRec.farmHistory": "فارم کی تاریخ",
+  "cropRec.farmAgeYears": "{n} سال",
+  "cropRec.generateTitle": "اے آئی سے چلنے والی فصل کی سفارشات حاصل کریں",
+  "cropRec.generateDesc":
+    "ہم آپ کی مٹی، آبپاشی، موسم اور فارم کی تاریخ کا تجزیہ کر کے ایسی فصلیں تجویز کریں گے جو آپ کے فارم کے لیے موزوں ہوں۔",
+  "cropRec.noRecommendations": "ابھی کوئی سفارش دستیاب نہیں",
+  "cropRec.noRecommendationsDesc":
+    "ہم ابھی ایسی فصلیں نہیں ڈھونڈ سکے جو واضح طور پر آپ کے فارم کے لیے موزوں ہوں۔ دوبارہ کوشش کریں یا اپنا فارم پروفائل اپ ڈیٹ کریں۔",
   "cropRec.getRecommendations": "فصل کی سفارشات حاصل کریں",
   "cropRec.gettingRecommendations": "آپ کی سفارشات حاصل ہو رہی ہیں…",
   "cropRec.analyzing": "آپ کے فارم کے حالات کا تجزیہ ہو رہا ہے…",

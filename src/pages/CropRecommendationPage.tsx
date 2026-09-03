@@ -1,6 +1,7 @@
 import * as React from "react";
 import { Link } from "react-router-dom";
 import {
+  ArrowRight,
   ChevronDown,
   ClipboardList,
   CloudSun,
@@ -18,8 +19,10 @@ import { EmptyState } from "../components/layout/empty-state";
 import { LoadingState } from "../components/layout/loading-state";
 import { ErrorState } from "../components/layout/error-state";
 import { FarmContextCard } from "../components/crop-recommendation/farm-context-card";
-import { RecommendationCard } from "../components/crop-recommendation/recommendation-card";
-import { buildFarmContext } from "../lib/farm-context";
+import {
+  CropRankRow,
+  RecommendationCard,
+} from "../components/crop-recommendation/recommendation-card";
 import { useFarm } from "../context/FarmContext";
 import { useFarmWeather } from "../hooks/useFarmWeather";
 import { usePreferences } from "../context/PreferencesContext";
@@ -38,6 +41,11 @@ import type { CropRecommendationRecord } from "../types";
  * Intelligence (live data when available). The AI reasoning runs server-side in
  * the `recommend-crops` Edge Function (Gemini, structured JSON, validated and
  * persisted via service role) and always reflects real data — never mocked.
+ *
+ * UI (redesign): reference-style two-column layout — "Your Conditions" card
+ * (real farm data) + "Top Recommended Crops" card (real ranked results with a
+ * functional "View Full Recommendations" action that scrolls to the full
+ * report). All existing behaviour (run flow, states, history) is preserved.
  */
 export default function CropRecommendationPage() {
   const { farm } = useFarm();
@@ -61,8 +69,6 @@ export default function CropRecommendationPage() {
       </div>
     );
   }
-
-  const farmContext = buildFarmContext(farm);
 
   /* ---- Run state ---------------------------------------------------- */
   const [runStatus, setRunStatus] = React.useState<
@@ -146,6 +152,13 @@ export default function CropRecommendationPage() {
     }
   };
 
+  // "View Full Recommendations" reveals the full report below the two columns.
+  const scrollToFullResults = () => {
+    document
+      .getElementById("crop-rec-full-results")
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
   const weatherUnavailable =
     weather.status === "error" ||
     weather.status === "idle" ||
@@ -155,117 +168,33 @@ export default function CropRecommendationPage() {
     <div className="space-y-6">
       <PageHeader title={t("cropRec.title")} subtitle={t("cropRec.subtitle")} />
 
-      {/* Farm Context — real saved data used for recommendations */}
-      <section className="space-y-3">
-        <SectionHeader title={t("cropRec.myFarm")} subtitle={t("cropRec.myFarmSub")} />
-        <FarmContextCard farm={farm} />
-      </section>
-
       {/* Weather note — honest degradation, never a fake value */}
       {weatherUnavailable ? (
         <InfoNote text={t("cropRec.weatherUnavailable")} tone="neutral" />
       ) : null}
 
-      {/* Action — Get Crop Recommendations */}
-      <section className="space-y-3 rounded-2xl border border-primary/20 bg-primary-soft/40 p-5">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-              <Sparkles className="h-5 w-5" aria-hidden="true" />
-            </span>
-            <div>
-              <p className="text-sm font-semibold text-foreground">
-                {t("cropRec.getRecommendations")}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {farmContext.crop.name || t("cropRec.currentCrop")}
-              </p>
-            </div>
-          </div>
-          <Button
-            size="lg"
-            onClick={runRecommendations}
-            disabled={runStatus === "loading"}
-            className="shrink-0"
-          >
-            {runStatus === "loading" ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                {t("cropRec.gettingRecommendations")}
-              </>
-            ) : (
-              <>
-                <Sparkles className="h-4 w-4" aria-hidden="true" />
-                {t("cropRec.getRecommendations")}
-              </>
-            )}
-          </Button>
-        </div>
-      </section>
-
-      {/* Loading — don't let the UI appear frozen */}
-      {runStatus === "loading" ? (
-        <Card>
-          <CardContent className="space-y-3 py-8 text-center">
-            <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" aria-hidden="true" />
-            <p className="text-base font-semibold text-foreground">{t("cropRec.analyzing")}</p>
-            <p className="mx-auto max-w-md text-sm text-muted-foreground">
-              {t("cropRec.analyzeDesc")}
-            </p>
-          </CardContent>
-        </Card>
-      ) : null}
-
-      {/* Missing information — honest, links to the farm profile */}
-      {runStatus === "insufficient" ? (
-        <Card>
-          <CardContent className="space-y-4 py-6">
-            <div className="flex items-start gap-3">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-warning/10 text-warning">
-                <ClipboardList className="h-5 w-5" aria-hidden="true" />
-              </span>
-              <div className="min-w-0">
-                <p className="text-base font-semibold text-foreground">
-                  {t("cropRec.missingTitle")}
-                </p>
-                <p className="mt-1 text-sm text-muted-foreground">{t("cropRec.missingDesc")}</p>
-                {missingInfo.length > 0 ? (
-                  <ul className="mt-3 space-y-1">
-                    {missingInfo.map((m) => (
-                      <li
-                        key={m}
-                        className="flex items-center gap-2 text-sm font-medium text-foreground"
-                      >
-                        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-warning" aria-hidden="true" />
-                        {m}
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
-              </div>
-            </div>
-            <Button asChild variant="outline">
-              <Link to="/farm-profile">
-                <ClipboardList className="h-4 w-4" aria-hidden="true" />
-                {t("cropRec.updateProfile")}
-              </Link>
-            </Button>
-          </CardContent>
-        </Card>
-      ) : null}
-
-      {/* AI error — friendly retry, never raw errors */}
-      {runStatus === "error" ? (
-        <ErrorState
-          title={t("cropRec.errorTitle")}
-          message={runError ?? t("cropRec.errorDesc")}
-          onRetry={runRecommendations}
+      {/* Reference-style two-column layout: conditions + ranked results */}
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+        <FarmContextCard farm={farm} />
+        <TopRecommendationsCard
+          runStatus={runStatus}
+          result={result}
+          missingInfo={missingInfo}
+          runError={runError}
+          onRun={runRecommendations}
+          onViewFull={scrollToFullResults}
         />
-      ) : null}
+      </div>
 
-      {/* Successful result */}
+      {/* Full report — the target of "View Full Recommendations" */}
       {runStatus === "success" && result ? (
-        <ResultReport record={result} weatherUnavailable={weatherUnavailable} onRegenerate={runRecommendations} />
+        <section id="crop-rec-full-results" className="scroll-mt-24 space-y-3">
+          <ResultReport
+            record={result}
+            weatherUnavailable={weatherUnavailable}
+            onRegenerate={runRecommendations}
+          />
+        </section>
       ) : null}
 
       {/* History — real saved records only */}
@@ -307,6 +236,152 @@ export default function CropRecommendationPage() {
 /* ------------------------------------------------------------------ */
 /* Sub-components                                                      */
 /* ------------------------------------------------------------------ */
+
+/**
+ * Right column of the reference layout — "Top Recommended Crops".
+ * Real ranked results when available; otherwise the honest idle, loading,
+ * missing-information, error, or empty state for the existing run flow.
+ */
+function TopRecommendationsCard({
+  runStatus,
+  result,
+  missingInfo,
+  runError,
+  onRun,
+  onViewFull,
+}: {
+  runStatus: "idle" | "loading" | "success" | "error" | "insufficient";
+  result: CropRecommendationRecord | null;
+  missingInfo: string[];
+  runError: string | null;
+  onRun: () => void;
+  onViewFull: () => void;
+}) {
+  const { t } = usePreferences();
+
+  // Ranked by confidence, descending — real data, never hardcoded.
+  const ranked = result
+    ? [...result.recommendations].sort((a, b) => b.confidence - a.confidence)
+    : [];
+
+  return (
+    <Card className="h-full">
+      <CardContent className="flex h-full flex-col p-0">
+        <div className="border-b border-border p-5">
+          <h2 className="flex items-center gap-2 font-heading text-base font-bold text-foreground">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-soft text-primary">
+              <Sparkles className="h-4 w-4" aria-hidden="true" />
+            </span>
+            {t("cropRec.topRecsTitle")}
+          </h2>
+          <p className="mt-1 text-xs text-muted-foreground">{t("cropRec.topRecsSub")}</p>
+        </div>
+
+        <div className="flex flex-1 flex-col p-5">
+          {runStatus === "loading" ? (
+            <div className="flex flex-1 flex-col items-center justify-center gap-4 py-8 text-center">
+              <Loader2 className="h-7 w-7 animate-spin text-primary" aria-hidden="true" />
+              <p className="text-sm font-semibold text-foreground">{t("cropRec.analyzing")}</p>
+              <div className="mt-1 w-full space-y-4 text-left" aria-hidden="true">
+                {[{ w: "w-2/3" }, { w: "w-1/2" }, { w: "w-3/4" }].map((s, i) => (
+                  <div key={i} className="space-y-2">
+                    <div className={`h-3.5 animate-pulse rounded bg-muted ${s.w}`} />
+                    <div className="h-1.5 w-full animate-pulse rounded-full bg-muted" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : runStatus === "insufficient" ? (
+            <div className="flex flex-1 flex-col justify-center gap-4 py-6">
+              <div className="flex items-start gap-3">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-warning/10 text-warning">
+                  <ClipboardList className="h-5 w-5" aria-hidden="true" />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-foreground">
+                    {t("cropRec.missingTitle")}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">{t("cropRec.missingDesc")}</p>
+                  {missingInfo.length > 0 ? (
+                    <ul className="mt-3 space-y-1">
+                      {missingInfo.map((m) => (
+                        <li
+                          key={m}
+                          className="flex items-center gap-2 text-xs font-medium text-foreground"
+                        >
+                          <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-warning" aria-hidden="true" />
+                          {m}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </div>
+              </div>
+              <Button asChild variant="outline" className="self-start">
+                <Link to="/farm-profile">
+                  <ClipboardList className="h-4 w-4" aria-hidden="true" />
+                  {t("cropRec.updateProfile")}
+                </Link>
+              </Button>
+            </div>
+          ) : runStatus === "error" ? (
+            <div className="flex flex-1 items-center">
+              <ErrorState
+                title={t("cropRec.errorTitle")}
+                message={runError ?? t("cropRec.errorDesc")}
+                onRetry={onRun}
+              />
+            </div>
+          ) : runStatus === "success" && result ? (
+            ranked.length === 0 ? (
+              <div className="flex flex-1 flex-col items-center justify-center gap-2 py-10 text-center">
+                <Sprout className="h-8 w-8 text-muted-foreground" aria-hidden="true" />
+                <p className="text-sm font-semibold text-foreground">
+                  {t("cropRec.noRecommendations")}
+                </p>
+                <p className="max-w-xs text-xs text-muted-foreground">
+                  {t("cropRec.noRecommendationsDesc")}
+                </p>
+              </div>
+            ) : (
+              <ol className="divide-y divide-border">
+                {ranked.map((rec, i) => (
+                  <CropRankRow key={rec.crop} rank={i + 1} recommendation={rec} />
+                ))}
+              </ol>
+            )
+          ) : (
+            <div className="flex flex-1 flex-col items-center justify-center gap-4 py-10 text-center">
+              <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary-soft text-primary">
+                <Sparkles className="h-6 w-6" aria-hidden="true" />
+              </span>
+              <div>
+                <p className="text-sm font-semibold text-foreground">{t("cropRec.generateTitle")}</p>
+                <p className="mx-auto mt-1 max-w-sm text-xs leading-relaxed text-muted-foreground">
+                  {t("cropRec.generateDesc")}
+                </p>
+              </div>
+              <Button size="lg" onClick={onRun} className="w-full sm:w-auto">
+                <Sparkles className="h-4 w-4" aria-hidden="true" />
+                {t("cropRec.getRecommendations")}
+              </Button>
+            </div>
+          )}
+        </div>
+
+        {/* Functional "View Full Recommendations" — scrolls to the real full report */}
+        {runStatus === "success" && result && result.recommendations.length > 0 ? (
+          <div className="border-t border-border p-4">
+            <Button onClick={onViewFull} className="w-full">
+              {t("cropRec.viewFull")}
+              <ArrowRight className="h-4 w-4" aria-hidden="true" />
+            </Button>
+          </div>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}
 
 function InfoNote({ text, tone }: { text: string; tone: "neutral" | "warning" }) {
   return (

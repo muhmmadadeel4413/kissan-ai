@@ -145,3 +145,56 @@ export function RecommendationCard({
     </Card>
   );
 }
+
+/**
+ * Compact ranked row for the "Top Recommended Crops" list. Shows rank number,
+ * crop name, confidence score, and a progress bar — driven entirely by the
+ * real recommendation data, never hardcoded.
+ */
+export function CropRankRow({
+  rank,
+  recommendation,
+}: {
+  rank: number;
+  recommendation: CropRecommendation;
+}) {
+  const { t } = usePreferences();
+  const meta = SUITABILITY_META[recommendation.suitability] ?? SUITABILITY_META.moderate;
+
+  return (
+    <li>
+      <div className="flex items-center gap-3 rounded-xl px-2 py-3 transition-colors duration-150 hover:bg-muted/40">
+        <span
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-xs font-bold text-primary"
+          aria-hidden="true"
+        >
+          {rank}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-baseline justify-between gap-3">
+            <p className="truncate text-sm font-semibold text-foreground">
+              {recommendation.crop}
+            </p>
+            <p className="shrink-0 text-sm font-bold text-primary">
+              {recommendation.confidence}
+              <span className="text-xs font-medium text-muted-foreground">%</span>
+            </p>
+          </div>
+          <div
+            className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-muted"
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={recommendation.confidence}
+            aria-label={`${recommendation.crop} — ${t(meta.labelKey)}`}
+          >
+            <div
+              className={`h-full rounded-full ${meta.dot}`}
+              style={{ width: `${recommendation.confidence}%` }}
+            />
+          </div>
+        </div>
+      </div>
+    </li>
+  );
+}
