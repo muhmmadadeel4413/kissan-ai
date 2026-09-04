@@ -25,7 +25,7 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const MODEL = "gemini-3.6-flash";
+const MODEL = "gemini-3.5-flash";
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {

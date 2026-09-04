@@ -31,7 +31,7 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const MODEL = "gemini-3.6-flash";
+const MODEL = "gemini-3.5-flash";
 /** Recent-message window sent to the model (configurable). */
 const HISTORY_LIMIT = 20;
 

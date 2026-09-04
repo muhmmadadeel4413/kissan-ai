@@ -35,7 +35,7 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const MODEL = "gemini-3.6-flash";
+const MODEL = "gemini-3.5-flash";
 const MAX_ACTIONS = 4;
 
 const VALID_PRIORITIES = new Set(["low", "medium", "high"]);
@@ -113,7 +113,7 @@ async function callGemini(
     } catch {
       lastError = "Kissan AI is temporarily unavailable. Please try again.";
       if (attempt < maxAttempts) {
-        await new Promise((r) => setTimeout(r, 1500 * attempt));
+        await new Promise((r) => setTimeout(r, 800 * attempt));
         continue;
       }
       throw new Error(lastError);
@@ -125,7 +125,7 @@ async function callGemini(
       if (!text) {
         lastError = "Kissan AI couldn't form a reply. Please try again.";
         if (attempt < maxAttempts) {
-          await new Promise((r) => setTimeout(r, 1500 * attempt));
+          await new Promise((r) => setTimeout(r, 800 * attempt));
           continue;
         }
       }
@@ -138,15 +138,15 @@ async function callGemini(
     if (resp.status === 429) {
       quotaExhausted = true;
       if (attempt < maxAttempts) {
-        // Wait for the rate-limit window (quota errors include a retry hint).
-        const waitMs = 5000 * attempt;
-        await new Promise((r) => setTimeout(r, waitMs));
+        // Short backoff — keep total retry time well under the Edge Function
+        // execution limit so a slow model can't time the function out.
+        await new Promise((r) => setTimeout(r, 800 * attempt));
         continue;
       }
       break;
     }
     if (resp.status >= 500 && attempt < maxAttempts) {
-      await new Promise((r) => setTimeout(r, 1500 * attempt));
+      await new Promise((r) => setTimeout(r, 800 * attempt));
       continue;
     }
     break;

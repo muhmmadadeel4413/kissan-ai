@@ -32,7 +32,7 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const MODEL = "gemini-3.6-flash";
+const MODEL = "gemini-3.5-flash";
 const MAX_RECOMMENDATIONS = 5;
 const MIN_RECOMMENDATIONS = 1;
 
