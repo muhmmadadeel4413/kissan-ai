@@ -4,6 +4,7 @@ import {
   AlertTriangle,
   CalendarDays,
   ChevronRight,
+  Download,
   History,
   ImageOff,
   Leaf,
@@ -26,6 +27,7 @@ import { LoadingState } from "../components/layout/loading-state";
 import { ErrorState } from "../components/layout/error-state";
 import { useFarm } from "../context/FarmContext";
 import { fetchDiagnoses } from "../lib/diagnosis-service";
+import { exportDiagnosesCsv, downloadCsv } from "../lib/export-utils";
 import type { Diagnosis, Severity } from "../types";
 
 const SEVERITY_META: Record<
@@ -80,12 +82,27 @@ export default function DiagnosisHistoryPage() {
             : "Crop health checks over time"
         }
         action={
-          <Button asChild variant="outline" size="sm">
-            <Link to="/crop-doctor">
-              <ScanLine className="h-4 w-4" aria-hidden="true" />
-              New diagnosis
-            </Link>
-          </Button>
+          <div className="flex items-center gap-2">
+            {diagnoses && diagnoses.length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const csv = exportDiagnosesCsv(diagnoses);
+                  downloadCsv(csv, `kissan-diagnoses-${new Date().toISOString().slice(0, 10)}.csv`);
+                }}
+              >
+                <Download className="h-4 w-4" aria-hidden="true" />
+                Export CSV
+              </Button>
+            )}
+            <Button asChild variant="outline" size="sm">
+              <Link to="/crop-doctor">
+                <ScanLine className="h-4 w-4" aria-hidden="true" />
+                New diagnosis
+              </Link>
+            </Button>
+          </div>
         }
       />
 

@@ -33,7 +33,22 @@ export function useFarmWeather() {
     setStatus("loading");
     setError(null);
 
-    getWeather(farm.location)
+    const maxRetries = 3;
+    const baseDelay = 1000;
+
+    function fetchWithRetry(retriesLeft: number): Promise<WeatherData> {
+      return getWeather(farm!.location).catch((err: unknown) => {
+        if (retriesLeft > 0) {
+          const delay = baseDelay * Math.pow(2, maxRetries - retriesLeft);
+          return new Promise<WeatherData>((resolve) =>
+            window.setTimeout(() => resolve(fetchWithRetry(retriesLeft - 1)), delay)
+          );
+        }
+        throw err;
+      });
+    }
+
+    fetchWithRetry(maxRetries)
       .then((data) => {
         if (!cancelled) {
           setWeather(data);

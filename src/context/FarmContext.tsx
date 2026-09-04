@@ -4,7 +4,7 @@ import {
   createFarmRecord,
   deleteFarmRecord,
   fetchFarm,
-  fetchFarmByOwner,
+  fetchFarmsByOwner,
   updateFarmRecord,
 } from "../lib/farm-service";
 import { useAuth } from "./AuthContext";
@@ -24,13 +24,19 @@ const ACTIVE_FARM_KEY = "kissanai.activeFarmId.v1";
 type FarmStatus = "loading" | "ready" | "error";
 
 interface FarmContextValue {
+  /** The currently active farm (null when user has no farms). */
   farm: Farm | null;
+  /** All farms owned by the authenticated user. */
+  farms: Farm[];
   status: FarmStatus;
   error: string | null;
   saving: boolean;
   createFarm: (input: FarmSetupInput) => Promise<Farm>;
-  updateFarm: (patch: Partial<FarmSetupInput>) => Promise<Farm>;
-  clearFarm: () => Promise<void>;
+  updateFarm: (id: string, patch: Partial<FarmSetupInput>) => Promise<Farm>;
+  /** Switch the active farm by ID. Persists to localStorage. */
+  switchFarm: (id: string) => Promise<void>;
+  /** Delete a farm by ID. If it was the active farm, falls back to first remaining. */
+  deleteFarm: (id: string) => Promise<void>;
   retry: () => void;
 }
 
@@ -58,17 +64,17 @@ function writeActiveFarmId(id: string | null) {
 /**
  * Farm state backed by Supabase and scoped to the authenticated user.
  *
- * The provider observes the auth session: on sign-in it hydrates the user's
- * owned farm from the database (the persisted ID, when valid, is reused;
- * otherwise the user's real farm is discovered). On sign-out all farm state is
- * cleared. Because client queries run under Row Level Security, no foreign farm
- * can ever be loaded — the persisted id is merely a convenience.
+ * The provider observes the auth session: on sign-in it hydrates ALL the
+ * user's farms from the database, then selects the active one (persisted ID
+ * or first farm). On sign-out all farm state is cleared. Because client
+ * queries run under Row Level Security, no foreign farm can ever be loaded.
  */
 export function FarmProvider({ children }: { children: React.ReactNode }) {
   const { user, loading: authLoading } = useAuth();
   const userId = user?.id ?? null;
 
   const [farm, setFarm] = React.useState<Farm | null>(null);
+  const [farms, setFarms] = React.useState<Farm[]>([]);
   const [status, setStatus] = React.useState<FarmStatus>("loading");
   const [error, setError] = React.useState<string | null>(null);
   const [saving, setSaving] = React.useState(false);
@@ -76,10 +82,10 @@ export function FarmProvider({ children }: { children: React.ReactNode }) {
 
   const loadForUser = React.useCallback(
     async (uid: string | null) => {
-      // Not signed in → no farm, nothing persisted.
       if (!uid) {
         writeActiveFarmId(null);
         setFarm(null);
+        setFarms([]);
         setError(null);
         setStatus("ready");
         return;
@@ -88,19 +94,24 @@ export function FarmProvider({ children }: { children: React.ReactNode }) {
       setStatus("loading");
       setError(null);
       try {
-        // 1) Try the persisted ID (UI convenience). RLS guarantees this only
-        // matches a farm the user owns; a foreign/deleted id returns null.
-        let loaded: Farm | null = null;
+        // Load ALL farms owned by the user
+        const allFarms = await fetchFarmsByOwner();
+        setFarms(allFarms);
+
+        // Determine the active farm:
+        // 1) Try persisted ID (validate it exists in the list)
+        // 2) Fall back to first farm in the list
+        let active: Farm | null = null;
         const persistedId = readActiveFarmId();
         if (persistedId) {
-          loaded = await fetchFarm(persistedId);
+          active = allFarms.find((f) => f.id === persistedId) ?? null;
         }
-        if (!loaded) {
-          // 2) No valid persisted farm → discover the user's actual farm.
-          loaded = await fetchFarmByOwner();
+        if (!active && allFarms.length > 0) {
+          active = allFarms[0];
         }
-        writeActiveFarmId(loaded ? loaded.id : null);
-        setFarm(loaded);
+
+        writeActiveFarmId(active ? active.id : null);
+        setFarm(active);
         setStatus("ready");
       } catch (err) {
         console.error("FarmProvider load:", err);
@@ -115,9 +126,6 @@ export function FarmProvider({ children }: { children: React.ReactNode }) {
     []
   );
 
-  // Whenever the auth user changes (or the session resolves, or a manual
-  // retry happens) reload the owned farm. authLoading guards the initial mount
-  // so we never flash protected content or a stale farm.
   React.useEffect(() => {
     if (authLoading) {
       setStatus("loading");
@@ -133,11 +141,10 @@ export function FarmProvider({ children }: { children: React.ReactNode }) {
       setSaving(true);
       setError(null);
       try {
-        // The DB trigger sets user_id = auth.uid(); the browser cannot choose
-        // another owner. Returns the created farm and persists it.
         const created = await createFarmRecord(input);
         writeActiveFarmId(created.id);
         setFarm(created);
+        setFarms((prev) => [created, ...prev]);
         setStatus("ready");
         return created;
       } catch (err) {
@@ -152,14 +159,15 @@ export function FarmProvider({ children }: { children: React.ReactNode }) {
   );
 
   const updateFarm = React.useCallback(
-    async (patch: Partial<FarmSetupInput>) => {
-      if (!farm) throw new Error("No active farm to update.");
+    async (id: string, patch: Partial<FarmSetupInput>) => {
       setSaving(true);
       setError(null);
       try {
-        // RLS restricts the UPDATE to the owned row only.
-        const updated = await updateFarmRecord(farm.id, patch);
-        setFarm(updated);
+        const updated = await updateFarmRecord(id, patch);
+        // Update in the farms list
+        setFarms((prev) => prev.map((f) => (f.id === id ? updated : f)));
+        // If this is the active farm, update that too
+        setFarm((prev) => (prev?.id === id ? updated : prev));
         setStatus("ready");
         return updated;
       } catch (err) {
@@ -170,27 +178,60 @@ export function FarmProvider({ children }: { children: React.ReactNode }) {
         setSaving(false);
       }
     },
-    [farm]
+    []
   );
 
-  const clearFarm = React.useCallback(async () => {
-    setSaving(true);
-    try {
-      if (farm) await deleteFarmRecord(farm.id);
-    } catch (err) {
-      console.error("FarmProvider clear:", err);
-    } finally {
-      writeActiveFarmId(null);
-      setFarm(null);
-      setStatus("ready");
-      setError(null);
-      setSaving(false);
-    }
-  }, [farm]);
+  const switchFarm = React.useCallback(
+    async (id: string) => {
+      // Find the farm in the local list first (fast path)
+      const target = farms.find((f) => f.id === id);
+      if (target) {
+        writeActiveFarmId(id);
+        setFarm(target);
+        return;
+      }
+      // Fallback: fetch from DB (handles stale local list)
+      const fetched = await fetchFarm(id);
+      if (fetched) {
+        writeActiveFarmId(id);
+        setFarm(fetched);
+        setFarms((prev) => {
+          const exists = prev.some((f) => f.id === id);
+          return exists ? prev : [fetched, ...prev];
+        });
+      }
+    },
+    [farms]
+  );
+
+  const deleteFarm = React.useCallback(
+    async (id: string) => {
+      setSaving(true);
+      try {
+        await deleteFarmRecord(id);
+        const remaining = farms.filter((f) => f.id !== id);
+        setFarms(remaining);
+
+        // If the deleted farm was active, switch to first remaining
+        if (farm?.id === id) {
+          const next = remaining.length > 0 ? remaining[0] : null;
+          writeActiveFarmId(next ? next.id : null);
+          setFarm(next);
+        }
+      } catch (err) {
+        console.error("FarmProvider delete:", err);
+        setError("We couldn't delete the farm. Please try again.");
+        throw err;
+      } finally {
+        setSaving(false);
+      }
+    },
+    [farms, farm]
+  );
 
   const value = React.useMemo(
-    () => ({ farm, status, error, saving, createFarm, updateFarm, clearFarm, retry }),
-    [farm, status, error, saving, createFarm, updateFarm, clearFarm, retry]
+    () => ({ farm, farms, status, error, saving, createFarm, updateFarm, switchFarm, deleteFarm, retry }),
+    [farm, farms, status, error, saving, createFarm, updateFarm, switchFarm, deleteFarm, retry]
   );
 
   return <FarmContext.Provider value={value}>{children}</FarmContext.Provider>;

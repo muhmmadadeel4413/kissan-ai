@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { CheckCircle2 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
@@ -65,25 +65,34 @@ function parseLandArea(value: string): number | null {
 }
 
 export default function FarmSetupPage() {
-  const { farm, status, saving, createFarm, updateFarm } = useFarm();
+  const { farm, farms, status, saving, createFarm, updateFarm } = useFarm();
   const { t } = useI18n();
   const navigate = useNavigate();
-  const isEdit = Boolean(farm);
+  const [searchParams] = useSearchParams();
+  const editId = searchParams.get("edit");
+
+  // Determine which farm we're editing (if any)
+  const editFarm = editId ? farms.find((f) => f.id === editId) ?? null : null;
+  const isEdit = Boolean(editFarm);
+  // If no edit param, check if user has an active farm (backward compat)
+  const fallbackEdit = !editId && farm ? farm : null;
+  const targetFarm = editFarm ?? fallbackEdit;
+  const isEditMode = Boolean(targetFarm);
 
   const [form, setForm] = useState<FarmSetupInput>({
-    farmerName: farm?.farmerName ?? "",
-    phone: farm?.phone ?? "",
-    email: farm?.email ?? "",
-    location: farm?.location ?? "",
-    landArea: farm?.landArea ?? "",
-    soilType: farm?.soilType ?? "",
-    irrigationMethod: farm?.irrigationMethod ?? "",
-    currentCrop: farm?.currentCrop ?? "",
-    currentCropVariety: farm?.currentCropVariety ?? "",
-    plantingDate: farm?.plantingDate ?? "",
-    farmName: farm?.farmName ?? "",
-    waterSource: farm?.waterSource ?? "",
-    farmAgeYears: farm?.farmAgeYears,
+    farmerName: targetFarm?.farmerName ?? "",
+    phone: targetFarm?.phone ?? "",
+    email: targetFarm?.email ?? "",
+    location: targetFarm?.location ?? "",
+    landArea: targetFarm?.landArea ?? "",
+    soilType: targetFarm?.soilType ?? "",
+    irrigationMethod: targetFarm?.irrigationMethod ?? "",
+    currentCrop: targetFarm?.currentCrop ?? "",
+    currentCropVariety: targetFarm?.currentCropVariety ?? "",
+    plantingDate: targetFarm?.plantingDate ?? "",
+    farmName: targetFarm?.farmName ?? "",
+    waterSource: targetFarm?.waterSource ?? "",
+    farmAgeYears: targetFarm?.farmAgeYears,
   });
   const [errors, setErrors] = useState<FormErrors>({});
   const [saved, setSaved] = useState(false);
@@ -148,14 +157,14 @@ export default function FarmSetupPage() {
 
     setSubmitError(null);
     try {
-      if (isEdit) {
-        await updateFarm(form);
+      if (isEditMode) {
+        await updateFarm(targetFarm!.id, form);
       } else {
         await createFarm(form);
       }
       setSaved(true);
-      // Short confirmation before advancing to the dashboard.
-      window.setTimeout(() => navigate("/dashboard"), 600);
+      // Navigate to farm profile list after save
+      window.setTimeout(() => navigate("/farm-profile"), 600);
     } catch {
       setSubmitError(t("farmSetup.saveErrorBody"));
     }
@@ -164,8 +173,9 @@ export default function FarmSetupPage() {
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <PageHeader
-        title={isEdit ? t("farmSetup.editTitle") : t("farmSetup.createTitle")}
+        title={isEditMode ? t("farmSetup.editTitle") : t("farmSetup.createTitle")}
         subtitle={t("farmSetup.subtitle")}
+        showIdentity={false}
       />
 
       {saved ? (

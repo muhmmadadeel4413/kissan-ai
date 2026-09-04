@@ -1,17 +1,20 @@
 import * as React from "react";
 import { cn } from "../../lib/utils";
+import { UserIdentity } from "./user-identity";
 
-/** Consistent page-level header: title, optional subtitle, optional action slot. */
+/** Consistent page-level header: title, optional subtitle, optional action slot, optional user identity. */
 export function PageHeader({
   title,
   subtitle,
   action,
   className,
+  showIdentity = true,
 }: {
   title: React.ReactNode;
   subtitle?: React.ReactNode;
   action?: React.ReactNode;
   className?: string;
+  showIdentity?: boolean;
 }) {
   return (
     <div className={cn("flex flex-wrap items-start justify-between gap-4", className)}>
@@ -28,7 +31,10 @@ export function PageHeader({
           </p>
         ) : null}
       </div>
-      {action ? <div className="flex shrink-0 items-center gap-2">{action}</div> : null}
+      <div className="flex shrink-0 items-center gap-3">
+        {action ? <div className="flex items-center gap-2">{action}</div> : null}
+        {showIdentity ? <UserIdentity /> : null}
+      </div>
     </div>
   );
 }

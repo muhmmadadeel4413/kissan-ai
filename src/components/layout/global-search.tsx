@@ -78,8 +78,15 @@ export function GlobalSearchDialog({
   const { farm } = useFarm();
   const activity = useRecentActivity(farm?.id);
   const [query, setQuery] = React.useState("");
+  const [debouncedQuery, setDebouncedQuery] = React.useState("");
   const [activeIndex, setActiveIndex] = React.useState(0);
   const inputRef = React.useRef<HTMLInputElement>(null);
+
+  // Debounce query input by 250ms to avoid filtering on every keystroke.
+  React.useEffect(() => {
+    const id = window.setTimeout(() => setDebouncedQuery(query), 250);
+    return () => window.clearTimeout(id);
+  }, [query]);
 
   // Reset + focus the input each time the dialog opens.
   React.useEffect(() => {
@@ -91,7 +98,7 @@ export function GlobalSearchDialog({
   }, [open]);
 
   const results = React.useMemo<SearchResult[]>(() => {
-    const q = query.trim().toLowerCase();
+    const q = debouncedQuery.trim().toLowerCase();
     const nav: SearchResult[] = primaryNav.map((item) => ({
       id: `nav:${item.to}`,
       label: t(item.labelKey),
@@ -114,12 +121,12 @@ export function GlobalSearchDialog({
     return all
       .filter((r) => `${r.label} ${r.hint}`.toLowerCase().includes(q))
       .slice(0, 12);
-  }, [query, t, activity.items]);
+  }, [debouncedQuery, t, activity.items]);
 
   // Keep the highlighted row valid when the list changes.
   React.useEffect(() => {
     setActiveIndex(0);
-  }, [query, results.length]);
+  }, [debouncedQuery, results.length]);
 
   function openResult(result: SearchResult) {
     if (!result.href) return;
@@ -187,6 +194,8 @@ export function GlobalSearchDialog({
           id="global-search-results"
           role="listbox"
           aria-label={t("search.open")}
+          aria-live="polite"
+          aria-atomic="true"
           className="max-h-80 overflow-y-auto p-2"
         >
           {results.length === 0 ? (

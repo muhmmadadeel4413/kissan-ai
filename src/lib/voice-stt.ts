@@ -1,22 +1,22 @@
 import { supabase } from "./supabase";
 
 /**
- * Voice Assistant — Speech-to-Text.
+ * Voice Assistant — Speech-to-Text (Sarvam AI).
  *
- * Uses Speechmatics' real-time WebSocket API (server-side key, never in the
- * browser). Flow:
- *   1. Ask the `speechmatics-token` Edge Function for a short-lived JWT
- *      (exchanges the server-side SPEECHMATICS_API_KEY for a 60s temp key).
- *   2. Open `wss://eu.rt.speechmatics.com/v2?jwt=<token>`.
- *   3. Stream raw PCM_S16LE @16 kHz mic audio (captured via AudioWorklet).
- *   4. Render `AddPartialTranscript` as live text and `AddTranscript` as the
- *      final, editable transcription.
+ * Uses Sarvam AI's REST STT API via a secure Edge Function proxy.
  *
- * Language support is reported honestly: if the provider rejects a language,
- * we surface a friendly message instead of fabricating a transcription.
+ * Flow:
+ *   1. Capture mic audio via AudioWorklet (PCM_S16LE @16 kHz).
+ *   2. On stop, encode accumulated PCM to a WAV Blob.
+ *   3. POST the WAV to the `sarvam-stt` Edge Function (SARVAM_API_KEY
+ *      stays server-side, never reaches the browser).
+ *   4. Return the final transcript via the onFinal callback.
+ *
+ * Language support is reported honestly: Saraiki is not supported by Sarvam
+ * and remains marked as unavailable.
  */
 
-export type STTLanguageCode = "en" | "ur" | "pa" | "skr";
+export type STTLanguageCode = "auto" | "en-IN" | "ur-IN" | "pa-IN";
 
 export interface STTSession {
   /** Stop recording and finalize the transcript (mic stops immediately). */
@@ -33,7 +33,6 @@ export interface STTCallbacks {
   onLevel?: (level: number) => void;
 }
 
-const WSS_ENDPOINT = "wss://eu.rt.speechmatics.com/v2";
 const SAMPLE_RATE = 16000;
 
 /** AudioWorklet: downsample mic input to 16 kHz and emit Int16 PCM chunks. */
@@ -78,60 +77,115 @@ class KissanPcmCapture extends AudioWorkletProcessor {
 registerProcessor("kissan-pcm-capture", KissanPcmCapture);
 `;
 
-async function fetchRealtimeToken(): Promise<string> {
-  const { data, error } = await supabase.functions.invoke("speechmatics-token", {});
-  if (error) {
-    console.error("voice-stt: token request failed", error);
-    throw new Error(
-      "Voice recognition isn't set up yet. Try again later or type your question."
-    );
-  }
-  const token = (data as { token?: string } | null)?.token;
-  if (!token) {
-    throw new Error(
-      "Voice recognition isn't available right now. Try again or type your question."
-    );
-  }
-  return token;
+/**
+ * Encode raw Int16 PCM samples into a WAV Blob (16-bit, mono, 16 kHz).
+ */
+function encodeWav(samples: Int16Array): Blob {
+  const numChannels = 1;
+  const bitsPerSample = 16;
+  const byteRate = SAMPLE_RATE * numChannels * (bitsPerSample / 8);
+  const blockAlign = numChannels * (bitsPerSample / 8);
+  const dataSize = samples.length * (bitsPerSample / 8);
+  const headerSize = 44;
+  const buffer = new ArrayBuffer(headerSize + dataSize);
+  const view = new DataView(buffer);
+
+  // RIFF header
+  writeString(view, 0, "RIFF");
+  view.setUint32(4, headerSize + dataSize - 8, true);
+  writeString(view, 8, "WAVE");
+
+  // fmt sub-chunk
+  writeString(view, 12, "fmt ");
+  view.setUint32(16, 16, true); // sub-chunk size
+  view.setUint16(20, 1, true); // PCM format
+  view.setUint16(22, numChannels, true);
+  view.setUint32(24, SAMPLE_RATE, true);
+  view.setUint32(28, byteRate, true);
+  view.setUint16(32, blockAlign, true);
+  view.setUint16(34, bitsPerSample, true);
+
+  // data sub-chunk
+  writeString(view, 36, "data");
+  view.setUint32(40, dataSize, true);
+
+  // Copy PCM samples
+  const pcmBytes = new Uint8Array(buffer, headerSize);
+  pcmBytes.set(new Uint8Array(samples.buffer));
+
+  return new Blob([buffer], { type: "audio/wav" });
 }
 
-/** Translate a Speechmatics Error message into an honest, friendly message. */
-function friendlyProviderError(msg: {
-  type?: string;
-  reason?: string;
-  code?: number;
-}): string | null {
-  const raw = `${msg.type ?? ""} ${msg.reason ?? ""} ${msg.code ?? ""}`.toLowerCase();
-  if (
-    raw.includes("language") ||
-    raw.includes("unsupported") ||
-    raw.includes("invalid") ||
-    raw.includes("not_supported") ||
-    raw.includes("4004")
-  ) {
-    return "Voice recognition for this language isn't available on this device. You can type your question instead.";
+function writeString(view: DataView, offset: number, str: string): void {
+  for (let i = 0; i < str.length; i++) {
+    view.setUint8(offset + i, str.charCodeAt(i));
   }
-  return null;
 }
 
 /**
- * Start a real-time transcription session for the given language.
- * Resolves once mic access + WS are ready. Throws a friendly Error on
- * permission denial / connection failure (caller shows it).
+ * Upload a WAV blob to the sarvam-stt Edge Function and return the transcript.
+ */
+async function uploadToSarvam(
+  wavBlob: Blob,
+  language: STTLanguageCode
+): Promise<{ transcript: string; languageCode: string | null }> {
+  const formData = new FormData();
+  formData.append("file", wavBlob, "audio.wav");
+  formData.append("language_code", language);
+  formData.append("model", "saaras:v3");
+  formData.append("mode", "transcribe");
+
+  const { data, error } = await supabase.functions.invoke("sarvam-stt", {
+    body: formData,
+  });
+
+  if (error) {
+    // Supabase wraps the Edge Function response; extract the error message
+    const msg =
+      (data as { error?: string } | null)?.error ??
+      (error instanceof Error ? error.message : null) ??
+      "Voice recognition is temporarily unavailable. Please try again.";
+    throw new Error(msg);
+  }
+
+  const result = data as {
+    transcript?: string;
+    language_code?: string | null;
+    error?: string;
+  } | null;
+
+  if (result?.error) {
+    throw new Error(result.error);
+  }
+
+  return {
+    transcript: result?.transcript ?? "",
+    languageCode: result?.language_code ?? null,
+  };
+}
+
+/**
+ * Start a recording session for the given language.
+ * Resolves once mic access + AudioWorklet are ready. Throws a friendly Error
+ * on permission denial / setup failure (caller shows it).
+ *
+ * Unlike the previous Speechmatics implementation, this does NOT stream audio
+ * in real-time. Instead, it records locally and uploads on stop().
  */
 export async function startSTT(
   language: STTLanguageCode,
   callbacks: STTCallbacks
 ): Promise<STTSession> {
-  const token = await fetchRealtimeToken();
-
   let stream: MediaStream | null = null;
   let audioCtx: AudioContext | null = null;
   let source: MediaStreamAudioSourceNode | null = null;
   let capture: AudioWorkletNode | null = null;
-  let ws: WebSocket | null = null;
-  let seqNo = 0;
   let stopped = false;
+  let cancelled = false;
+
+  // Accumulate PCM chunks for WAV encoding on stop
+  const pcmChunks: Int16Array[] = [];
+  let totalSamples = 0;
 
   function teardown() {
     try {
@@ -159,16 +213,10 @@ export async function startSTT(
     } catch {
       /* ignore */
     }
-    try {
-      ws?.close();
-    } catch {
-      /* ignore */
-    }
     capture = null;
     source = null;
     stream = null;
     audioCtx = null;
-    ws = null;
   }
 
   try {
@@ -202,92 +250,23 @@ export async function startSTT(
   source.connect(capture);
   capture.connect(audioCtx.destination); // keeps the graph running; emits no sound
 
-  ws = new WebSocket(`${WSS_ENDPOINT}?jwt=${token}`);
-  ws.binaryType = "arraybuffer";
-
-  ws.onopen = () => {
-    ws?.send(
-      JSON.stringify({
-        message: "StartRecognition",
-        audio_format: {
-          type: "raw",
-          encoding: "pcm_s16le",
-          sample_rate: SAMPLE_RATE,
-        },
-        transcription_config: {
-          language,
-          max_delay: 2,
-          enable_partials: true,
-        },
-      })
-    );
-    if (capture) {
-      capture.port.onmessage = (e) => {
-        if (stopped) return;
-        const msg = e.data as { buffer?: ArrayBuffer; level?: number };
-        if (msg && msg.buffer) {
-          if (ws?.readyState === WebSocket.OPEN) ws.send(msg.buffer);
-          if (typeof msg.level === "number") callbacks.onLevel?.(msg.level);
-        }
-      };
+  // Collect PCM chunks and mic levels
+  capture.port.onmessage = (e) => {
+    if (stopped || cancelled) return;
+    const msg = e.data as { buffer?: ArrayBuffer; level?: number };
+    if (msg && msg.buffer) {
+      const chunk = new Int16Array(msg.buffer);
+      pcmChunks.push(chunk);
+      totalSamples += chunk.length;
+      if (typeof msg.level === "number") callbacks.onLevel?.(msg.level);
     }
-  };
-
-  interface RecognitionMessage {
-    message?: string;
-    seq_no?: number;
-    metadata?: { transcript?: string };
-    type?: string;
-    reason?: string;
-    code?: number;
-  }
-
-  ws.onmessage = (ev) => {
-    let msg: RecognitionMessage | null = null;
-    try {
-      msg = JSON.parse(ev.data as string) as RecognitionMessage | null;
-    } catch {
-      return;
-    }
-    if (!msg || !msg.message) return;
-
-    if (msg.message === "AudioAdded") {
-      seqNo = msg.seq_no ?? seqNo;
-      return;
-    }
-    if (msg.message === "AddPartialTranscript") {
-      const t = msg.metadata?.transcript ?? "";
-      if (t) callbacks.onPartial(t);
-      return;
-    }
-    if (msg.message === "AddTranscript") {
-      const t = msg.metadata?.transcript ?? "";
-      if (t) callbacks.onFinal(t);
-      return;
-    }
-    if (msg.message === "Error") {
-      const friendly = friendlyProviderError(msg);
-      callbacks.onError(
-        friendly ??
-          "The voice service ran into a problem. Please try again or type your question."
-      );
-      teardown();
-    }
-  };
-
-  ws.onerror = () => {
-    if (!stopped) {
-      callbacks.onError(
-        "We couldn't connect to the voice service. Please try again or type your question."
-      );
-    }
-    teardown();
   };
 
   return {
-    stop() {
-      if (stopped) return;
+    async stop() {
+      if (stopped || cancelled) return;
       stopped = true;
+
       // Stop the microphone immediately.
       try {
         stream?.getTracks().forEach((t) => t.stop());
@@ -309,24 +288,50 @@ export async function startSTT(
       } catch {
         /* ignore */
       }
-      if (ws?.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ message: "EndOfStream", last_seq_no: seqNo }));
+
+      // Check for empty/very short recordings
+      if (totalSamples < SAMPLE_RATE / 4) {
+        // Less than 250ms of audio
+        callbacks.onError(
+          "We couldn't hear a clear question. Please try again or type it."
+        );
+        teardown();
+        return;
       }
-      // Keep the socket briefly open to receive the final transcript.
-      window.setTimeout(() => {
-        try {
-          ws?.close();
-        } catch {
-          /* ignore */
+
+      try {
+        // Merge all PCM chunks into a single Int16Array
+        const merged = new Int16Array(totalSamples);
+        let offset = 0;
+        for (const chunk of pcmChunks) {
+          merged.set(chunk, offset);
+          offset += chunk.length;
         }
-        try {
-          void audioCtx?.close();
-        } catch {
-          /* ignore */
+
+        // Encode to WAV and upload
+        const wavBlob = encodeWav(merged);
+        const result = await uploadToSarvam(wavBlob, language);
+
+        if (result.transcript) {
+          callbacks.onFinal(result.transcript);
+        } else {
+          callbacks.onError(
+            "We couldn't hear a clear question. Please try again or type it."
+          );
         }
-      }, 6000);
+      } catch (err) {
+        callbacks.onError(
+          err instanceof Error
+            ? err.message
+            : "Voice recognition is temporarily unavailable. Please try again."
+        );
+      } finally {
+        teardown();
+      }
     },
+
     cancel() {
+      cancelled = true;
       stopped = true;
       teardown();
     },

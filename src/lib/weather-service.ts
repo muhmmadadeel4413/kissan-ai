@@ -5,9 +5,9 @@ import type { WeatherForecastDay as BaseForecastDay } from "../types";
  * Weather data layer.
  *
  * The real weather request happens server-side in the `get-weather` Edge
- * Function (which owns the OpenWeatherMap API key). The browser only sends the
- * farm's location string and receives normalized weather — no key ever reaches
- * client code.
+ * Function (which calls Open-Meteo, a free no-key API). The browser only sends
+ * the farm's location string and receives normalized weather — no key ever
+ * reaches client code.
  *
  * Responses are cached in localStorage with a short TTL so Dashboard and the
  * Weather page share the same fetch instead of hammering the provider on every
@@ -23,6 +23,14 @@ export interface WeatherForecastDay extends BaseForecastDay {
   conditionCode?: string;
   /** Average humidity for the day (%). */
   humidity?: number;
+  /** Total precipitation for the day (mm). */
+  precipitation?: number;
+  /** Total rain for the day (mm). */
+  rain?: number;
+  /** Average soil moisture 0-1cm (m³/m³), null if unavailable. */
+  soilMoisture?: number | null;
+  /** Daily ET0 evapotranspiration (mm), null if unavailable. */
+  et0?: number | null;
 }
 
 export interface CurrentWeather {

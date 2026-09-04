@@ -44,8 +44,11 @@ export function NotificationBell({ className }: { className?: string }) {
   const rootRef = React.useRef<HTMLDivElement>(null);
   const panelRef = React.useRef<HTMLDivElement>(null);
 
-  const highCount = items.filter((i) => i.metaTone === "danger").length;
-  const visible = items.slice(0, 6);
+  const highCount = React.useMemo(
+    () => items.filter((i) => i.metaTone === "danger").length,
+    [items]
+  );
+  const visible = React.useMemo(() => items.slice(0, 6), [items]);
 
   // Dismiss on outside click + Escape while the panel is open.
   React.useEffect(() => {

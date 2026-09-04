@@ -35,6 +35,24 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+/** Origins permitted to call this Edge Function (preflight gate). */
+const ALLOWED_ORIGINS = [
+  "http://localhost:5173",
+  "http://localhost:3000",
+  "http://127.0.0.1:5173",
+  "https://vxldkzrmtygurdggtjro.supabase.co",
+];
+
+function corsForOrigin(req: Request): Record<string, string> {
+  const origin = req.headers.get("origin") ?? "";
+  return {
+    ...corsHeaders,
+    "Access-Control-Allow-Origin": ALLOWED_ORIGINS.includes(origin)
+      ? origin
+      : ALLOWED_ORIGINS[0],
+  };
+}
+
 const MODEL = "gemini-3.5-flash";
 const MAX_ACTIONS = 4;
 
@@ -419,7 +437,7 @@ function buildDecisionPrompt(input: DecisionInput): string {
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+    return new Response("ok", { headers: corsForOrigin(req) });
   }
 
   const auth = req.headers.get("Authorization") ?? "";

@@ -6,21 +6,32 @@ import {
   Loader2,
   MapPin,
   MessageCircle,
+  MessageSquareText,
+  Mic,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Pause,
+  Play,
   Plus,
   RefreshCw,
   Send,
   Sprout,
+  Square,
   User,
+  Volume2,
+  VolumeX,
+  X,
 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Alert, AlertDescription, AlertTitle } from "../components/ui/alert";
 import { EmptyState } from "../components/layout/empty-state";
-import { NotificationBell } from "../components/layout/notification-bell";
+import { UserIdentity } from "../components/layout/user-identity";
 import { useFarm } from "../context/FarmContext";
-import { useAuth } from "../context/AuthContext";
 import { usePreferences } from "../context/PreferencesContext";
 import { useFarmWeather } from "../hooks/useFarmWeather";
+import { useVoiceInput } from "../hooks/useVoiceInput";
+import { LANG_CONFIG, type VoiceLang } from "../lib/voice-languages";
 import { fetchDiagnoses } from "../lib/diagnosis-service";
 import { fetchActiveRisks } from "../lib/risk-service";
 import { fetchTodayActions } from "../lib/actions-service";
@@ -37,16 +48,17 @@ import type { ChatMessage } from "../types";
 import { cn } from "../lib/utils";
 
 const LANGUAGE_OPTIONS = [
-  { value: "auto", label: "Auto (Urdu / English)" },
-  { value: "urdu", label: "Urdu" },
-  { value: "english", label: "English" },
+  { value: "auto", label: "Auto (Urdu / English)", voiceLang: "auto" as VoiceLang },
+  { value: "urdu", label: "Urdu", voiceLang: "urdu" as VoiceLang },
+  { value: "english", label: "English", voiceLang: "english" as VoiceLang },
+  { value: "punjabi", label: "Punjabi", voiceLang: "punjabi" as VoiceLang },
+  { value: "saraiki", label: "Saraiki (voice unavailable)", voiceLang: "saraiki" as VoiceLang },
 ] as const;
 
 type LanguagePref = (typeof LANGUAGE_OPTIONS)[number]["value"];
 
 export default function AssistantPage() {
   const { farm } = useFarm();
-  const { user } = useAuth();
   const { t, language: uiLanguage } = usePreferences();
   const { status: weatherStatus, weather } = useFarmWeather();
 
@@ -73,9 +85,47 @@ export default function AssistantPage() {
   >([]);
   const [contextError, setContextError] = React.useState<string | null>(null);
   const [failedMessage, setFailedMessage] = React.useState<string | null>(null);
+  const [sidebarOpen, setSidebarOpen] = React.useState(false);
 
   const endRef = React.useRef<HTMLDivElement | null>(null);
   const inputRef = React.useRef<HTMLTextAreaElement | null>(null);
+
+  /* ------------------------------------------------------------------ */
+  /* Voice input integration                                            */
+  /* ------------------------------------------------------------------ */
+  const lastWasVoiceRef = React.useRef(false);
+  const pendingVoiceTranscriptRef = React.useRef<string | null>(null);
+
+  // Get the voice language from the current language preference.
+  const currentVoiceLang = React.useMemo(() => {
+    const opt = LANGUAGE_OPTIONS.find((o) => o.value === language);
+    return opt?.voiceLang ?? "auto";
+  }, [language]);
+
+  const voice = useVoiceInput({
+    initialLanguage: currentVoiceLang,
+    onTranscript: (text) => {
+      // Store the transcript and mark that this came from voice.
+      pendingVoiceTranscriptRef.current = text;
+      lastWasVoiceRef.current = true;
+    },
+  });
+
+  // Sync voice language when the chat language changes.
+  React.useEffect(() => {
+    if (voice.language !== currentVoiceLang) {
+      voice.setLanguage(currentVoiceLang);
+    }
+  }, [currentVoiceLang, voice.language, voice.setLanguage]);
+
+  // When a voice transcript is ready, send it as a chat message.
+  React.useEffect(() => {
+    const transcript = pendingVoiceTranscriptRef.current;
+    if (transcript && !voice.isBusy && voice.voiceState === "idle") {
+      pendingVoiceTranscriptRef.current = null;
+      void runTurn(transcript, true);
+    }
+  }, [voice.voiceState, voice.isBusy]);
 
   /* ------------------------------------------------------------------ */
   /* Load real diagnosis history for context (never invented)            */
@@ -251,7 +301,13 @@ export default function AssistantPage() {
   const contextRef = React.useRef(chatContext);
   contextRef.current = chatContext;
 
-  async function runTurn(text: string) {
+  /** Map the UI language preference to the chat-compatible format. */
+  const chatLanguage = React.useMemo((): "auto" | "urdu" | "english" => {
+    const cfg = LANG_CONFIG[currentVoiceLang];
+    return cfg?.chat ?? "auto";
+  }, [currentVoiceLang]);
+
+  async function runTurn(text: string, fromVoice = false) {
     const content = text.trim();
     if (!content || isThinking) return;
     if (!farm || !activeConversationId) return;
@@ -286,7 +342,7 @@ export default function AssistantPage() {
           risks: [],
           todayActions: [],
         },
-        preferredLanguage: language,
+        preferredLanguage: chatLanguage,
       });
 
       // Replace the optimistic user message with the persisted one.
@@ -298,6 +354,12 @@ export default function AssistantPage() {
         ...prev,
         [result.assistantMessage.id]: result.reply,
       }));
+
+      // Auto-speak the response if this came from voice input.
+      if (fromVoice || lastWasVoiceRef.current) {
+        lastWasVoiceRef.current = false;
+        voice.speak(result.reply.answer);
+      }
     } catch (err) {
       // Remove the optimistic message so we never show a message that wasn't saved.
       setMessages((prev) => prev.filter((m) => m.id !== optimisticUser.id));
@@ -365,16 +427,8 @@ export default function AssistantPage() {
     );
   }
 
-  const activeConversationTitle =
-    conversations.find((c) => c.id === activeConversationId)?.title ?? "New conversation";
-
   const hasContext =
     chatContext && (chatContext.crop.name || chatContext.farm.location || chatContext.growth.stageLabel);
-
-  const farmerName = farm.farmerName.trim();
-  const farmerInitial = farmerName.charAt(0).toUpperCase() || "?";
-  const farmerLocation = farm.location || "";
-  const farmerEmail = user?.email ?? "";
 
   // The title shows the reply-language mode (English / Urdu) in the app's
   // active UI language — matching the reference header.
@@ -384,19 +438,85 @@ export default function AssistantPage() {
     uiLanguage === "ur" ? "اپنا سوال یہاں لکھیں…" : t("assistant.placeholder");
 
   return (
-    <div className="flex h-[calc(100dvh-4.5rem)] flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-soft card-sheen lg:h-[calc(100dvh-9.5rem)]">
+    <div className="flex h-[calc(100dvh-4.5rem)] overflow-hidden rounded-2xl border border-border bg-card shadow-soft card-sheen lg:h-[calc(100dvh-9.5rem)]">
+      {/* ===================== Chat history sidebar ===================== */}
+      <aside
+        className={cn(
+          "flex shrink-0 flex-col border-r border-border bg-background/60 transition-all duration-200",
+          sidebarOpen ? "w-64" : "w-0 overflow-hidden"
+        )}
+      >
+        <div className="flex items-center justify-between border-b border-border px-4 py-3">
+          <h2 className="text-sm font-semibold text-foreground">Conversations</h2>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 w-7 p-0"
+            onClick={() => setSidebarOpen(false)}
+            aria-label="Close sidebar"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-2">
+          {conversations.length === 0 ? (
+            <p className="px-3 py-6 text-center text-xs text-muted-foreground">
+              No conversations yet
+            </p>
+          ) : (
+            conversations.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => {
+                  setActiveConversationId(c.id);
+                  setSearchParams({ conversation: c.id });
+                  // Close sidebar on mobile after selection
+                  if (window.innerWidth < 768) setSidebarOpen(false);
+                }}
+                className={cn(
+                  "mb-1 flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-muted/60",
+                  c.id === activeConversationId && "bg-primary-soft text-primary"
+                )}
+              >
+                <MessageSquareText className="h-4 w-4 shrink-0" aria-hidden="true" />
+                <span className="min-w-0 flex-1 truncate text-sm">{c.title}</span>
+              </button>
+            ))
+          )}
+        </div>
+      </aside>
+
+      {/* ===================== Main chat area ===================== */}
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
       {/* ===================== Chat header ===================== */}
       <header className="flex shrink-0 items-start justify-between gap-3 border-b border-border px-4 py-3.5 sm:px-5">
-        <div className="min-w-0">
-          <h1 className="flex items-center gap-2 font-heading text-lg font-bold tracking-tight text-foreground sm:text-xl">
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-primary">
-              <Bot className="h-4.5 w-4.5" aria-hidden="true" />
-            </span>
-            {headerTitle}
-          </h1>
-          <p className="mt-0.5 truncate text-xs text-muted-foreground sm:text-sm">
-            {t("assistant.chatSubtitle")}
-          </p>
+        <div className="flex items-center gap-2">
+          {/* Sidebar toggle */}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 w-8 p-0"
+            onClick={() => setSidebarOpen((prev) => !prev)}
+            aria-label={sidebarOpen ? "Close sidebar" : "Open sidebar"}
+          >
+            {sidebarOpen ? (
+              <PanelLeftClose className="h-4 w-4" />
+            ) : (
+              <PanelLeftOpen className="h-4 w-4" />
+            )}
+          </Button>
+          <div className="min-w-0">
+            <h1 className="flex items-center gap-2 font-heading text-lg font-bold tracking-tight text-foreground sm:text-xl">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-primary">
+                <Bot className="h-4.5 w-4.5" aria-hidden="true" />
+              </span>
+              {headerTitle}
+            </h1>
+            <p className="mt-0.5 truncate text-xs text-muted-foreground sm:text-sm">
+              {t("assistant.chatSubtitle")}
+            </p>
+          </div>
         </div>
 
         <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
@@ -429,22 +549,8 @@ export default function AssistantPage() {
             <span className="hidden md:inline">{t("assistant.newConversation")}</span>
           </Button>
 
-          <NotificationBell />
-
-          {/* Real authenticated farmer/profile info from farm + auth */}
-          <div className="hidden items-center gap-2 rounded-xl border border-border bg-background/60 py-1.5 pl-1.5 pr-3 sm:flex">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-foreground ring-1 ring-inset ring-primary/20">
-              {farmerInitial}
-            </span>
-            <span className="min-w-0 text-left">
-              <span className="block max-w-[9rem] truncate text-sm font-semibold leading-tight text-foreground">
-                {farmerName}
-              </span>
-              <span className="block max-w-[9rem] truncate text-xs leading-tight text-muted-foreground">
-                {farmerLocation || farmerEmail || "Farmer"}
-              </span>
-            </span>
-          </div>
+          <div className="mx-1 hidden h-6 w-px bg-border sm:block" aria-hidden="true" />
+          <UserIdentity className="hidden sm:flex" />
         </div>
       </header>
 
@@ -525,13 +631,32 @@ export default function AssistantPage() {
           </div>
         ) : null}
 
-        {messages.map((msg) => (
-          <MessageBubble
-            key={msg.id}
-            message={msg}
-            reply={structuredReplies[msg.id]}
-          />
-        ))}
+        {messages.map((msg, idx) => {
+          const isLastAssistant =
+            msg.role === "assistant" &&
+            idx === messages.length - 1;
+          const isSpeakingThis =
+            isLastAssistant && voice.voiceState === "speaking";
+
+          return (
+            <MessageBubble
+              key={msg.id}
+              message={msg}
+              reply={structuredReplies[msg.id]}
+              ttsState={isSpeakingThis ? voice.ttsState : "idle"}
+              onPlay={
+                isLastAssistant
+                  ? () => {
+                      const reply = structuredReplies[msg.id];
+                      if (reply) voice.speak(reply.answer);
+                    }
+                  : undefined
+              }
+              onPause={isLastAssistant ? () => voice.pauseSpeech() : undefined}
+              onStop={isLastAssistant ? () => voice.stopSpeech() : undefined}
+            />
+          );
+        })}
 
         {isThinking ? (
           <div className="flex items-start gap-2.5">
@@ -561,8 +686,55 @@ export default function AssistantPage() {
           handleSend();
         }}
       >
+        {/* Voice state indicator */}
+        {voice.voiceState === "listening" ? (
+          <div className="mb-3 flex items-center justify-center gap-3 rounded-xl border border-primary/30 bg-primary-soft px-4 py-2.5">
+            <span className="flex h-3 w-3 animate-pulse rounded-full bg-primary" />
+            <span className="text-sm font-medium text-primary">Listening... tap mic to stop</span>
+            <button
+              type="button"
+              onClick={() => voice.stopRecording()}
+              className="ml-2 rounded-lg bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground hover:bg-primary/90"
+            >
+              Stop
+            </button>
+          </div>
+        ) : voice.voiceState === "transcribing" ? (
+          <div className="mb-3 flex items-center justify-center gap-2 rounded-xl border border-border bg-muted px-4 py-2.5">
+            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+            <span className="text-sm text-muted-foreground">Transcribing...</span>
+          </div>
+        ) : voice.voiceState === "speaking" ? (
+          <div className="mb-3 flex items-center justify-center gap-3 rounded-xl border border-accent/30 bg-accent-soft px-4 py-2.5">
+            <Volume2 className="h-4 w-4 text-accent" />
+            <span className="text-sm font-medium text-accent">Speaking...</span>
+            <button
+              type="button"
+              onClick={() => voice.stopSpeech()}
+              className="ml-2 rounded-lg bg-accent px-3 py-1 text-xs font-semibold text-accent-foreground hover:bg-accent/90"
+            >
+              Stop
+            </button>
+          </div>
+        ) : null}
+
+        {/* Voice error banner */}
+        {voice.error ? (
+          <div className="mb-3 flex items-center gap-2 rounded-xl border border-danger/30 bg-danger-soft px-4 py-2.5 text-sm text-danger">
+            <VolumeX className="h-4 w-4 shrink-0" />
+            <span className="flex-1">{voice.error}</span>
+            <button
+              type="button"
+              onClick={() => voice.clearError()}
+              className="rounded-lg px-2 py-1 text-xs font-semibold hover:bg-danger/10"
+            >
+              Dismiss
+            </button>
+          </div>
+        ) : null}
+
         <div className="flex items-end gap-2">
-          <div className="min-w-0 flex-1 rounded-2xl border border-input bg-background px-4 shadow-soft transition-colors duration-150 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/25">
+          <div className="flex min-w-0 flex-1 items-end gap-2 rounded-2xl border border-input bg-background px-3 py-2 shadow-soft transition-colors duration-150 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/25">
             <label htmlFor="message" className="sr-only">
               {placeholder}
             </label>
@@ -574,7 +746,7 @@ export default function AssistantPage() {
               onChange={(e) => setInput(e.target.value)}
               placeholder={placeholder}
               dir="auto"
-              className="max-h-40 min-h-[52px] w-full resize-none bg-transparent py-3.5 text-sm leading-relaxed text-foreground placeholder:text-muted-foreground/70 focus:outline-none"
+              className="max-h-40 min-h-[40px] w-full flex-1 resize-none bg-transparent py-1.5 text-sm leading-relaxed text-foreground placeholder:text-muted-foreground/70 focus:outline-none"
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
@@ -582,24 +754,60 @@ export default function AssistantPage() {
                 }
               }}
             />
+
+            {/* Mic button — inside input container */}
+            <button
+              type="button"
+              className={cn(
+                "flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-all cursor-pointer",
+                voice.voiceState === "listening"
+                  ? "bg-primary text-primary-foreground animate-pulse ring-2 ring-primary/30"
+                  : voice.voiceState === "transcribing"
+                    ? "bg-muted text-muted-foreground"
+                    : "bg-muted text-muted-foreground hover:bg-primary-soft hover:text-primary"
+              )}
+              onClick={() => {
+                if (voice.voiceState === "listening") {
+                  voice.stopRecording();
+                } else if (voice.voiceState === "idle" || voice.voiceState === "error") {
+                  void voice.startRecording();
+                }
+              }}
+              disabled={isThinking || voice.voiceState === "transcribing"}
+              aria-label={
+                voice.voiceState === "listening"
+                  ? "Stop recording"
+                  : "Start voice input"
+              }
+            >
+              {voice.voiceState === "listening" ? (
+                <Square className="h-4 w-4" />
+              ) : voice.voiceState === "transcribing" ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Mic className="h-4 w-4" />
+              )}
+            </button>
           </div>
+
           <Button
             type="submit"
             size="icon"
             className="h-[52px] w-[52px] shrink-0 rounded-full shadow-soft"
-            disabled={!input.trim() || isThinking}
+            disabled={!input.trim() || isThinking || voice.isBusy}
             aria-label="Send message"
           >
             <Send className="h-5 w-5" />
           </Button>
         </div>
 
-        {/* Language preference */}
-        <div className="mt-2.5 flex items-center gap-2 text-xs text-muted-foreground">
-          <Languages className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-          <span>{activeConversationId ? activeConversationTitle : "New conversation"}</span>
-        </div>
+        {voice.ttsUnavailable ? (
+          <p className="mt-2 text-center text-xs text-warning">
+            Voice playback unavailable for this language
+          </p>
+        ) : null}
       </form>
+      </div>
     </div>
   );
 }
@@ -611,12 +819,22 @@ export default function AssistantPage() {
 function MessageBubble({
   message,
   reply,
+  ttsState,
+  onPlay,
+  onPause,
+  onStop,
 }: {
   message: ChatMessage;
   reply?: ChatReply;
+  ttsState?: "idle" | "playing" | "paused";
+  onPlay?: () => void;
+  onPause?: () => void;
+  onStop?: () => void;
 }) {
   const isUser = message.role === "user";
   const content = message.content || reply?.answer || "";
+  const isThisPlaying = ttsState === "playing";
+  const isThisPaused = ttsState === "paused";
 
   return (
     <div className={cn("flex items-start gap-2.5", isUser && "flex-row-reverse")}>
@@ -667,6 +885,38 @@ function MessageBubble({
                 <li key={i} className="break-words">{action}</li>
               ))}
             </ol>
+          </div>
+        ) : null}
+
+        {/* TTS controls for assistant messages */}
+        {!isUser && reply && onPlay && onPause && onStop ? (
+          <div className="mt-2 flex items-center gap-1.5">
+            <Button
+              variant={isThisPlaying ? "accent" : "outline"}
+              size="sm"
+              onClick={isThisPlaying ? onPause : onPlay}
+              className="h-7 gap-1 rounded-full px-2.5 text-xs"
+              aria-label={isThisPlaying ? "Pause" : isThisPaused ? "Resume" : "Play response"}
+            >
+              {isThisPlaying ? (
+                <Pause className="h-3 w-3" />
+              ) : (
+                <Play className="h-3 w-3" />
+              )}
+              {isThisPlaying ? "Pause" : isThisPaused ? "Resume" : "Play"}
+            </Button>
+            {(isThisPlaying || isThisPaused) ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onStop}
+                className="h-7 gap-1 rounded-full px-2.5 text-xs"
+                aria-label="Stop playback"
+              >
+                <Square className="h-3 w-3" />
+                Stop
+              </Button>
+            ) : null}
           </div>
         ) : null}
       </div>

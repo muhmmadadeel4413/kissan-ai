@@ -3,17 +3,18 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 /**
  * get-weather
  *
- * Securely fetches live weather for a farm location using OpenWeatherMap.
+ * Securely fetches live weather for a farm location using Open-Meteo.
  *
- * Security model (mirrors analyze-crop):
- *  - The OpenWeatherMap API key lives ONLY in Supabase Edge Function secrets
- *    (OPENWEATHER_API_KEY). It is read here with Deno.env.get and never
- *    reaches the browser.
+ * Security model:
+ *  - Open-Meteo is a free, no-key API — no secrets needed.
  *  - The client sends only the farm's location string. This function geocodes
- *    it to lat/lon, fetches current conditions + a 5-day forecast, aggregates
- *    the forecast into per-day summaries, and returns normalized JSON.
- *  - verify_jwt is disabled at the platform level (anon-based app, no user
- *    accounts); we do a lightweight Bearer JWT sanity check here.
+ *    it to lat/lon, fetches current conditions + a 7-day forecast with hourly
+ *    detail, aggregates into per-day summaries, and returns normalized JSON.
+ *  - verify_jwt is disabled at the platform level (anon-based app); we do a
+ *    lightweight Bearer JWT sanity check here.
+ *
+ * Data includes soil moisture and ET0 (evapotranspiration) for irrigation
+ * support — these are null if the provider doesn't return them.
  */
 
 const corsHeaders = {
@@ -23,9 +24,26 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const GEO_URL = "https://api.openweathermap.org/geo/1.0/direct";
-const CURRENT_URL = "https://api.openweathermap.org/data/2.5/weather";
-const FORECAST_URL = "https://api.openweathermap.org/data/2.5/forecast";
+/** Origins permitted to call this Edge Function (preflight gate). */
+const ALLOWED_ORIGINS = [
+  "http://localhost:5173",
+  "http://localhost:3000",
+  "http://127.0.0.1:5173",
+  "https://vxldkzrmtygurdggtjro.supabase.co",
+];
+
+function corsForOrigin(req: Request): Record<string, string> {
+  const origin = req.headers.get("origin") ?? "";
+  return {
+    ...corsHeaders,
+    "Access-Control-Allow-Origin": ALLOWED_ORIGINS.includes(origin)
+      ? origin
+      : ALLOWED_ORIGINS[0],
+  };
+}
+
+const GEO_URL = "https://geocoding-api.open-meteo.com/v1/search";
+const FORECAST_URL = "https://api.open-meteo.com/v1/forecast";
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -34,33 +52,100 @@ function json(data: unknown, status = 200): Response {
   });
 }
 
-/** Convert m/s to km/h (OpenWeatherMap reports wind in m/s in metric mode). */
-function toKmh(ms: number): number {
-  return Math.round(ms * 3.6);
-}
-
 /** Coerce a value to a finite number, falling back to 0 (never NaN). */
 function safeNum(value: unknown): number {
   const n = Number(value);
   return Number.isFinite(n) ? n : 0;
 }
 
-interface GeoPlace {
-  lat?: number;
-  lon?: number;
-  name?: string;
-  country?: string;
-  state?: string;
+/** Coerce a value to a finite number or null. */
+function safeNumOrNull(value: unknown): number | null {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
 }
+
+interface GeoPlace {
+  name?: string;
+  latitude?: number;
+  longitude?: number;
+  country?: string;
+  admin1?: string;
+  timezone?: string;
+}
+
+/**
+ * Known province/state to major city mappings for fallback geocoding.
+ * When a user enters a province name, we try the major city in that province.
+ */
+const PROVINCE_TO_CITY: Record<string, string> = {
+  // Pakistan
+  punjab: "Lahore",
+  sindh: "Karachi",
+  "khyber pakhtunkhwa": "Peshawar",
+  kpk: "Peshawar",
+  balochistan: "Quetta",
+  "azad kashmir": "Muzaffarabad",
+  gilgit: "Gilgit",
+  // India
+  maharashtra: "Mumbai",
+  "uttar pradesh": "Lucknow",
+  "tamil nadu": "Chennai",
+  karnataka: "Bangalore",
+  gujarat: "Ahmedabad",
+  rajasthan: "Jaipur",
+  "west bengal": "Kolkata",
+  bihar: "Patna",
+  "madhya pradesh": "Bhopal",
+  haryana: "Chandigarh",
+  telangana: "Hyderabad",
+  kerala: "Thiruvananthapuram",
+  assam: "Guwahati",
+};
+
+/**
+ * Known city aliases for Pakistan (common spellings and major cities).
+ * Used as fallback when geocoding fails for partial matches.
+ */
+const PAKISTAN_CITIES = [
+  "Karachi",
+  "Lahore",
+  "Islamabad",
+  "Rawalpindi",
+  "Faisalabad",
+  "Multan",
+  "Peshawar",
+  "Quetta",
+  "Sialkot",
+  "Gujranwala",
+  "Hyderabad",
+  "Bahawalpur",
+  "Sargodha",
+  "Sukkur",
+  "Larkana",
+  "Abbottabad",
+  "Mardan",
+  "Muzaffarabad",
+  "Gilgit",
+  "Chiniot",
+  "Jhang",
+  "Sahiwal",
+  "Okara",
+  "Wah",
+  "Dera Ghazi Khan",
+  "Mingora",
+  "Mirpur Khas",
+  "Nawabshah",
+  "Khanewal",
+  "Jacobabad",
+];
 
 /**
  * Build progressively-simplified search queries for a free-text location.
  *
  * Farm locations are typed by hand and often aren't an exact place name
  * (e.g. "Faisalabad Chiniot" — two neighbouring cities typed together).
- * OpenWeatherMap's geocoder returns nothing for those, so we derive a list of
- * fallback queries: the exact string, comma-separated parts, token reductions,
- * and (as a last resort) a country hint.
+ * We derive a list of fallback queries: the exact string, comma-separated
+ * parts, token reductions, province-to-city mappings, and country hints.
  */
 function locationCandidates(raw: string): string[] {
   const clean = raw.trim().replace(/\s+/g, " ");
@@ -95,28 +180,60 @@ function locationCandidates(raw: string): string[] {
     push(tokens[tokens.length - 1]);
   }
 
-  // Country hint as a last resort, unless the query already mentions one.
-  const hasCountry = /pakistan|india|bangladesh|\bPK\b|\bIN\b|,\s*[A-Z]{2}$/i.test(clean);
+  // Remove common suffixes like "province", "state", "district".
+  const withoutSuffix = clean.replace(/\s*(province|state|district|division|tehsil)$/i, "").trim();
+  if (withoutSuffix && withoutSuffix !== clean) {
+    push(withoutSuffix);
+  }
+
+  // Province/state to major city fallback.
+  const lowerClean = clean.toLowerCase();
+  for (const [province, city] of Object.entries(PROVINCE_TO_CITY)) {
+    if (lowerClean.includes(province) || province.includes(lowerClean)) {
+      push(city);
+      push(`${city}, Pakistan`);
+      push(`${city}, India`);
+      break;
+    }
+  }
+
+  // Check if any token matches a known Pakistan city (partial match fallback).
+  const lowerTokens = tokens.map((t) => t.toLowerCase());
+  for (const city of PAKISTAN_CITIES) {
+    const lowerCity = city.toLowerCase();
+    if (lowerTokens.some((t) => t === lowerCity || lowerCity.includes(t) || t.includes(lowerCity))) {
+      push(city);
+      push(`${city}, Pakistan`);
+      break;
+    }
+  }
+
+  // Country hints as a last resort, unless the query already mentions one.
+  const hasCountry = /pakistan|india|bangladesh|\bPK\b|\bIN\b|\bBD\b|,\s*[A-Z]{2}$/i.test(clean);
   if (!hasCountry) {
-    for (const q of [...candidates]) push(`${q}, Pakistan`);
+    for (const q of [...candidates]) {
+      push(`${q}, Pakistan`);
+      push(`${q}, India`);
+    }
   }
 
   return candidates;
 }
 
 /**
- * Geocode a free-text location, trying progressively simpler forms.
+ * Geocode a free-text location using Open-Meteo Geocoding API.
  * Returns the best place found, or null if nothing matched.
  */
-async function geocodeLocation(query: string, apiKey: string): Promise<GeoPlace | null> {
+async function geocodeLocation(query: string): Promise<GeoPlace | null> {
   const candidates = locationCandidates(query);
   for (const candidate of candidates) {
     try {
       const resp = await fetch(
-        `${GEO_URL}?q=${encodeURIComponent(candidate)}&limit=5&appid=${apiKey}`
+        `${GEO_URL}?name=${encodeURIComponent(candidate)}&count=5&language=en&format=json`
       );
       if (!resp.ok) continue;
-      const list = (await resp.json()) as GeoPlace[];
+      const data = (await resp.json()) as { results?: GeoPlace[] };
+      const list = data.results;
       if (!Array.isArray(list) || list.length === 0) continue;
 
       // Prefer an exact-ish name match; otherwise use the first result.
@@ -135,11 +252,57 @@ async function geocodeLocation(query: string, apiKey: string): Promise<GeoPlace 
 }
 
 /**
- * Map a forecast 3-hour entry into a "local date" string using the city's
- * UTC offset so daily grouping matches the farmer's calendar, not UTC.
+ * Map WMO weather code to the condition codes used by the Kissan AI UI.
+ * WMO codes: https://open-meteo.com/en/docs (Weather interpretation section)
  */
-function localDateFrom(unixSeconds: number, tzSeconds: number): string {
-  return new Date((unixSeconds + tzSeconds) * 1000).toISOString().slice(0, 10);
+function wmoToConditionCode(code: number): string {
+  if (code === 0) return "Clear";
+  if (code <= 3) return "Clouds";
+  if (code === 45 || code === 48) return "Fog";
+  if (code >= 51 && code <= 57) return "Drizzle";
+  if (code >= 61 && code <= 67) return "Rain";
+  if (code >= 71 && code <= 77) return "Snow";
+  if (code >= 80 && code <= 82) return "Rain";
+  if (code === 85 || code === 86) return "Snow";
+  if (code >= 95) return "Thunderstorm";
+  return "Clouds";
+}
+
+/**
+ * Map WMO weather code to a human-readable description.
+ */
+function wmoToDescription(code: number): string {
+  const descriptions: Record<number, string> = {
+    0: "Clear sky",
+    1: "Mainly clear",
+    2: "Partly cloudy",
+    3: "Overcast",
+    45: "Fog",
+    48: "Rime fog",
+    51: "Light drizzle",
+    53: "Moderate drizzle",
+    55: "Dense drizzle",
+    56: "Freezing drizzle",
+    57: "Dense freezing drizzle",
+    61: "Slight rain",
+    63: "Moderate rain",
+    65: "Heavy rain",
+    66: "Freezing rain",
+    67: "Heavy freezing rain",
+    71: "Slight snow",
+    73: "Moderate snow",
+    75: "Heavy snow",
+    77: "Snow grains",
+    80: "Slight rain showers",
+    81: "Moderate rain showers",
+    82: "Violent rain showers",
+    85: "Slight snow showers",
+    86: "Heavy snow showers",
+    95: "Thunderstorm",
+    96: "Thunderstorm with slight hail",
+    99: "Thunderstorm with heavy hail",
+  };
+  return descriptions[code] ?? "Conditions";
 }
 
 interface DayAcc {
@@ -150,14 +313,20 @@ interface DayAcc {
   wind: number;
   humiditySum: number;
   humidityCount: number;
+  rainSum: number;
+  et0Sum: number;
+  et0Count: number;
+  soilMoistureSum: number;
+  soilMoistureCount: number;
   condition: string;
   conditionCode: string;
+  middayCode: number;
 }
 
 Deno.serve(async (req: Request) => {
   // CORS preflight
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+    return new Response("ok", { headers: corsForOrigin(req) });
   }
 
   // Lightweight JWT sanity check (anon-based app).
@@ -166,18 +335,6 @@ Deno.serve(async (req: Request) => {
     return json(
       { success: false, error: "This request is not authorized. Please try again." },
       401
-    );
-  }
-
-  const apiKey = Deno.env.get("OPENWEATHER_API_KEY");
-  if (!apiKey) {
-    return json(
-      {
-        success: false,
-        error:
-          "Live weather isn't configured yet. Add the OpenWeatherMap API key (OPENWEATHER_API_KEY) in the project settings to enable weather for your farm.",
-      },
-      503
     );
   }
 
@@ -200,11 +357,12 @@ Deno.serve(async (req: Request) => {
   }
 
   // 1) Geocode the farm location string -> lat/lon.
-  //    Free-text farm locations often aren't an exact OpenWeatherMap place
-  //    name (e.g. "Faisalabad Chiniot"), so we try progressively simpler
-  //    forms before giving up.
-  const place = await geocodeLocation(location, apiKey);
-  if (!place || typeof place.lat !== "number" || typeof place.lon !== "number") {
+  const place = await geocodeLocation(location);
+  if (
+    !place ||
+    typeof place.latitude !== "number" ||
+    typeof place.longitude !== "number"
+  ) {
     console.log("get-weather: no geocode match for", JSON.stringify(location));
     return json(
       {
@@ -215,112 +373,186 @@ Deno.serve(async (req: Request) => {
     );
   }
 
-  // 2) Fetch current conditions.
-  let currentRaw: any;
+  const lat = place.latitude;
+  const lon = place.longitude;
+  const tz = place.timezone ?? "auto";
+
+  // 2) Fetch forecast with hourly + daily data from Open-Meteo.
+  //    Includes soil moisture and ET0 for irrigation support.
+  const params = new URLSearchParams({
+    latitude: String(lat),
+    longitude: String(lon),
+    timezone: tz,
+    // Current weather variables
+    current: [
+      "temperature_2m",
+      "relative_humidity_2m",
+      "apparent_temperature",
+      "precipitation",
+      "rain",
+      "weather_code",
+      "wind_speed_10m",
+    ].join(","),
+    // Hourly variables for aggregation
+    hourly: [
+      "temperature_2m",
+      "relative_humidity_2m",
+      "precipitation_probability",
+      "precipitation",
+      "rain",
+      "weather_code",
+      "wind_speed_10m",
+      "soil_moisture_0_to_1cm",
+      "et0_fao_evapotranspiration",
+    ].join(","),
+    // Daily variables
+    daily: [
+      "weather_code",
+      "temperature_2m_max",
+      "temperature_2m_min",
+      "precipitation_sum",
+      "rain_sum",
+      "precipitation_probability_max",
+      "wind_speed_10m_max",
+      "et0_fao_evapotranspiration",
+    ].join(","),
+    forecast_days: "7",
+  });
+
+  let forecastRaw: any;
   try {
-    const resp = await fetch(
-      `${CURRENT_URL}?lat=${place.lat}&lon=${place.lon}&units=metric&appid=${apiKey}`
-    );
+    const resp = await fetch(`${FORECAST_URL}?${params}`);
     if (!resp.ok) {
+      console.error("get-weather: Open-Meteo API error", resp.status);
       return json(
-        { success: false, error: "We couldn't load the current weather. Please try again." },
+        { success: false, error: "We couldn't load the weather. Please try again." },
         502
       );
     }
-    currentRaw = await resp.json();
-  } catch {
+    forecastRaw = await resp.json();
+  } catch (err) {
+    console.error("get-weather: network error", err);
+    return json(
+      { success: false, error: "We couldn't load the weather. Please try again." },
+      502
+    );
+  }
+
+  // 3) Extract current conditions from the response.
+  const current = forecastRaw?.current;
+  if (!current) {
     return json(
       { success: false, error: "We couldn't load the current weather. Please try again." },
       502
     );
   }
 
-  // 3) Fetch the 5-day / 3-hour forecast.
-  let forecastRaw: any;
-  try {
-    const resp = await fetch(
-      `${FORECAST_URL}?lat=${place.lat}&lon=${place.lon}&units=metric&cnt=40&appid=${apiKey}`
-    );
-    if (!resp.ok) {
-      return json(
-        { success: false, error: "We couldn't load the weather forecast. Please try again." },
-        502
-      );
+  const currentCode = safeNum(current.weather_code);
+  const todayPrecipProb = safeNum(
+    forecastRaw?.daily?.precipitation_probability_max?.[0]
+  );
+
+  const currentWeather = {
+    temperature: Math.round(safeNum(current.temperature_2m)),
+    feelsLike: Math.round(safeNum(current.apparent_temperature) || safeNum(current.temperature_2m)),
+    humidity: Math.round(safeNum(current.relative_humidity_2m)),
+    rainProbability: Math.round(todayPrecipProb),
+    windSpeed: Math.round(safeNum(current.wind_speed_10m)),
+    condition: wmoToDescription(currentCode),
+    conditionCode: wmoToConditionCode(currentCode),
+    capturedAt: current.time ?? new Date().toISOString(),
+  };
+
+  // 4) Aggregate hourly data into per-day summaries.
+  const hourly = forecastRaw?.hourly;
+  const daily = forecastRaw?.daily;
+
+  const forecast: Array<{
+    date: string;
+    condition: string;
+    conditionCode: string;
+    temperatureMax: number;
+    temperatureMin: number;
+    rainProbability: number;
+    windSpeed: number;
+    humidity: number;
+    precipitation: number;
+    rain: number;
+    soilMoisture: number | null;
+    et0: number | null;
+  }> = [];
+
+  // Use daily data if available (more accurate aggregates)
+  if (daily && Array.isArray(daily.time)) {
+    for (let i = 0; i < daily.time.length; i++) {
+      const code = safeNum(daily.weather_code?.[i]);
+      forecast.push({
+        date: daily.time[i],
+        condition: wmoToDescription(code),
+        conditionCode: wmoToConditionCode(code),
+        temperatureMax: Math.round(safeNum(daily.temperature_2m_max?.[i])),
+        temperatureMin: Math.round(safeNum(daily.temperature_2m_min?.[i])),
+        rainProbability: Math.round(safeNum(daily.precipitation_probability_max?.[i])),
+        windSpeed: Math.round(safeNum(daily.wind_speed_10m_max?.[i])),
+        humidity: 0, // Will be filled from hourly if needed
+        precipitation: safeNum(daily.precipitation_sum?.[i]),
+        rain: safeNum(daily.rain_sum?.[i]),
+        soilMoisture: null, // Soil moisture is hourly-only
+        et0: safeNumOrNull(daily.et0_fao_evapotranspiration?.[i]),
+      });
     }
-    forecastRaw = await resp.json();
-  } catch {
-    return json(
-      { success: false, error: "We couldn't load the weather forecast. Please try again." },
-      502
-    );
   }
 
-  // 4) Aggregate the 3-hourly entries into per-day summaries (max 5 days).
-  const tz = typeof forecastRaw?.city?.timezone === "number" ? forecastRaw.city.timezone : 0;
-  const days = new Map<string, DayAcc>();
+  // Fill humidity from hourly data and compute average soil moisture per day
+  if (hourly && Array.isArray(hourly.time)) {
+    const dayMap = new Map<string, {
+      humiditySum: number;
+      humidityCount: number;
+      soilMoistureSum: number;
+      soilMoistureCount: number;
+    }>();
 
-  for (const item of forecastRaw?.list ?? []) {
-    const date = localDateFrom(item.dt, tz);
-    const temp = safeNum(item.main?.temp);
-    const acc: DayAcc = days.get(date) ?? {
-      date,
-      max: -Infinity,
-      min: Infinity,
-      pop: 0,
-      wind: 0,
-      humiditySum: 0,
-      humidityCount: 0,
-      condition: item.weather?.[0]?.description ?? "Conditions",
-      conditionCode: item.weather?.[0]?.main ?? "",
-    };
-    acc.max = Math.max(acc.max, safeNum(item.main?.temp_max) || temp);
-    acc.min = Math.min(acc.min, safeNum(item.main?.temp_min) || temp);
-    acc.pop = Math.max(acc.pop, safeNum(item.pop));
-    acc.wind = Math.max(acc.wind, safeNum(item.wind?.speed));
-    acc.humiditySum += safeNum(item.main?.humidity);
-    acc.humidityCount += 1;
-    // Prefer the midday entry as the day's representative condition.
-    const hour = new Date((item.dt + tz) * 1000).getUTCHours();
-    if (hour === 12 && item.weather?.[0]) {
-      acc.condition = item.weather[0].description ?? acc.condition;
-      acc.conditionCode = item.weather[0].main ?? acc.conditionCode;
+    for (let i = 0; i < hourly.time.length; i++) {
+      const date = hourly.time[i].slice(0, 10);
+      const acc = dayMap.get(date) ?? {
+        humiditySum: 0,
+        humidityCount: 0,
+        soilMoistureSum: 0,
+        soilMoistureCount: 0,
+      };
+      const hum = safeNumOrNull(hourly.relative_humidity_2m?.[i]);
+      if (hum !== null) {
+        acc.humiditySum += hum;
+        acc.humidityCount += 1;
+      }
+      const sm = safeNumOrNull(hourly.soil_moisture_0_to_1cm?.[i]);
+      if (sm !== null) {
+        acc.soilMoistureSum += sm;
+        acc.soilMoistureCount += 1;
+      }
+      dayMap.set(date, acc);
     }
-    days.set(date, acc);
+
+    for (const day of forecast) {
+      const acc = dayMap.get(day.date);
+      if (acc) {
+        day.humidity = acc.humidityCount > 0
+          ? Math.round(acc.humiditySum / acc.humidityCount)
+          : 0;
+        day.soilMoisture = acc.soilMoistureCount > 0
+          ? Math.round((acc.soilMoistureSum / acc.soilMoistureCount) * 100) / 100
+          : null;
+      }
+    }
   }
 
-  const sorted = [...days.values()]
-    .sort((a, b) => (a.date < b.date ? -1 : 1))
-    .slice(0, 5);
+  // Limit to 5 days for the forecast strip (UI expects 5)
+  const forecastLimited = forecast.slice(0, 5);
 
-  const forecast = sorted.map((d) => ({
-    date: d.date,
-    condition: d.condition,
-    conditionCode: d.conditionCode,
-    temperatureMax: Math.round(d.max),
-    temperatureMin: Math.round(d.min),
-    rainProbability: Math.round(d.pop * 100),
-    windSpeed: toKmh(d.wind),
-    humidity: d.humidityCount > 0 ? Math.round(d.humiditySum / d.humidityCount) : 0,
-  }));
-
-  // 5) Build the current-conditions payload. Rain probability for "today"
-  // comes from the current day's forecast (OpenWeatherMap does not expose
-  // probability on the current-weather endpoint).
-  const todayDate = localDateFrom(Math.floor(Date.now() / 1000), tz);
-  const todayDay = sorted.find((d) => d.date === todayDate);
-
+  // 5) Build the response payload.
   const weather = {
-    current: {
-      temperature: Math.round(safeNum(currentRaw?.main?.temp)),
-      feelsLike: Math.round(safeNum(currentRaw?.main?.feels_like) || safeNum(currentRaw?.main?.temp)),
-      humidity: Math.round(safeNum(currentRaw?.main?.humidity)),
-      rainProbability: Math.round((todayDay?.pop ?? 0) * 100),
-      windSpeed: toKmh(safeNum(currentRaw?.wind?.speed)),
-      condition: currentRaw?.weather?.[0]?.description ?? "Conditions",
-      conditionCode: currentRaw?.weather?.[0]?.main ?? "",
-      capturedAt: new Date().toISOString(),
-    },
-    forecast,
+    current: currentWeather,
+    forecast: forecastLimited,
     location: {
       name: place.name ?? location,
       country: place.country ?? "",

@@ -130,6 +130,28 @@ export async function fetchFarmByOwner(): Promise<Farm | null> {
   }
 }
 
+/**
+ * Fetch ALL farms owned by the authenticated user, newest first.
+ *
+ * RLS scopes this to user_id = auth.uid(), so it can never return another
+ * user's farms. Returns an empty array when the user has no farms yet.
+ */
+export async function fetchFarmsByOwner(): Promise<Farm[]> {
+  try {
+    const { data, error } = await supabase
+      .from("farms")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      friendlyError(error, "We couldn't load your farms. Please check your connection and try again.");
+    }
+    return (data ?? []).map((row) => rowToFarm(row as FarmRow));
+  } catch (err) {
+    friendlyError(err, "We couldn't load your farms. Please check your connection and try again.");
+  }
+}
+
 /** Insert a new farm row and return the created farm (with its UUID). */
 export async function createFarmRecord(input: FarmSetupInput): Promise<Farm> {
   try {

@@ -8,6 +8,7 @@ import {
 } from "react-router-dom";
 import {
   ChevronDown,
+  LogOut,
   Menu,
   Search,
   Settings,
@@ -16,7 +17,8 @@ import {
   X,
 } from "lucide-react";
 import { useFarm } from "../../context/FarmContext";
-import { useI18n } from "../../context/PreferencesContext";
+import { useI18n, usePreferences } from "../../context/PreferencesContext";
+import { useAuth } from "../../context/AuthContext";
 import { cn } from "../../lib/utils";
 import { LoadingState } from "./loading-state";
 import { ErrorState } from "./error-state";
@@ -26,6 +28,7 @@ import { LanguageToggle, ThemeToggle } from "./preference-controls";
 import { LogoutButton } from "../auth/LogoutButton";
 import { GlobalSearchDialog } from "./global-search";
 import { NotificationBell } from "./notification-bell";
+import { FarmSwitcher } from "./farm-switcher";
 
 /** Farm-dependent routes redirect to /farm-setup when no farm exists. */
 const FARM_DEPENDENT_PATHS = new Set([
@@ -33,7 +36,6 @@ const FARM_DEPENDENT_PATHS = new Set([
   "/crop-doctor",
   "/crop-recommendation",
   "/assistant",
-  "/voice",
   "/weather",
   "/irrigation",
   "/risks",
@@ -52,7 +54,6 @@ const TOOL_NAV_PATHS = new Set([
   "/crop-doctor",
   "/crop-recommendation",
   "/assistant",
-  "/voice",
   "/weather",
   "/irrigation",
   "/risks",
@@ -76,6 +77,195 @@ function Brand({ tone = "sidebar" }: { tone?: "sidebar" | "light" }) {
         {t("brand.name")}
       </span>
     </Link>
+  );
+}
+
+/** Sidebar Settings button popover — contains Profile, Language, Theme, Logout. */
+function SettingsPopover() {
+  const { t } = useI18n();
+  const { farm } = useFarm();
+  const { language, setLanguage, theme, toggleTheme } = usePreferences();
+  const { signOut } = useAuth();
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+  const popoverRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+
+  const close = useCallback(() => {
+    setOpen(false);
+    buttonRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        close();
+      }
+    }
+    function onPointerDown(e: PointerEvent) {
+      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("pointerdown", onPointerDown);
+    };
+  }, [open, close]);
+
+  async function handleLogout() {
+    if (loggingOut) return;
+    setLoggingOut(true);
+    try {
+      await signOut();
+      navigate("/", { replace: true });
+    } finally {
+      setLoggingOut(false);
+    }
+  }
+
+  const name = farm ? farm.farmerName : t("app.nav.noFarm");
+  const location = farm?.location ?? "";
+  const initial = (farm?.farmerName ?? "?").trim().charAt(0).toUpperCase() || "?";
+  const isDark = theme === "dark";
+
+  return (
+    <div className="relative" ref={popoverRef}>
+      <button
+        ref={buttonRef}
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className={cn(
+          "flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium transition-colors duration-150 cursor-pointer",
+          open
+            ? "bg-sidebar-accent text-sidebar-foreground"
+            : "text-sidebar-muted hover:bg-sidebar-accent hover:text-sidebar-foreground"
+        )}
+        aria-expanded={open}
+        aria-haspopup="dialog"
+      >
+        <Settings className="h-4 w-4 shrink-0" aria-hidden="true" />
+        <span className="flex-1 text-left">{t("app.nav.settings")}</span>
+        <ChevronDown
+          className={cn(
+            "h-3.5 w-3.5 shrink-0 transition-transform duration-200",
+            open && "rotate-180"
+          )}
+          aria-hidden="true"
+        />
+      </button>
+
+      {open ? (
+        <div
+          role="dialog"
+          aria-label="Settings panel"
+          className="absolute bottom-full left-0 z-50 mb-2 w-[200px] overflow-hidden rounded-xl border border-sidebar-border bg-sidebar shadow-pop animate-slide-in"
+        >
+          {/* Profile section */}
+          <div className="border-b border-sidebar-border px-3 py-2.5">
+            <div className="flex items-center gap-2.5">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-soft text-sm font-bold text-primary ring-1 ring-inset ring-white/10">
+                {initial}
+              </span>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-sidebar-foreground">{name}</p>
+                {location ? (
+                  <p className="truncate text-xs text-sidebar-muted">{location}</p>
+                ) : null}
+              </div>
+            </div>
+          </div>
+
+          {/* Language */}
+          <div className="border-b border-sidebar-border px-3 py-2">
+            <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-sidebar-muted">
+              {t("common.language")}
+            </p>
+            <div className="flex rounded-lg border border-sidebar-border bg-sidebar-accent p-0.5">
+              <button
+                type="button"
+                onClick={() => setLanguage("en")}
+                className={cn(
+                  "flex-1 rounded-md px-2 py-1 text-xs font-medium transition-colors",
+                  language === "en"
+                    ? "bg-primary text-primary-foreground"
+                    : "text-sidebar-muted hover:text-sidebar-foreground"
+                )}
+              >
+                English
+              </button>
+              <button
+                type="button"
+                onClick={() => setLanguage("ur")}
+                className={cn(
+                  "flex-1 rounded-md px-2 py-1 text-xs font-medium transition-colors",
+                  language === "ur"
+                    ? "bg-primary text-primary-foreground"
+                    : "text-sidebar-muted hover:text-sidebar-foreground"
+                )}
+              >
+                اردو
+              </button>
+            </div>
+          </div>
+
+          {/* Theme */}
+          <div className="border-b border-sidebar-border px-3 py-2">
+            <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-sidebar-muted">
+              Appearance
+            </p>
+            <div className="flex rounded-lg border border-sidebar-border bg-sidebar-accent p-0.5">
+              <button
+                type="button"
+                onClick={() => {
+                  if (isDark) toggleTheme();
+                }}
+                className={cn(
+                  "flex-1 rounded-md px-2 py-1 text-xs font-medium transition-colors",
+                  !isDark
+                    ? "bg-primary text-primary-foreground"
+                    : "text-sidebar-muted hover:text-sidebar-foreground"
+                )}
+              >
+                Light
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!isDark) toggleTheme();
+                }}
+                className={cn(
+                  "flex-1 rounded-md px-2 py-1 text-xs font-medium transition-colors",
+                  isDark
+                    ? "bg-primary text-primary-foreground"
+                    : "text-sidebar-muted hover:text-sidebar-foreground"
+                )}
+              >
+                Dark
+              </button>
+            </div>
+          </div>
+
+          {/* Logout */}
+          <div className="p-2">
+            <button
+              type="button"
+              onClick={handleLogout}
+              disabled={loggingOut}
+              className="flex w-full items-center justify-center gap-2 rounded-lg border border-sidebar-border bg-sidebar-accent px-3 py-2 text-sm font-medium text-red-300 transition-colors hover:bg-[#3a4a33] disabled:opacity-60 cursor-pointer"
+            >
+              <LogOut className="h-4 w-4" aria-hidden="true" />
+              {loggingOut ? t("common.loading") : t("auth.logout")}
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -307,49 +497,39 @@ export function AppLayout() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Desktop sidebar — matches the reference: dark shell, logo, compact
-          grouped nav (AI tools / management), profile pinned at the bottom. */}
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-[220px] flex-col border-r border-sidebar-border bg-sidebar px-3 py-4 lg:flex">
-        <div className="flex items-center justify-between px-1.5 pb-3">
+      {/* Desktop sidebar — full-height flex layout, no scrolling needed. */}
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-[220px] flex-col border-r border-sidebar-border bg-sidebar px-3 py-3 lg:flex">
+        {/* Logo / Brand */}
+        <div className="flex shrink-0 items-center justify-between px-1.5 pb-2">
           <Brand />
         </div>
-        <nav
-          className="flex-1 space-y-0.5 overflow-y-auto scrollbar-thin"
-          aria-label={t("nav.primary")}
-        >
-          <p className="px-2.5 pb-1 pt-0.5 text-[10px] font-semibold uppercase tracking-wider text-sidebar-muted">
-            {t("nav.aiTools")}
-          </p>
-          {tools.map((item) => (
-            <NavLinkItem key={item.to} item={item} />
-          ))}
+
+        {/* Navigation — takes available space, no overflow */}
+        <nav className="flex flex-1 flex-col overflow-hidden" aria-label={t("nav.primary")}>
+          <div className="flex flex-col gap-0.5">
+            <p className="px-2.5 pb-0.5 pt-1 text-[10px] font-semibold uppercase tracking-wider text-sidebar-muted">
+              {t("nav.aiTools")}
+            </p>
+            {tools.map((item) => (
+              <NavLinkItem key={item.to} item={item} />
+            ))}
+          </div>
+
           <div className="my-1.5 h-px bg-sidebar-border" />
-          <p className="px-2.5 pb-1 pt-0.5 text-[10px] font-semibold uppercase tracking-wider text-sidebar-muted">
-            {t("nav.manage")}
-          </p>
-          {manage.map((item) => (
-            <NavLinkItem key={item.to} item={item} />
-          ))}
+
+          <div className="flex flex-col gap-0.5">
+            <p className="px-2.5 pb-0.5 text-[10px] font-semibold uppercase tracking-wider text-sidebar-muted">
+              {t("nav.manage")}
+            </p>
+            {manage.map((item) => (
+              <NavLinkItem key={item.to} item={item} />
+            ))}
+          </div>
         </nav>
-        <div className="mt-2 space-y-1.5 border-t border-sidebar-border pt-2.5">
-          <div className="flex items-center gap-2.5 px-1.5">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-soft text-sm font-bold text-primary ring-1 ring-inset ring-white/10">
-              {farm ? farm.farmerName.trim().charAt(0).toUpperCase() : "?"}
-            </span>
-            <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-sidebar-foreground">
-                {farm ? farm.farmerName : t("app.nav.noFarm")}
-              </p>
-              {farm ? (
-                <p className="truncate text-xs text-sidebar-muted">{farm.location}</p>
-              ) : null}
-            </div>
-          </div>
-          <div className="flex items-center gap-1.5 pt-0.5">
-            <LanguageToggle className="min-w-0 flex-1" />
-            <ThemeToggle className="w-9 shrink-0 justify-center px-0" />
-          </div>
-          <LogoutButton className="lg:-mx-1.5 lg:w-[calc(100%+0.75rem)]" />
+
+        {/* Settings button anchored at bottom */}
+        <div className="mt-auto shrink-0 border-t border-sidebar-border pt-2">
+          <SettingsPopover />
         </div>
       </aside>
 
@@ -370,6 +550,7 @@ export function AppLayout() {
               </kbd>
             </button>
             <div className="ml-auto flex items-center gap-1.5">
+              <FarmSwitcher />
               <NotificationBell />
               <div className="mx-1.5 h-6 w-px bg-border" aria-hidden="true" />
               <ProfileMenu />
@@ -381,6 +562,7 @@ export function AppLayout() {
         <header className="sticky top-0 z-30 flex items-center justify-between border-b border-border bg-background/95 px-4 py-3 backdrop-blur lg:hidden">
           <Brand tone="light" />
           <div className="flex items-center gap-1">
+            <FarmSwitcher className="mr-1" />
             <button
               type="button"
               onClick={openSearch}

@@ -5,6 +5,7 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  Download,
   Droplets,
   FlaskConical,
   ListChecks,
@@ -39,6 +40,7 @@ import {
 } from "../components/ui/select";
 import { Badge } from "../components/ui/badge";
 import { PageHeader, SectionHeader } from "../components/layout/page-header";
+import { exportFarmEventsCsv, downloadCsv } from "../lib/export-utils";
 import { EmptyState } from "../components/layout/empty-state";
 import { LoadingState } from "../components/layout/loading-state";
 import { ErrorState } from "../components/layout/error-state";
@@ -325,10 +327,25 @@ export default function CropCalendarPage() {
         title={t("page.cropCalendar")}
         subtitle={t("calendar.subtitle")}
         action={
-          <Button onClick={openAdd}>
-            <Plus className="h-4 w-4" aria-hidden="true" />
-            {t("calendar.addEvent")}
-          </Button>
+          <div className="flex items-center gap-2">
+            {events.length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const csv = exportFarmEventsCsv(events);
+                  downloadCsv(csv, `kissan-calendar-${new Date().toISOString().slice(0, 10)}.csv`);
+                }}
+              >
+                <Download className="h-4 w-4" aria-hidden="true" />
+                Export CSV
+              </Button>
+            )}
+            <Button onClick={openAdd}>
+              <Plus className="h-4 w-4" aria-hidden="true" />
+              {t("calendar.addEvent")}
+            </Button>
+          </div>
         }
       />
 

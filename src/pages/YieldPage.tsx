@@ -18,8 +18,16 @@ import { EmptyState } from "../components/layout/empty-state";
 import { useFarm } from "../context/FarmContext";
 import { buildFarmContext } from "../lib/farm-context";
 import { estimateYieldForFarm, buildYieldComparison } from "../lib/yield-service";
-import { YieldComparisonChart } from "../components/yield/yield-comparison-chart";
 import { cn } from "../lib/utils";
+import { LoadingState } from "../components/layout/loading-state";
+
+// Lazy-load the chart component so recharts is split into its own chunk.
+const YieldComparisonChart = React.lazy(
+  () =>
+    import("../components/yield/yield-comparison-chart").then((m) => ({
+      default: m.YieldComparisonChart,
+    }))
+);
 
 /**
  * AI Yield Prediction (UI redesign).
@@ -226,7 +234,15 @@ export default function YieldPage() {
 
           {/* Right — Yield Comparison */}
           <div className="lg:col-span-3">
-            <YieldComparisonChart data={chartData} />
+            <React.Suspense
+              fallback={
+                <div className="flex h-72 items-center justify-center rounded-2xl border border-border bg-card">
+                  <LoadingState rows={2} title="Loading chart…" />
+                </div>
+              }
+            >
+              <YieldComparisonChart data={chartData} />
+            </React.Suspense>
           </div>
         </div>
       )}

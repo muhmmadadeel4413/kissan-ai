@@ -1,6 +1,6 @@
 import * as React from "react";
 import { Link } from "react-router-dom";
-import { Plus, Trash2, Wallet, Pencil } from "lucide-react";
+import { Plus, Trash2, Wallet, Pencil, Download } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Card, CardContent } from "../components/ui/card";
 import { Input } from "../components/ui/input";
@@ -27,6 +27,7 @@ import { EmptyState } from "../components/layout/empty-state";
 import { LoadingState } from "../components/layout/loading-state";
 import { ErrorState } from "../components/layout/error-state";
 import { StatCard } from "../components/layout/stat-card";
+import { exportExpensesCsv, downloadCsv } from "../lib/export-utils";
 import { useFarm } from "../context/FarmContext";
 import { useI18n } from "../context/PreferencesContext";
 import { supabase } from "../lib/supabase";
@@ -255,10 +256,25 @@ export default function ExpensesPage() {
         title={t("expenses.title")}
         subtitle={t("expenses.subtitle")}
         action={
-          <Button onClick={openAdd}>
-            <Plus className="h-4 w-4" aria-hidden="true" />
-            {t("expenses.addBtn")}
-          </Button>
+          <div className="flex items-center gap-2">
+            {expenses.length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const csv = exportExpensesCsv(expenses);
+                  downloadCsv(csv, `kissan-expenses-${new Date().toISOString().slice(0, 10)}.csv`);
+                }}
+              >
+                <Download className="h-4 w-4" aria-hidden="true" />
+                Export CSV
+              </Button>
+            )}
+            <Button onClick={openAdd}>
+              <Plus className="h-4 w-4" aria-hidden="true" />
+              {t("expenses.addBtn")}
+            </Button>
+          </div>
         }
       />
 

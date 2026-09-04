@@ -3,11 +3,14 @@ import { createRoot } from "react-dom/client";
 import "./index.css";
 import App from "./App";
 import { PreferencesProvider } from "./context/PreferencesContext";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <PreferencesProvider>
-      <App />
-    </PreferencesProvider>
+    <ErrorBoundary>
+      <PreferencesProvider>
+        <App />
+      </PreferencesProvider>
+    </ErrorBoundary>
   </StrictMode>
 );
