@@ -28,7 +28,7 @@ import { Alert, AlertDescription, AlertTitle } from "../components/ui/alert";
 import { EmptyState } from "../components/layout/empty-state";
 import { UserIdentity } from "../components/layout/user-identity";
 import { useFarm } from "../context/FarmContext";
-import { usePreferences } from "../context/PreferencesContext";
+import { useI18n, usePreferences } from "../context/PreferencesContext";
 import { useFarmWeather } from "../hooks/useFarmWeather";
 import { useVoiceInput } from "../hooks/useVoiceInput";
 import { LANG_CONFIG, type VoiceLang } from "../lib/voice-languages";
@@ -48,11 +48,11 @@ import type { ChatMessage } from "../types";
 import { cn } from "../lib/utils";
 
 const LANGUAGE_OPTIONS = [
-  { value: "auto", label: "Auto (Urdu / English)", voiceLang: "auto" as VoiceLang },
-  { value: "urdu", label: "Urdu", voiceLang: "urdu" as VoiceLang },
-  { value: "english", label: "English", voiceLang: "english" as VoiceLang },
-  { value: "punjabi", label: "Punjabi", voiceLang: "punjabi" as VoiceLang },
-  { value: "saraiki", label: "Saraiki (voice unavailable)", voiceLang: "saraiki" as VoiceLang },
+  { value: "auto", labelKey: "assistant.autoLanguage", voiceLang: "auto" as VoiceLang },
+  { value: "urdu", labelKey: "assistant.langUrdu", voiceLang: "urdu" as VoiceLang },
+  { value: "english", labelKey: "assistant.langEnglish", voiceLang: "english" as VoiceLang },
+  { value: "punjabi", labelKey: "assistant.langPunjabi", voiceLang: "punjabi" as VoiceLang },
+  { value: "saraiki", labelKey: "assistant.langSaraiki", voiceLang: "saraiki" as VoiceLang },
 ] as const;
 
 type LanguagePref = (typeof LANGUAGE_OPTIONS)[number]["value"];
@@ -141,7 +141,7 @@ export default function AssistantPage() {
         if (!cancelled) setDiagnoses(rows);
       })
       .catch(() => {
-        if (!cancelled) setContextError("We couldn't load your recent diagnoses.");
+        if (!cancelled) setContextError(t("assistant.weCouldntLoadDiagnoses"));
       });
     return () => {
       cancelled = true;
@@ -224,7 +224,7 @@ export default function AssistantPage() {
           setError(
             err instanceof Error
               ? err.message
-              : "We couldn't load your conversations. Please try again."
+              : t("assistant.couldntLoadConvos")
           );
         }
       })
@@ -256,7 +256,7 @@ export default function AssistantPage() {
           setError(
             err instanceof Error
               ? err.message
-              : "We couldn't load your messages. Please try again."
+              : t("assistant.couldntLoadMessages")
           );
         }
       })
@@ -336,7 +336,7 @@ export default function AssistantPage() {
         context: contextRef.current ?? {
           farm: { location: "", area: "", soilType: "", irrigationMethod: "" },
           crop: { name: farm.currentCrop, variety: farm.currentCropVariety ?? null, plantingDate: farm.plantingDate ?? null },
-          growth: { ageDays: null, stage: "unknown", stageLabel: "Growth stage unavailable" },
+          growth: { ageDays: null, stage: "unknown", stageLabel: t("assistant.growthStageUnavailable") },
           weather: null,
           recentDiagnoses: [],
           risks: [],
@@ -367,7 +367,7 @@ export default function AssistantPage() {
       setError(
         err instanceof Error
           ? err.message
-          : "Kissan AI is temporarily unavailable. Please try again."
+          : t("assistant.temporarilyUnavailable")
       );
     } finally {
       setIsThinking(false);
@@ -401,7 +401,7 @@ export default function AssistantPage() {
       setError(
         err instanceof Error
           ? err.message
-          : "We couldn't start a new conversation. Please try again."
+          : t("assistant.couldntStartConvo")
       );
     }
   }
@@ -415,11 +415,11 @@ export default function AssistantPage() {
       <div className="mx-auto max-w-xl">
         <EmptyState
           icon={<MessageCircle className="h-6 w-6" />}
-          title="Set up your farm to talk to Kissan AI"
-          description="The assistant answers with your farm, crop, growth stage, and weather in mind — set up your farm first."
+          title={t("assistant.setupFarm")}
+          description={t("assistant.setupFarmDesc")}
           action={
             <Button asChild size="lg">
-              <Link to="/farm-setup">Create Farm</Link>
+              <Link to="/farm-setup">{t("assistant.createFarm")}</Link>
             </Button>
           }
         />
@@ -447,13 +447,13 @@ export default function AssistantPage() {
         )}
       >
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
-          <h2 className="text-sm font-semibold text-foreground">Conversations</h2>
+          <h2 className="text-sm font-semibold text-foreground">{t("assistant.conversations")}</h2>
           <Button
             variant="ghost"
             size="sm"
             className="h-7 w-7 p-0"
             onClick={() => setSidebarOpen(false)}
-            aria-label="Close sidebar"
+            aria-label={t("assistant.closeSidebarAria")}
           >
             <X className="h-4 w-4" />
           </Button>
@@ -461,7 +461,7 @@ export default function AssistantPage() {
         <div className="flex-1 overflow-y-auto p-2">
           {conversations.length === 0 ? (
             <p className="px-3 py-6 text-center text-xs text-muted-foreground">
-              No conversations yet
+              {t("assistant.noConversations")}
             </p>
           ) : (
             conversations.map((c) => (
@@ -532,7 +532,7 @@ export default function AssistantPage() {
             <SelectContent>
               {LANGUAGE_OPTIONS.map((opt) => (
                 <SelectItem key={opt.value} value={opt.value}>
-                  {opt.label}
+                  {t(opt.labelKey)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -559,7 +559,7 @@ export default function AssistantPage() {
         <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-border/70 bg-background/40 px-4 py-2 text-xs text-muted-foreground sm:px-5">
           <span className="inline-flex items-center gap-1.5 font-medium text-foreground">
             <Sprout className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
-            {chatContext!.crop.name || "Your farm"}
+            {chatContext!.crop.name || t("assistant.yourFarm")}
           </span>
           {chatContext!.growth.stageLabel ? (
             <>
@@ -574,7 +574,7 @@ export default function AssistantPage() {
             </span>
           ) : null}
           {weatherStatus === "error" ? (
-            <span className="text-warning">Weather unavailable</span>
+            <span className="text-warning">{t("assistant.weatherUnavailable")}</span>
           ) : null}
         </div>
       ) : null}
@@ -588,13 +588,13 @@ export default function AssistantPage() {
         <Alert variant="danger" className="mx-4 mt-3 shrink-0 sm:mx-5">
           <AlertTitle className="flex items-center gap-2">
             <RefreshCw className="h-4 w-4" aria-hidden="true" />
-            {failedMessage ? "Couldn't get an answer" : "Something went wrong"}
+            {failedMessage ? t("assistant.couldntGetAnswer") : t("assistant.somethingWrong")}
           </AlertTitle>
           <AlertDescription>
             {error}
             {failedMessage ? (
               <Button variant="outline" size="sm" className="mt-2" onClick={handleRetry}>
-                Try again
+                {t("common.tryAgain")}
               </Button>
             ) : null}
           </AlertDescription>
@@ -609,17 +609,15 @@ export default function AssistantPage() {
         {initializing ? (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
             <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
-            Loading your conversation…
+            {t("assistant.loadingConvo")}
           </div>
         ) : null}
 
         {!initializing && !loadingConversation && messages.length === 0 ? (
           <EmptyState
             icon={<MessageCircle className="h-6 w-6" />}
-            title="Ask Kissan AI anything about your farm"
-            description={
-              "Try “What crop am I growing?”, “What stage is my crop in?”, or ask in Urdu: “میری فصل کے لیے آج کیا کرنا چاہیے؟”"
-            }
+            title={t("assistant.askAnything")}
+            description={t("assistant.tryExamples")}
             className="my-4"
           />
         ) : null}
@@ -627,7 +625,7 @@ export default function AssistantPage() {
         {loadingConversation ? (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
             <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
-            Opening conversation…
+            {t("assistant.openingConvo")}
           </div>
         ) : null}
 
@@ -690,30 +688,30 @@ export default function AssistantPage() {
         {voice.voiceState === "listening" ? (
           <div className="mb-3 flex items-center justify-center gap-3 rounded-xl border border-primary/30 bg-primary-soft px-4 py-2.5">
             <span className="flex h-3 w-3 animate-pulse rounded-full bg-primary" />
-            <span className="text-sm font-medium text-primary">Listening... tap mic to stop</span>
+            <span className="text-sm font-medium text-primary">{t("assistant.listeningTapMic")}</span>
             <button
               type="button"
               onClick={() => voice.stopRecording()}
               className="ml-2 rounded-lg bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground hover:bg-primary/90"
             >
-              Stop
+              {t("assistant.stop")}
             </button>
           </div>
         ) : voice.voiceState === "transcribing" ? (
           <div className="mb-3 flex items-center justify-center gap-2 rounded-xl border border-border bg-muted px-4 py-2.5">
             <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-            <span className="text-sm text-muted-foreground">Transcribing...</span>
+            <span className="text-sm text-muted-foreground">{t("assistant.transcribing")}</span>
           </div>
         ) : voice.voiceState === "speaking" ? (
           <div className="mb-3 flex items-center justify-center gap-3 rounded-xl border border-accent/30 bg-accent-soft px-4 py-2.5">
             <Volume2 className="h-4 w-4 text-accent" />
-            <span className="text-sm font-medium text-accent">Speaking...</span>
+            <span className="text-sm font-medium text-accent">{t("assistant.speaking")}</span>
             <button
               type="button"
               onClick={() => voice.stopSpeech()}
               className="ml-2 rounded-lg bg-accent px-3 py-1 text-xs font-semibold text-accent-foreground hover:bg-accent/90"
             >
-              Stop
+              {t("assistant.stop")}
             </button>
           </div>
         ) : null}
@@ -728,7 +726,7 @@ export default function AssistantPage() {
               onClick={() => voice.clearError()}
               className="rounded-lg px-2 py-1 text-xs font-semibold hover:bg-danger/10"
             >
-              Dismiss
+              {t("assistant.dismiss")}
             </button>
           </div>
         ) : null}
@@ -776,8 +774,8 @@ export default function AssistantPage() {
               disabled={isThinking || voice.voiceState === "transcribing"}
               aria-label={
                 voice.voiceState === "listening"
-                  ? "Stop recording"
-                  : "Start voice input"
+                  ? t("assistant.stopRecording")
+                  : t("assistant.startVoiceInput")
               }
             >
               {voice.voiceState === "listening" ? (
@@ -795,7 +793,7 @@ export default function AssistantPage() {
             size="icon"
             className="h-[52px] w-[52px] shrink-0 rounded-full shadow-soft"
             disabled={!input.trim() || isThinking || voice.isBusy}
-            aria-label="Send message"
+            aria-label={t("assistant.sendMessage")}
           >
             <Send className="h-5 w-5" />
           </Button>
@@ -803,7 +801,7 @@ export default function AssistantPage() {
 
         {voice.ttsUnavailable ? (
           <p className="mt-2 text-center text-xs text-warning">
-            Voice playback unavailable for this language
+            {t("assistant.voicePlaybackUnavailable")}
           </p>
         ) : null}
       </form>
@@ -831,6 +829,7 @@ function MessageBubble({
   onPause?: () => void;
   onStop?: () => void;
 }) {
+  const { t } = useI18n();
   const isUser = message.role === "user";
   const content = message.content || reply?.answer || "";
   const isThisPlaying = ttsState === "playing";
@@ -868,7 +867,7 @@ function MessageBubble({
 
         {!isUser && reply && reply.key_points.length > 0 ? (
           <div className="mt-2 w-full rounded-xl border border-border bg-card/70 px-4 py-3">
-            <p className="mb-1.5 text-xs font-semibold text-foreground">Key points</p>
+            <p className="mb-1.5 text-xs font-semibold text-foreground">{t("assistant.keyPoints")}</p>
             <ul className="list-disc space-y-1 pl-4 text-sm text-foreground/90">
               {reply.key_points.map((point, i) => (
                 <li key={i} className="break-words">{point}</li>
@@ -879,7 +878,7 @@ function MessageBubble({
 
         {!isUser && reply && reply.recommended_actions.length > 0 ? (
           <div className="mt-2 w-full rounded-xl border border-border bg-primary-soft/60 px-4 py-3">
-            <p className="mb-1.5 text-xs font-semibold text-foreground">Recommended next steps</p>
+            <p className="mb-1.5 text-xs font-semibold text-foreground">{t("assistant.recommendedNextSteps")}</p>
             <ol className="list-decimal space-y-1 pl-4 text-sm text-foreground/90">
               {reply.recommended_actions.map((action, i) => (
                 <li key={i} className="break-words">{action}</li>
@@ -896,14 +895,14 @@ function MessageBubble({
               size="sm"
               onClick={isThisPlaying ? onPause : onPlay}
               className="h-7 gap-1 rounded-full px-2.5 text-xs"
-              aria-label={isThisPlaying ? "Pause" : isThisPaused ? "Resume" : "Play response"}
+              aria-label={isThisPlaying ? t("assistant.pause") : isThisPaused ? t("assistant.resume") : t("assistant.play")}
             >
               {isThisPlaying ? (
                 <Pause className="h-3 w-3" />
               ) : (
                 <Play className="h-3 w-3" />
               )}
-              {isThisPlaying ? "Pause" : isThisPaused ? "Resume" : "Play"}
+              {isThisPlaying ? t("assistant.pause") : isThisPaused ? t("assistant.resume") : t("assistant.play")}
             </Button>
             {(isThisPlaying || isThisPaused) ? (
               <Button
@@ -911,10 +910,10 @@ function MessageBubble({
                 size="sm"
                 onClick={onStop}
                 className="h-7 gap-1 rounded-full px-2.5 text-xs"
-                aria-label="Stop playback"
+                aria-label={t("assistant.stopPlayback")}
               >
                 <Square className="h-3 w-3" />
-                Stop
+                {t("assistant.stop")}
               </Button>
             ) : null}
           </div>

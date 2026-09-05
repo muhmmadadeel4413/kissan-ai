@@ -13,6 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Badge } from "../ui/badge";
 import { Skeleton } from "../ui/skeleton";
 import { useTodayActions } from "../../hooks/useTodayActions";
+import { useI18n } from "../../context/PreferencesContext";
 import type { ActionItem, ActionSource, ActionTiming } from "../../types";
 import { cn } from "../../lib/utils";
 
@@ -28,31 +29,31 @@ import { cn } from "../../lib/utils";
 
 const PRIORITY_META: Record<
   ActionItem["priority"],
-  { label: string; variant: "danger" | "warning" | "success" }
+  { labelKey: string; variant: "danger" | "warning" | "success" }
 > = {
-  high: { label: "High", variant: "danger" },
-  medium: { label: "Medium", variant: "warning" },
-  low: { label: "Low", variant: "success" },
+  high: { labelKey: "actions.priorityHigh", variant: "danger" },
+  medium: { labelKey: "actions.priorityMedium", variant: "warning" },
+  low: { labelKey: "actions.priorityLow", variant: "success" },
 };
 
-const TIMING_LABEL: Record<ActionTiming, string> = {
-  today: "Today",
-  this_morning: "This morning",
-  this_afternoon: "This afternoon",
-  this_evening: "This evening",
-  before_rain: "Before rain",
-  this_week: "This week",
-  monitor: "Monitor",
+const TIMING_LABEL_KEY: Record<ActionTiming, string> = {
+  today: "actions.timingToday",
+  this_morning: "actions.timingMorning",
+  this_afternoon: "actions.timingAfternoon",
+  this_evening: "actions.timingEvening",
+  before_rain: "actions.timingBeforeRain",
+  this_week: "actions.timingThisWeek",
+  monitor: "actions.timingMonitor",
 };
 
-const SOURCE_LABEL: Record<ActionSource, string> = {
-  farm_context: "Farm profile",
-  growth_stage: "Growth stage",
-  weather: "Weather",
-  diagnosis: "Crop check",
-  risk: "Risk",
-  yield: "Yield",
-  history: "History",
+const SOURCE_LABEL_KEY: Record<ActionSource, string> = {
+  farm_context: "actions.sourceFarmProfile",
+  growth_stage: "actions.sourceGrowthStage",
+  weather: "actions.sourceWeather",
+  diagnosis: "actions.sourceCropCheck",
+  risk: "actions.sourceRisk",
+  yield: "actions.sourceYield",
+  history: "actions.sourceHistory",
 };
 
 export function TodayActionsCard({ compact = false }: { compact?: boolean }) {
@@ -67,6 +68,7 @@ export function TodayActionsCard({ compact = false }: { compact?: boolean }) {
     refresh,
     retry,
   } = useTodayActions();
+  const { t } = useI18n();
 
   const completedCount = actions.filter((a) => a.completed).length;
   const pending = actions.filter((a) => !a.completed);
@@ -78,15 +80,15 @@ export function TodayActionsCard({ compact = false }: { compact?: boolean }) {
         <CardHeader className={compact ? "pb-2" : "pb-3"}>
           <CardTitle className="flex items-center gap-2">
             <ListChecks className="h-5 w-5 text-primary" aria-hidden="true" />
-            What Should I Do Today?
+            {t("actions.whatShouldIDo")}
           </CardTitle>
         </CardHeader>
         <CardContent
           className={compact ? "space-y-2" : "space-y-3"}
           role="status"
-          aria-label="Loading today's actions"
+          aria-label={t("actions.loadingAria")}
         >
-          <span className="sr-only">Loading today's actions</span>
+          <span className="sr-only">{t("actions.loadingAria")}</span>
           {[0, 1, 2].map((i) => (
             <div
               key={i}
@@ -115,7 +117,7 @@ export function TodayActionsCard({ compact = false }: { compact?: boolean }) {
         <CardHeader className={compact ? "pb-2" : "pb-3"}>
           <CardTitle className="flex items-center gap-2">
             <ListChecks className="h-5 w-5 text-primary" aria-hidden="true" />
-            What Should I Do Today?
+            {t("actions.whatShouldIDo")}
           </CardTitle>
         </CardHeader>
         <CardContent className="py-2">
@@ -125,11 +127,10 @@ export function TodayActionsCard({ compact = false }: { compact?: boolean }) {
             </span>
             <div className="min-w-0">
               <p className="text-sm font-semibold text-foreground">
-                More farm information is needed
+                {t("actions.moreFarmInfoNeeded")}
               </p>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                Complete your farm profile and add crop information to receive
-                personalized actions.
+                {t("actions.completeFarmProfile")}
               </p>
             </div>
           </div>
@@ -145,7 +146,7 @@ export function TodayActionsCard({ compact = false }: { compact?: boolean }) {
         <CardHeader className={compact ? "pb-2" : "pb-3"}>
           <CardTitle className="flex items-center gap-2">
             <ListChecks className="h-5 w-5 text-primary" aria-hidden="true" />
-            What Should I Do Today?
+            {t("actions.whatShouldIDo")}
           </CardTitle>
         </CardHeader>
         <CardContent className={compact ? "space-y-2 py-2" : "space-y-3 py-2"}>
@@ -155,14 +156,14 @@ export function TodayActionsCard({ compact = false }: { compact?: boolean }) {
             </span>
             <div className="min-w-0">
               <p className="text-sm font-semibold text-foreground">
-                We couldn't update today's actions right now
+                {t("actions.couldntUpdate")}
               </p>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                {error ?? "Please try again."}
+                {error ?? t("actions.pleaseTryAgain")}
               </p>
               <Button variant="outline" size="sm" className="mt-2" onClick={retry}>
                 <RefreshCw className="h-4 w-4" aria-hidden="true" />
-                Try again
+                {t("common.tryAgain")}
               </Button>
             </div>
           </div>
@@ -178,7 +179,7 @@ export function TodayActionsCard({ compact = false }: { compact?: boolean }) {
         <CardHeader className={compact ? "pb-2" : "pb-3"}>
           <CardTitle className="flex items-center gap-2">
             <ListChecks className="h-5 w-5 text-primary" aria-hidden="true" />
-            What Should I Do Today?
+            {t("actions.whatShouldIDo")}
           </CardTitle>
         </CardHeader>
         <CardContent className="py-2">
@@ -188,16 +189,14 @@ export function TodayActionsCard({ compact = false }: { compact?: boolean }) {
             </span>
             <div className="min-w-0">
               <p className="text-sm font-semibold text-foreground">
-                You're all caught up
+                {t("actions.allCaughtUp")}
               </p>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                No urgent actions were identified from your current farm
-                information. Continue monitoring your crop and check again as
-                conditions change.
+                {t("actions.noUrgentActions")}
               </p>
               <Button variant="outline" size="sm" className="mt-2" onClick={refresh}>
                 <RefreshCw className="h-4 w-4" aria-hidden="true" />
-                Refresh Today's Actions
+                {t("actions.refreshTodayActions")}
               </Button>
             </div>
           </div>
@@ -213,7 +212,7 @@ export function TodayActionsCard({ compact = false }: { compact?: boolean }) {
         <div className="flex items-start justify-between gap-3">
           <CardTitle className="flex items-center gap-2">
             <ListChecks className="h-5 w-5 text-primary" aria-hidden="true" />
-            What Should I Do Today?
+            {t("actions.whatShouldIDo")}
           </CardTitle>
           <Button
             variant="outline"
@@ -226,9 +225,9 @@ export function TodayActionsCard({ compact = false }: { compact?: boolean }) {
               aria-hidden="true"
             />
             <span className="hidden sm:inline">
-              {generating ? "Updating…" : "Refresh"}
+              {generating ? t("actions.updating") : t("actions.refreshBtn")}
             </span>
-            <span className="sm:hidden">Refresh</span>
+            <span className="sm:hidden">{t("actions.refreshBtn")}</span>
           </Button>
         </div>
         {summary ? (
@@ -244,10 +243,7 @@ export function TodayActionsCard({ compact = false }: { compact?: boolean }) {
             className="flex items-start gap-2 rounded-lg bg-warning-soft px-3 py-2 text-xs text-warning"
           >
             <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-            <p>
-              We couldn't update today's actions right now. Showing your last
-              saved actions. Please try again.
-            </p>
+            <p>{t("actions.lastSavedWarning")}</p>
           </div>
         ) : null}
 
@@ -258,7 +254,7 @@ export function TodayActionsCard({ compact = false }: { compact?: boolean }) {
         {completedCount > 0 ? (
           <div className={compact ? "pt-0.5" : "pt-1"}>
             <p className="mb-2 text-xs font-medium text-muted-foreground">
-              Completed ({completedCount})
+              {t("actions.completedCount", { n: completedCount })}
             </p>
             <div className="space-y-2">
               {actions
@@ -292,6 +288,7 @@ function ActionRow({
   onToggle: (id: string, completed: boolean) => Promise<unknown>;
   compact?: boolean;
 }) {
+  const { t } = useI18n();
   const [busy, setBusy] = React.useState(false);
   const meta = PRIORITY_META[action.priority];
 
@@ -336,7 +333,7 @@ function ActionRow({
                 )}
                 aria-hidden="true"
               />
-              <span className="ml-1.5">{meta.label}</span>
+              <span className="ml-1.5">{t(meta.labelKey)}</span>
             </Badge>
           </div>
           <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
@@ -348,7 +345,7 @@ function ActionRow({
               (compact ? " mt-1" : " mt-2")
             }
           >
-            <span className="font-semibold text-foreground">Why: </span>
+            <span className="font-semibold text-foreground">{t("actions.whyLabel")}</span>{" "}
             {action.reason}
           </p>
         </div>
@@ -363,16 +360,18 @@ function ActionRow({
         {action.timing ? (
           <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
             <Clock className="h-3.5 w-3.5" aria-hidden="true" />
-            <span className="font-medium text-foreground">Timing:</span>{" "}
-            {TIMING_LABEL[action.timing] ?? action.timing}
+            <span className="font-medium text-foreground">{t("actions.timingLabel")}</span>{" "}
+            {TIMING_LABEL_KEY[action.timing] ? t(TIMING_LABEL_KEY[action.timing]) : action.timing}
           </span>
         ) : null}
 
         {action.source.length > 0 ? (
           <span className="inline-flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
             <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
-            <span className="font-medium text-foreground">Based on:</span>{" "}
-            {action.source.map((s) => SOURCE_LABEL[s] ?? s).join(" + ")}
+            <span className="font-medium text-foreground">{t("actions.basedOnLabel")}</span>{" "}
+            {action.source
+              .map((s) => (SOURCE_LABEL_KEY[s] ? t(SOURCE_LABEL_KEY[s]) : s))
+              .join(" + ")}
           </span>
         ) : null}
 
@@ -385,8 +384,8 @@ function ActionRow({
             aria-pressed={action.completed}
             aria-label={
               action.completed
-                ? `Mark "${action.title}" as not done`
-                : `Mark "${action.title}" as done`
+                ? t("actions.unmarkDoneAria", { title: action.title })
+                : t("actions.markDoneAria", { title: action.title })
             }
           >
             {action.completed ? (
@@ -394,7 +393,7 @@ function ActionRow({
             ) : (
               <Circle className="h-4 w-4" aria-hidden="true" />
             )}
-            {action.completed ? "Done" : "Mark done"}
+            {action.completed ? t("actions.done") : t("actions.markDone")}
           </Button>
         </span>
       </div>

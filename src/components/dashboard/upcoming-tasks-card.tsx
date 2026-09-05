@@ -134,7 +134,7 @@ export function UpcomingTasksCard() {
                 {t("dashboard.tasksLoading")}
               </p>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                We couldn't load your upcoming tasks.
+                {t("dashboard.tasksLoadError")}
               </p>
               <Button
                 variant="outline"

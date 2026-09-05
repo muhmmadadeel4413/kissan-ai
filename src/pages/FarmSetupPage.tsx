@@ -74,8 +74,19 @@ export default function FarmSetupPage() {
   // Determine which farm we're editing (if any)
   const editFarm = editId ? farms.find((f) => f.id === editId) ?? null : null;
   const isEdit = Boolean(editFarm);
-  // If no edit param, check if user has an active farm (backward compat)
-  const fallbackEdit = !editId && farm ? farm : null;
+
+  // Backward-compat fallback: when a user with no explicit query params lands
+  // on /farm-setup (e.g. the post-auth redirect from usePostAuthRedirect),
+  // treat the active farm as the edit target so the onboarding form still
+  // works for users who already have a farm.
+  //
+  // IMPORTANT: only apply this fallback when the URL has NO search params at
+  // all. When the URL carries ?create=new (from the farm switcher or profile
+  // page) or any other explicit param, the user intentionally wants to
+  // create a NEW farm — entering edit mode here would silently overwrite the
+  // existing farm instead of inserting a new row.
+  const hasExplicitParams = searchParams.toString().length > 0;
+  const fallbackEdit = !hasExplicitParams && farm ? farm : null;
   const targetFarm = editFarm ?? fallbackEdit;
   const isEditMode = Boolean(targetFarm);
 

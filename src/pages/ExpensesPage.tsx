@@ -130,7 +130,7 @@ export default function ExpensesPage() {
       setStatus("ready");
     } catch (err) {
       console.error("expenses-page:", err);
-      setLoadError("We couldn't load your expenses. Please try again.");
+      setLoadError(t("expenses.loadError"));
       setStatus("error");
     }
   }, [farm]);
@@ -267,7 +267,7 @@ export default function ExpensesPage() {
                 }}
               >
                 <Download className="h-4 w-4" aria-hidden="true" />
-                Export CSV
+                {t("common.exportCsv")}
               </Button>
             )}
             <Button onClick={openAdd}>

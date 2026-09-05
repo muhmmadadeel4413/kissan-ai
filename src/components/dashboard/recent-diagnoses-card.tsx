@@ -4,10 +4,13 @@ import { Card, CardContent } from "../ui/card";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Skeleton } from "../ui/skeleton";
+import { useI18n } from "../../context/PreferencesContext";
 import type { Diagnosis, Severity } from "../../types";
 import { cn } from "../../lib/utils";
 
 type Status = "loading" | "ready" | "error";
+
+type Translate = (key: string, vars?: Record<string, string | number>) => string;
 
 const SEVERITY_VARIANT: Record<Severity, "danger" | "warning" | "success"> = {
   high: "danger",
@@ -15,23 +18,23 @@ const SEVERITY_VARIANT: Record<Severity, "danger" | "warning" | "success"> = {
   low: "success",
 };
 
-const SEVERITY_LABEL: Record<Severity, string> = {
-  high: "High",
-  medium: "Medium",
-  low: "Low",
+const SEVERITY_LABEL_KEY: Record<Severity, string> = {
+  high: "dashboard.severityHigh",
+  medium: "dashboard.severityMedium",
+  low: "dashboard.severityLow",
 };
 
-function relativeTime(iso: string): string {
+function relativeTime(iso: string, t: Translate): string {
   const then = new Date(iso).getTime();
   if (Number.isNaN(then)) return "";
   const mins = Math.round((Date.now() - then) / 60_000);
-  if (mins < 1) return "Just now";
-  if (mins < 60) return `${mins}m ago`;
+  if (mins < 1) return t("dashboard.justNow");
+  if (mins < 60) return t("dashboard.minAgo", { n: mins });
   const hours = Math.round(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
+  if (hours < 24) return t("dashboard.hrAgo", { n: hours });
   const days = Math.round(hours / 24);
-  if (days === 1) return "Yesterday";
-  if (days < 7) return `${days} days ago`;
+  if (days === 1) return t("dashboard.yesterday");
+  if (days < 7) return t("dashboard.daysAgo", { n: days });
   return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
@@ -48,26 +51,27 @@ export function RecentDiagnosesCard({
   status: Status;
   onRetry: () => void;
 }) {
+  const { t } = useI18n();
   return (
     <Card className="flex h-full flex-col">
       <div className="flex items-center justify-between gap-2 p-5 pb-3">
         <div className="flex items-center gap-2">
           <Stethoscope className="h-5 w-5 text-primary" aria-hidden="true" />
           <h2 className="text-base font-semibold tracking-tight text-foreground">
-            Recent Diagnoses
+            {t("dashboard.recentDiagnoses")}
           </h2>
         </div>
         <Link
           to="/diagnosis-history"
           className="inline-flex items-center gap-0.5 text-xs font-semibold text-primary hover:text-primary-deep transition-colors cursor-pointer"
         >
-          View all
+          {t("dashboard.viewAll")}
           <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
         </Link>
       </div>
 
       {status === "loading" ? (
-        <CardContent className="space-y-2.5 pt-0" role="status" aria-label="Loading diagnoses">
+        <CardContent className="space-y-2.5 pt-0" role="status" aria-label={t("dashboard.loadingDiagnosesAria")}>
           {[0, 1, 2].map((i) => (
             <div key={i} className="flex items-center gap-3 rounded-xl border border-border bg-background/40 p-3">
               <Skeleton className="h-9 w-9 rounded-lg" />
@@ -86,10 +90,10 @@ export function RecentDiagnosesCard({
             </span>
             <div className="min-w-0">
               <p className="text-sm font-semibold text-foreground">
-                We couldn't load recent diagnoses
+                {t("dashboard.couldntLoadRecent")}
               </p>
               <Button variant="outline" size="sm" className="mt-2" onClick={onRetry}>
-                Try again
+                {t("common.tryAgain")}
               </Button>
             </div>
           </div>
@@ -102,13 +106,13 @@ export function RecentDiagnosesCard({
             </span>
             <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold text-foreground">
-                No crop checks yet
+                {t("dashboard.noCropChecks")}
               </p>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                Diagnose a crop photo and your checks will appear here.
+                {t("dashboard.diagnoseAndChecksAppear")}
               </p>
               <Button asChild variant="outline" size="sm" className="mt-2">
-                <Link to="/crop-doctor">Analyze a Crop</Link>
+                <Link to="/crop-doctor">{t("dashboard.analyzeACrop")}</Link>
               </Button>
             </div>
           </div>
@@ -138,11 +142,11 @@ export function RecentDiagnosesCard({
                     {d.crop}
                   </p>
                   <Badge variant={SEVERITY_VARIANT[d.severity]}>
-                    {SEVERITY_LABEL[d.severity]}
+                    {t(SEVERITY_LABEL_KEY[d.severity])}
                   </Badge>
                 </div>
                 <p className="truncate text-xs text-muted-foreground">
-                  {d.diagnosis} · {d.confidence}% · {relativeTime(d.createdAt)}
+                  {d.diagnosis} · {d.confidence}% · {relativeTime(d.createdAt, t)}
                 </p>
               </div>
               <ChevronRight

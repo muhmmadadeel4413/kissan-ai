@@ -2,6 +2,7 @@ import { CloudRain, CloudSun, Droplets, RefreshCw, Wind } from "lucide-react";
 import { Card, CardContent } from "../ui/card";
 import { Button } from "../ui/button";
 import { Skeleton } from "../ui/skeleton";
+import { useI18n } from "../../context/PreferencesContext";
 import type { WeatherData } from "../../lib/weather-service";
 import type { WeatherStatus } from "../../hooks/useFarmWeather";
 
@@ -19,12 +20,13 @@ export function WeatherTodayCard({
   status: WeatherStatus;
   onRetry: () => void;
 }) {
+  const { t } = useI18n();
   return (
     <Card className="h-full">
       <CardContent className="flex h-full flex-col gap-3 p-5">
         <div className="flex items-start justify-between gap-2">
           <p className="text-sm font-semibold text-muted-foreground">
-            Weather Today
+            {t("dashboard.weatherToday")}
           </p>
           <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-warning-soft text-warning shadow-soft ring-1 ring-inset ring-warning/15">
             <CloudSun className="h-5 w-5" aria-hidden="true" />
@@ -32,7 +34,7 @@ export function WeatherTodayCard({
         </div>
 
         {status === "loading" ? (
-          <div className="flex-1 space-y-2" role="status" aria-label="Loading weather">
+          <div className="flex-1 space-y-2" role="status" aria-label={t("dashboard.loadingWeatherAria")}>
             <Skeleton className="h-8 w-20" />
             <Skeleton className="h-3.5 w-32" />
             <div className="mt-auto grid grid-cols-3 gap-2 border-t border-border pt-3">
@@ -44,10 +46,10 @@ export function WeatherTodayCard({
         ) : status === "error" || !weather ? (
           <div className="flex flex-1 flex-col items-start gap-2">
             <p className="text-sm font-semibold text-foreground">
-              Weather unavailable
+              {t("dashboard.weatherUnavailable")}
             </p>
             <p className="text-xs leading-relaxed text-muted-foreground">
-              We couldn't load live conditions for your farm right now.
+              {t("dashboard.weatherLoadError")}
             </p>
             <Button
               variant="outline"
@@ -56,7 +58,7 @@ export function WeatherTodayCard({
               onClick={onRetry}
             >
               <RefreshCw className="h-4 w-4" aria-hidden="true" />
-              Try again
+              {t("common.tryAgain")}
             </Button>
           </div>
         ) : (
@@ -66,7 +68,7 @@ export function WeatherTodayCard({
                 {Math.round(weather.current.temperature)}°C
               </p>
               <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                Feels like {Math.round(weather.current.feelsLike)}°C ·{" "}
+                {t("dashboard.feelsLike")} {Math.round(weather.current.feelsLike)}°C ·{" "}
                 {weather.current.condition}
               </p>
             </div>
@@ -74,17 +76,17 @@ export function WeatherTodayCard({
             <div className="mt-auto grid grid-cols-3 gap-2 border-t border-border pt-3">
               <Metric
                 icon={<Droplets className="h-3.5 w-3.5" aria-hidden="true" />}
-                label="Humidity"
+                label={t("dashboard.humidity")}
                 value={`${Math.round(weather.current.humidity)}%`}
               />
               <Metric
                 icon={<Wind className="h-3.5 w-3.5" aria-hidden="true" />}
-                label="Wind"
+                label={t("dashboard.wind")}
                 value={`${Math.round(weather.current.windSpeed)} km/h`}
               />
               <Metric
                 icon={<CloudRain className="h-3.5 w-3.5" aria-hidden="true" />}
-                label="Rain"
+                label={t("dashboard.rain")}
                 value={`${Math.round(weather.current.rainProbability)}%`}
               />
             </div>

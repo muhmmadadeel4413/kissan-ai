@@ -20,14 +20,15 @@ import { buildFarmContext } from "../lib/farm-context";
 import { fetchActiveRisks } from "../lib/risk-service";
 import { fetchDiagnoses } from "../lib/diagnosis-service";
 import { useFarm } from "../context/FarmContext";
+import { useI18n } from "../context/PreferencesContext";
 import { useFarmWeather } from "../hooks/useFarmWeather";
 import { useRecentActivity } from "../hooks/useRecentActivity";
 import type { Diagnosis, RiskAlert } from "../types";
 
-function greetingFor(hour: number): string {
-  if (hour < 12) return "Good Morning";
-  if (hour < 17) return "Good Afternoon";
-  return "Good Evening";
+function greetingFor(hour: number, t: (key: string) => string): string {
+  if (hour < 12) return t("dashboard.greetingMorning");
+  if (hour < 17) return t("dashboard.greetingAfternoon");
+  return t("dashboard.greetingEvening");
 }
 
 /**
@@ -44,17 +45,18 @@ function greetingFor(hour: number): string {
  */
 export default function DashboardPage() {
   const { farm } = useFarm();
+  const { t } = useI18n();
 
   if (!farm) {
     return (
       <div className="mx-auto max-w-xl">
         <EmptyState
           icon={<Sprout className="h-6 w-6" />}
-          title="Set up your farm to unlock Kissan AI"
-          description="Add your farmer, farm, and crop details once — every Kissan AI insight is then tailored to your farm."
+          title={t("dashboard.setupTitle")}
+          description={t("dashboard.setupDesc")}
           action={
             <Button asChild size="lg">
-              <Link to="/farm-setup">Create Farm</Link>
+              <Link to="/farm-setup">{t("dashboard.createFarm")}</Link>
             </Button>
           }
         />
@@ -83,7 +85,7 @@ export default function DashboardPage() {
         if (!cancelled) {
           setRiskAlerts([]);
           setRisksError(
-            err instanceof Error ? err.message : "Risk information unavailable. Please try again."
+            err instanceof Error ? err.message : t("dashboard.riskInfoUnavailable")
           );
         }
       })
@@ -167,20 +169,19 @@ export default function DashboardPage() {
             {today} · {farm.location}
           </p>
           <h1 className="mt-1.5 font-heading text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
-            {greetingFor(new Date().getHours())}, {firstName}! 👋
+            {greetingFor(new Date().getHours(), t)}, {firstName}! 👋
           </h1>
           <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-            Your AI farming decision assistant is ready — here&apos;s what&apos;s
-            happening on your farm today.
+            {t("dashboard.greetingReady")}
           </p>
         </div>
         <Button asChild variant="outline" className="shrink-0">
-          <Link to="/farm-setup">Edit Farm</Link>
+          <Link to="/farm-setup">{t("dashboard.editFarm")}</Link>
         </Button>
       </section>
 
       {/* Row 1 — the four stat cards from the reference */}
-      <section aria-label="Farm at a glance">
+      <section aria-label={t("dashboard.farmAtGlance")}>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <FarmOverviewCard farm={farm} growth={farmContext.growth} />
           <WeatherTodayCard
@@ -204,7 +205,7 @@ export default function DashboardPage() {
 
       {/* Row 2 — intelligence, diagnoses, irrigation, tasks.
           This four-card row now sits directly below the top stat cards. */}
-      <section aria-label="Farm intelligence">
+      <section aria-label={t("dashboard.aiFarmIntelligence")}>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <FarmIntelligenceCard input={healthInput} />
           <RecentDiagnosesCard
@@ -224,26 +225,26 @@ export default function DashboardPage() {
           and bottom at every breakpoint. The [&>div:last-child] selector
           targets the card's single root Card element directly after the
           header. The cards use their compact variant so the row stays short. */}
-      <section aria-label="Today's plan and outlook">
+      <section aria-label={t("dashboard.todayPlanOutlook")}>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           <div className="flex flex-col gap-3 [&>div:last-child]:flex-1">
             <SectionHeader
-              title="What Should I Do Today?"
-              subtitle="Your decision plan, built from real farm data"
+              title={t("dashboard.whatShouldIDo")}
+              subtitle={t("dashboard.whatShouldISub")}
             />
             <TodayActionsCard compact />
           </div>
           <div className="flex flex-col gap-3 [&>div:last-child]:flex-1">
             <SectionHeader
-              title="Crop Growth Stage"
-              subtitle="Crop age and current stage"
+              title={t("dashboard.cropGrowthStage")}
+              subtitle={t("dashboard.cropGrowthStageSub")}
             />
             <GrowthStageCard growth={farmContext.growth} compact />
           </div>
           <div className="flex flex-col gap-3 [&>div:last-child]:flex-1 md:col-span-2 xl:col-span-1">
             <SectionHeader
-              title="AI Yield Prediction"
-              subtitle="Estimate range and confidence"
+              title={t("dashboard.aiYieldPrediction")}
+              subtitle={t("dashboard.aiYieldPredictionSub")}
             />
             <YieldPredictionCard farm={farm} compact />
           </div>

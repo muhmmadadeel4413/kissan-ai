@@ -163,7 +163,7 @@ function SettingsPopover() {
       {open ? (
         <div
           role="dialog"
-          aria-label="Settings panel"
+          aria-label={t("app.settingsPanelAria")}
           className="absolute bottom-full left-0 z-50 mb-2 w-[200px] overflow-hidden rounded-xl border border-sidebar-border bg-sidebar shadow-pop animate-slide-in"
         >
           {/* Profile section */}
@@ -217,7 +217,7 @@ function SettingsPopover() {
           {/* Theme */}
           <div className="border-b border-sidebar-border px-3 py-2">
             <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-sidebar-muted">
-              Appearance
+              {t("app.appearance")}
             </p>
             <div className="flex rounded-lg border border-sidebar-border bg-sidebar-accent p-0.5">
               <button
@@ -232,7 +232,7 @@ function SettingsPopover() {
                     : "text-sidebar-muted hover:text-sidebar-foreground"
                 )}
               >
-                Light
+                {t("app.light")}
               </button>
               <button
                 type="button"
@@ -246,7 +246,7 @@ function SettingsPopover() {
                     : "text-sidebar-muted hover:text-sidebar-foreground"
                 )}
               >
-                Dark
+                {t("app.dark")}
               </button>
             </div>
           </div>
@@ -348,7 +348,7 @@ function ProfileMenu() {
         type="button"
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label={`Account — ${name}`}
+        aria-label={t("app.accountAria", { name })}
         onClick={() => setOpen((v) => !v)}
         className="flex items-center gap-2.5 rounded-xl px-2 py-1.5 transition-colors duration-150 hover:bg-muted cursor-pointer"
       >
@@ -377,7 +377,7 @@ function ProfileMenu() {
       {open ? (
         <div
           role="menu"
-          aria-label="Account menu"
+          aria-label={t("app.accountMenuAria")}
           className="absolute right-0 top-full z-50 mt-2 w-56 overflow-hidden rounded-2xl border border-border bg-background p-1.5 shadow-pop animate-slide-in"
         >
           <div className="border-b border-border px-2.5 py-2.5">
@@ -394,7 +394,7 @@ function ProfileMenu() {
               className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm font-medium text-foreground transition-colors duration-150 hover:bg-muted cursor-pointer"
             >
               <User className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-              Farm Profile
+              {t("app.farmProfileMenu")}
             </Link>
             <Link
               to="/settings"
@@ -403,7 +403,7 @@ function ProfileMenu() {
               className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm font-medium text-foreground transition-colors duration-150 hover:bg-muted cursor-pointer"
             >
               <Settings className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-              Settings
+              {t("app.settingsMenu")}
             </Link>
           </div>
           <div className="my-1 h-px bg-border" />
@@ -470,10 +470,7 @@ export function AppLayout() {
       <div className="flex min-h-screen items-center justify-center bg-background p-6">
         <div className="w-full max-w-md">
           <ErrorState
-            message={
-              error ??
-              "We couldn't load your farm. Please try again."
-            }
+            message={error ?? t("common.couldntLoad")}
             onRetry={retry}
           />
         </div>
@@ -544,7 +541,7 @@ export function AppLayout() {
               aria-label={t("search.open")}
             >
               <Search className="h-4 w-4 shrink-0" aria-hidden="true" />
-              <span className="flex-1 text-left">Search your farm…</span>
+              <span className="flex-1 text-left">{t("app.searchYourFarm")}</span>
               <kbd className="hidden rounded-md border border-border bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground sm:inline">
                 ⌘K
               </kbd>
@@ -622,7 +619,7 @@ export function AppLayout() {
       {/* Mobile bottom nav */}
       <nav
         className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background/95 backdrop-blur lg:hidden"
-        aria-label="Bottom"
+        aria-label={t("app.bottomNavAria")}
       >
         <div className="mx-auto flex max-w-lg items-stretch">
           {bottomNav.map((item) => (

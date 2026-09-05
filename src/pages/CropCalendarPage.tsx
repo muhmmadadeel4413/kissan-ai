@@ -164,7 +164,7 @@ export default function CropCalendarPage() {
       setStatus("ready");
     } catch (err) {
       console.error("calendar-page:", err);
-      setLoadError("We couldn't load your calendar events. Please try again.");
+      setLoadError(t("calendar.loadError"));
       setStatus("error");
     }
   }, [farm]);
@@ -249,7 +249,7 @@ export default function CropCalendarPage() {
       return;
     }
     if (!form.eventType) {
-      setFormError("Please select an event type.");
+      setFormError(t("calendar.errEventType"));
       return;
     }
 
@@ -338,7 +338,7 @@ export default function CropCalendarPage() {
                 }}
               >
                 <Download className="h-4 w-4" aria-hidden="true" />
-                Export CSV
+                {t("common.exportCsv")}
               </Button>
             )}
             <Button onClick={openAdd}>
@@ -375,7 +375,7 @@ export default function CropCalendarPage() {
       </section>
 
       {/* Crop cycle — real farm crop, growth stage and harvest timeline */}
-      <section aria-label="Crop cycle">
+      <section aria-label={t("calendar.cropCycleAria")}>
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           <CropCycleCard farm={farm} growth={farmContext?.growth ?? buildFarmContext(farm).growth} />
           <Card className="h-full">
@@ -386,42 +386,41 @@ export default function CropCalendarPage() {
                 </span>
                 <div>
                   <p className="font-heading text-base font-bold text-foreground">
-                    Season at a glance
+                    {t("calendar.seasonAtGlance")}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {farmContext?.growth.stageLabel ?? "Growth stage unavailable"}
+                    {farmContext?.growth.stageLabel ?? t("farm.growthStageUnavailable")}
                   </p>
                 </div>
               </div>
               <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
                 <div>
-                  <dt className="text-xs font-medium text-muted-foreground">Crop age</dt>
+                  <dt className="text-xs font-medium text-muted-foreground">{t("farm.cropAge")}</dt>
                   <dd className="text-sm font-bold text-foreground">
-                    {farmContext?.growth.cropAgeDays !== null
-                      ? `${farmContext?.growth.cropAgeDays} days`
+                    {farmContext?.growth.cropAgeDays != null
+                      ? t("calendar.cropAgeDays", { n: farmContext.growth.cropAgeDays })
                       : "—"}
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-xs font-medium text-muted-foreground">Land area</dt>
+                  <dt className="text-xs font-medium text-muted-foreground">{t("calendar.landArea")}</dt>
                   <dd className="text-sm font-bold text-foreground">
                     {farm.landArea || "—"}
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-xs font-medium text-muted-foreground">Soil type</dt>
+                  <dt className="text-xs font-medium text-muted-foreground">{t("calendar.soilType")}</dt>
                   <dd className="text-sm font-bold text-foreground">{farm.soilType || "—"}</dd>
                 </div>
                 <div>
-                  <dt className="text-xs font-medium text-muted-foreground">Irrigation</dt>
+                  <dt className="text-xs font-medium text-muted-foreground">{t("calendar.irrigationLabel")}</dt>
                   <dd className="text-sm font-bold text-foreground">
                     {farm.irrigationMethod || "—"}
                   </dd>
                 </div>
               </dl>
               <p className="mt-auto text-xs leading-relaxed text-muted-foreground">
-                Timeline stages are estimated from your saved planting date and crop. Log
-                activities below to track work across the season.
+                {t("calendar.timelineHint")}
               </p>
             </CardContent>
           </Card>
@@ -429,7 +428,7 @@ export default function CropCalendarPage() {
       </section>
 
       {/* Month navigation + filter */}
-      <section className="space-y-3" aria-label="Calendar navigation">
+      <section className="space-y-3" aria-label={t("calendar.navAria")}>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <Button
             variant="outline"
@@ -467,7 +466,7 @@ export default function CropCalendarPage() {
             </Button>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filter events">
+        <div className="flex flex-wrap items-center gap-2" role="group" aria-label={t("calendar.filterAria")}>
           {(
             [
               { key: "all", label: t("calendar.filterAll") },

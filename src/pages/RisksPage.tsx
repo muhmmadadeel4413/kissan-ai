@@ -12,6 +12,7 @@ import { EmptyState } from "../components/layout/empty-state";
 import { LoadingState } from "../components/layout/loading-state";
 import { ErrorState } from "../components/layout/error-state";
 import { useFarmRisks } from "../hooks/useFarmRisks";
+import { useI18n } from "../context/PreferencesContext";
 import type { Level, RiskAlert } from "../types";
 import { cn } from "../lib/utils";
 
@@ -21,11 +22,11 @@ import { cn } from "../lib/utils";
 
 type AlertFilter = "all" | Level;
 
-const FILTERS: { key: AlertFilter; label: string }[] = [
-  { key: "all", label: "All" },
-  { key: "high", label: "High" },
-  { key: "medium", label: "Medium" },
-  { key: "low", label: "Low" },
+const FILTERS: { key: AlertFilter; labelKey: string }[] = [
+  { key: "all", labelKey: "risks.filterAll" },
+  { key: "high", labelKey: "risks.filterHigh" },
+  { key: "medium", labelKey: "risks.filterMedium" },
+  { key: "low", labelKey: "risks.filterLow" },
 ];
 
 const LEVEL_RANK: Record<Level, number> = { high: 0, medium: 1, low: 2 };
@@ -37,7 +38,7 @@ const LEVEL_RANK: Record<Level, number> = { high: 0, medium: 1, low: 2 };
 const SEVERITY_META: Record<
   Level,
   {
-    label: string;
+    labelKey: string;
     chip: string;
     text: string;
     dot: string;
@@ -47,7 +48,7 @@ const SEVERITY_META: Record<
   }
 > = {
   high: {
-    label: "High Risk",
+    labelKey: "risks.highRisk",
     chip: "bg-danger-soft text-danger ring-danger/20",
     text: "text-danger",
     dot: "bg-danger",
@@ -56,7 +57,7 @@ const SEVERITY_META: Record<
     icon: <ShieldAlert className="h-5 w-5" aria-hidden="true" />,
   },
   medium: {
-    label: "Medium Risk",
+    labelKey: "risks.mediumRisk",
     chip: "bg-warning-soft text-warning ring-warning/20",
     text: "text-warning",
     dot: "bg-warning",
@@ -65,7 +66,7 @@ const SEVERITY_META: Record<
     icon: <ShieldAlert className="h-5 w-5" aria-hidden="true" />,
   },
   low: {
-    label: "Low Risk",
+    labelKey: "risks.lowRisk",
     chip: "bg-success-soft text-success ring-success/15",
     text: "text-success",
     dot: "bg-success",
@@ -79,17 +80,19 @@ const SEVERITY_META: Record<
 /* Time indicators (existing behaviour, preserved)                     */
 /* ------------------------------------------------------------------ */
 
-function relativeTime(iso: string | null): string {
-  if (!iso) return "Not assessed yet";
+type Translate = (key: string, vars?: Record<string, string | number>) => string;
+
+function relativeTime(iso: string | null, t: Translate): string {
+  if (!iso) return t("risks.notAssessed");
   const then = new Date(iso).getTime();
-  if (Number.isNaN(then)) return "Not assessed yet";
+  if (Number.isNaN(then)) return t("risks.notAssessed");
   const mins = Math.max(0, Math.floor((Date.now() - then) / 60_000));
-  if (mins < 1) return "Just now";
-  if (mins < 60) return `${mins} min ago`;
+  if (mins < 1) return t("risks.justNow");
+  if (mins < 60) return t("risks.minAgo", { n: mins });
   const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours} hr ago`;
+  if (hours < 24) return t("risks.hrAgo", { n: hours });
   const days = Math.floor(hours / 24);
-  return `${days} day${days > 1 ? "s" : ""} ago`;
+  return days > 1 ? t("risks.daysAgo", { n: days }) : t("risks.dayAgo", { n: days });
 }
 
 function formatDateTime(iso: string | null): string {
@@ -109,6 +112,7 @@ function formatDateTime(iso: string | null): string {
 /* ------------------------------------------------------------------ */
 
 function AlertRow({ alert }: { alert: RiskAlert }) {
+  const { t } = useI18n();
   const severity = SEVERITY_META[alert.level];
 
   return (
@@ -145,11 +149,11 @@ function AlertRow({ alert }: { alert: RiskAlert }) {
             )}
           >
             <span className={cn("h-1.5 w-1.5 rounded-full", severity.dot)} aria-hidden="true" />
-            {severity.label}
+            {t(severity.labelKey)}
           </span>
           <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
             <Clock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-            <time dateTime={alert.createdAt}>{relativeTime(alert.createdAt)}</time>
+            <time dateTime={alert.createdAt}>{relativeTime(alert.createdAt, t)}</time>
           </span>
         </div>
 
@@ -175,6 +179,7 @@ function AlertRow({ alert }: { alert: RiskAlert }) {
 /* ------------------------------------------------------------------ */
 
 export default function RisksPage() {
+  const { t } = useI18n();
   const {
     farm,
     risks,
@@ -205,27 +210,27 @@ export default function RisksPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Alerts"
+        title={t("risks.alerts")}
         subtitle={
           farm
-            ? `Risks that could affect your ${farm.currentCrop} crop right now — from your farm, weather, and crop-health data.`
-            : "Stay on top of risks that could affect your farm"
+            ? t("risks.subtitle", { crop: farm.currentCrop })
+            : t("risks.subtitleNoFarm")
         }
         action={
           <Button variant="outline" size="sm" onClick={refresh} disabled={assessing}>
             <RefreshCw className={cn("h-4 w-4", assessing && "animate-spin")} aria-hidden="true" />
-            <span className="hidden sm:inline">{assessing ? "Assessing…" : "Refresh"}</span>
-            <span className="sm:hidden">Refresh</span>
+            <span className="hidden sm:inline">{assessing ? t("risks.assessing") : t("risks.refresh")}</span>
+            <span className="sm:hidden">{t("risks.refresh")}</span>
           </Button>
         }
       />
 
       {status === "loading" ? (
-        <LoadingState rows={3} title="Loading your alerts…" />
+        <LoadingState rows={3} title={t("risks.loadingAlerts")} />
       ) : status === "error" ? (
         <ErrorState
-          title="Couldn't load your alerts"
-          message={error ?? "We couldn't load your farm alerts right now. Please try again."}
+          title={t("risks.couldntLoad")}
+          message={error ?? t("risks.loadError")}
           onRetry={retry}
         />
       ) : (
@@ -243,8 +248,8 @@ export default function RisksPage() {
           ) : null}
 
           {/* Filter tabs — All / High / Medium / Low, driven by real data */}
-          <div role="group" aria-label="Filter alerts by severity" className="flex flex-wrap gap-2">
-            {FILTERS.map(({ key, label }) => {
+          <div role="group" aria-label={t("risks.filterSeverityAria")} className="flex flex-wrap gap-2">
+            {FILTERS.map(({ key, labelKey }) => {
               const active = filter === key;
               return (
                 <button
@@ -259,7 +264,7 @@ export default function RisksPage() {
                       : "border-border bg-card text-foreground hover:border-primary/30 hover:bg-muted"
                   )}
                 >
-                  {label}
+                  {t(labelKey)}
                   <span
                     className={cn(
                       "rounded-full px-2 py-0.5 text-xs tabular-nums transition-colors duration-200",
@@ -284,12 +289,15 @@ export default function RisksPage() {
                     className={cn("h-1.5 w-1.5 rounded-full", SEVERITY_META[level].dot)}
                     aria-hidden="true"
                   />
-                  {counts[level]} {SEVERITY_META[level].label}
+                  {counts[level]} {t(SEVERITY_META[level].labelKey)}
                 </span>
               ))}
             </div>
             <span>
-              Last assessed: {formatDateTime(assessedAt)} ({relativeTime(assessedAt)})
+              {t("risks.lastAssessed", {
+                date: formatDateTime(assessedAt),
+                relative: relativeTime(assessedAt, t),
+              })}
             </span>
           </div>
 
@@ -297,18 +305,18 @@ export default function RisksPage() {
           {risks.length === 0 ? (
             <EmptyState
               icon={<ShieldCheck className="h-6 w-6" />}
-              title="No alerts right now"
-              description="No significant risks were detected from the available farm and weather information. We don't invent alerts we can't back up — check back when conditions change."
+              title={t("risks.noAlerts")}
+              description={t("risks.noAlertsDesc")}
             />
           ) : filtered.length === 0 ? (
             /* Selected filter has no results */
             <EmptyState
               icon={<ShieldCheck className="h-6 w-6" />}
-              title={`No ${filter}-risk alerts right now`}
-              description={`There are no ${filter}-risk alerts from your current farm data. Try another filter or view all alerts.`}
+              title={t("risks.noFilterAlerts", { level: filter })}
+              description={t("risks.noFilterDesc", { level: filter })}
               action={
                 <Button variant="outline" size="sm" onClick={() => setFilter("all")}>
-                  View all alerts
+                  {t("risks.viewAllAlerts")}
                 </Button>
               }
             />

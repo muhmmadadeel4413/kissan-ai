@@ -208,12 +208,99 @@
 
   /* Urdu (RTL) mode: swap the whole font stack to Unicode Urdu fonts.
      Nastaliq for display/body plus a clean sans fallback. English glyphs
-     keep the original stack because it is restored for LTR documents. */
+     keep the original stack because it is restored for LTR documents.
+
+     Nastaliq typography needs:
+       • A generous line-height (1.9) because the script cascades vertically
+         and descenders extend well below the baseline.
+       • A slightly larger root font-size (~18 px body) for comfortable reading.
+       • font-language-override so the shaper picks Urdu-specific glyphs
+         rather than generic Arabic forms.
+       • overflow-wrap and word-break tuned for RTL script.
+       • Extra bottom padding on the body so the lowest Nastaliq descenders
+         in the last line of a block are never clipped by overflow containers. */
   html[dir="rtl"] {
     --font-sans: "Noto Nastaliq Urdu", "Noto Sans Urdu", ui-sans-serif,
       system-ui, -apple-system, "Segoe UI", sans-serif;
     --font-heading: "Noto Nastaliq Urdu", "Noto Sans Urdu", ui-sans-serif,
       system-ui, -apple-system, "Segoe UI", sans-serif;
+
+    /* ~18 px base when the browser default is 16 px; all rem-based Tailwind
+       sizes scale proportionally so headings land in the 20–28 px range. */
+    font-size: 112.5%;
+  }
+
+  html[dir="rtl"] body {
+    line-height: 1.9;
+    font-feature-settings: "kern";
+    font-language-override: "urd";
+    word-spacing: 0.04em;
+    overflow-wrap: break-word;
+    /* Guard against Nastaliq descender clipping at the viewport bottom. */
+    padding-bottom: 0.25rem;
+  }
+
+  /* Headings inherit the Nastaliq stack; bump the two largest sizes a touch
+     so they still feel like headings at the larger root font-size. */
+  html[dir="rtl"] h1 {
+    font-size: 1.65rem;
+    line-height: 2.1;
+  }
+
+  html[dir="rtl"] h2 {
+    font-size: 1.35rem;
+    line-height: 2;
+  }
+
+  html[dir="rtl"] h3 {
+    font-size: 1.125rem;
+    line-height: 1.95;
+  }
+
+  html[dir="rtl"] h4 {
+    font-size: 1rem;
+    line-height: 1.9;
+  }
+
+  /* Buttons, nav links, and interactive controls: keep text slightly smaller
+     than body (~16–17 px) so Nastaliq doesn't crowd tight containers. */
+  html[dir="rtl"] button,
+  html[dir="rtl"] [role="button"],
+  html[dir="rtl"] a,
+  html[dir="rtl"] input,
+  html[dir="rtl"] select,
+  html[dir="rtl"] textarea {
+    line-height: 1.8;
+  }
+
+  /* Prevent Nastaliq descender clipping inside tight card / list containers
+     where overflow:hidden would otherwise cut the bottom of the last line. */
+  html[dir="rtl"] [class*="overflow-hidden"],
+  html[dir="rtl"] [class*="truncate"] {
+    padding-bottom: 0.15em;
+  }
+
+  /* Tailwind's leading-none (line-height:1) and leading-tight (1.25) are far
+     too tight for Nastaliq — descenders extend well below the baseline.
+     Override them in RTL to a minimum that keeps Nastaliq visible. */
+  html[dir="rtl"] [class*="leading-none"] {
+    line-height: 1.6;
+  }
+
+  html[dir="rtl"] [class*="leading-tight"] {
+    line-height: 1.75;
+  }
+
+  /* Single-line text inputs need enough vertical space for Nastaliq glyphs
+     whose ascenders/descenders exceed the Latin bounding box. */
+  html[dir="rtl"] input[type="text"],
+  html[dir="rtl"] input[type="email"],
+  html[dir="rtl"] input[type="password"],
+  html[dir="rtl"] input[type="search"],
+  html[dir="rtl"] input[type="tel"],
+  html[dir="rtl"] input[type="url"],
+  html[dir="rtl"] input[type="number"] {
+    min-height: 2.5rem;
   }
 
   /* ---- Deliberate dark palette (not an inversion of the light theme) ---- */

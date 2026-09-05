@@ -130,7 +130,7 @@ export default function FarmProfilePage() {
           title={t("farmProfile.myFarms")}
           action={
             <Button asChild>
-              <Link to="/farm-setup">
+              <Link to="/farm-setup?create=new">
                 <Plus className="h-4 w-4" aria-hidden="true" />
                 {t("farmProfile.createNew")}
               </Link>
@@ -145,7 +145,7 @@ export default function FarmProfilePage() {
             description={t("farmProfile.createFirst")}
             action={
               <Button asChild>
-                <Link to="/farm-setup">
+                <Link to="/farm-setup?create=new">
                   <Plus className="h-4 w-4" aria-hidden="true" />
                   {t("farmProfile.createNew")}
                 </Link>
@@ -223,7 +223,7 @@ export default function FarmProfilePage() {
             })}
 
             {/* Create New Farm card */}
-            <Link to="/farm-setup" className="block cursor-pointer">
+            <Link to="/farm-setup?create=new" className="block cursor-pointer">
               <Card className="flex h-full min-h-[180px] flex-col items-center justify-center gap-3 border-2 border-dashed border-border p-6 text-center transition-colors hover:border-primary/40 hover:bg-primary-soft/30">
                 <span className="flex h-12 w-12 items-center justify-center rounded-full bg-primary-soft text-primary">
                   <Plus className="h-6 w-6" aria-hidden="true" />
@@ -341,7 +341,7 @@ function FarmDetailView({
               size="sm"
               onClick={() => void onSwitch(f.id)}
             >
-              Set Active
+              {t("farmProfile.setActiveBtn")}
             </Button>
           ) : null}
           <Button asChild variant="outline" size="sm">
@@ -356,7 +356,7 @@ function FarmDetailView({
       {/* Tab bar */}
       <div
         role="tablist"
-        aria-label="Farm profile sections"
+        aria-label={t("farmProfile.sectionsAria")}
         className="flex items-center gap-1 overflow-x-auto border-b border-border"
       >
         {tabs.map((tab) => {

@@ -2,6 +2,7 @@ import { Info, ListChecks } from "lucide-react";
 import { PageHeader } from "../components/layout/page-header";
 import { TodayActionsCard } from "../components/actions/today-actions-card";
 import { useFarm } from "../context/FarmContext";
+import { useI18n } from "../context/PreferencesContext";
 
 /**
  * Today's Actions page (Prompt 10).
@@ -12,15 +13,16 @@ import { useFarm } from "../context/FarmContext";
  */
 export default function ActionsPage() {
   const { farm } = useFarm();
+  const { t } = useI18n();
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Today's Actions"
+        title={t("actions.pageTitle")}
         subtitle={
           farm
-            ? `What should you do on your ${farm.currentCrop} farm today?`
-            : "What should I do today?"
+            ? t("actions.subtitleWithCrop", { crop: farm.currentCrop })
+            : t("actions.subtitleDefault")
         }
       />
 
@@ -30,18 +32,14 @@ export default function ActionsPage() {
       <div className="flex items-start gap-2 rounded-2xl border border-border bg-card p-4 text-sm text-muted-foreground">
         <Info className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
         <p>
-          Up to 4 top-priority actions are generated from your real farm data —
-          always with a clear reason and the best time to act. Actions stay
-          saved until you mark them done, and you can refresh them any time.
+          {t("actions.infoText")}
         </p>
       </div>
 
       <div className="flex items-start gap-2 rounded-2xl border border-border bg-card p-4 text-sm text-muted-foreground">
         <ListChecks className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
         <p>
-          Completed actions are kept for your records. Refresh generates a
-          fresh set from your latest farm, weather, crop-health, and risk
-          information.
+          {t("actions.completedInfoText")}
         </p>
       </div>
     </div>

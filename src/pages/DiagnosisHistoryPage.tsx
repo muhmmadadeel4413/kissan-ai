@@ -26,17 +26,18 @@ import { EmptyState } from "../components/layout/empty-state";
 import { LoadingState } from "../components/layout/loading-state";
 import { ErrorState } from "../components/layout/error-state";
 import { useFarm } from "../context/FarmContext";
+import { useI18n } from "../context/PreferencesContext";
 import { fetchDiagnoses } from "../lib/diagnosis-service";
 import { exportDiagnosesCsv, downloadCsv } from "../lib/export-utils";
 import type { Diagnosis, Severity } from "../types";
 
 const SEVERITY_META: Record<
   Severity,
-  { label: string; variant: "success" | "warning" | "danger" }
+  { labelKey: string; variant: "success" | "warning" | "danger" }
 > = {
-  low: { label: "Low", variant: "success" },
-  medium: { label: "Medium", variant: "warning" },
-  high: { label: "High", variant: "danger" },
+  low: { labelKey: "diagHistory.severityLow", variant: "success" },
+  medium: { labelKey: "diagHistory.severityMedium", variant: "warning" },
+  high: { labelKey: "diagHistory.severityHigh", variant: "danger" },
 };
 
 function formatDate(iso: string): string {
@@ -51,6 +52,7 @@ function formatDate(iso: string): string {
 
 export default function DiagnosisHistoryPage() {
   const { farm } = useFarm();
+  const { t } = useI18n();
   const [diagnoses, setDiagnoses] = useState<Diagnosis[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Diagnosis | null>(null);
@@ -62,9 +64,9 @@ export default function DiagnosisHistoryPage() {
       const rows = await fetchDiagnoses(farm?.id);
       setDiagnoses(rows);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "We couldn't load your diagnosis history.");
+      setError(err instanceof Error ? err.message : t("diagHistory.loadError"));
     }
-  }, [farm?.id]);
+  }, [farm?.id, t]);
 
   useEffect(() => {
     void load();
@@ -75,11 +77,11 @@ export default function DiagnosisHistoryPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Diagnosis History"
+        title={t("diagnosisHistory.title")}
         subtitle={
           farm
-            ? `Crop health checks for your ${farm.currentCrop} farm`
-            : "Crop health checks over time"
+            ? t("diagHistory.subtitle", { crop: farm.currentCrop })
+            : t("diagHistory.subtitleNoFarm")
         }
         action={
           <div className="flex items-center gap-2">
@@ -93,13 +95,13 @@ export default function DiagnosisHistoryPage() {
                 }}
               >
                 <Download className="h-4 w-4" aria-hidden="true" />
-                Export CSV
+                {t("diagHistory.exportCsv")}
               </Button>
             )}
             <Button asChild variant="outline" size="sm">
               <Link to="/crop-doctor">
                 <ScanLine className="h-4 w-4" aria-hidden="true" />
-                New diagnosis
+                {t("diagHistory.newDiagnosis")}
               </Link>
             </Button>
           </div>
@@ -107,23 +109,23 @@ export default function DiagnosisHistoryPage() {
       />
 
       {loading ? (
-        <LoadingState rows={3} title="Loading diagnosis history…" />
+        <LoadingState rows={3} title={t("diagHistory.loadingHistory")} />
       ) : error ? (
         <ErrorState
-          title="We couldn't load your history"
+          title={t("diagHistory.couldntLoad")}
           message={error}
           onRetry={() => void load()}
         />
       ) : !diagnoses || diagnoses.length === 0 ? (
         <EmptyState
           icon={<History className="h-6 w-6" />}
-          title="No diagnoses yet"
-          description="When you analyze a crop photo, the result will appear here with the date, crop, diagnosis, confidence, and severity — so you can track crop health over time."
+          title={t("diagHistory.noDiagnoses")}
+          description={t("diagHistory.noDiagnosesDesc")}
           action={
             <Button asChild>
               <Link to="/crop-doctor">
                 <ScanLine className="h-4 w-4" aria-hidden="true" />
-                Analyze a crop photo
+                {t("diagHistory.analyzeCropPhoto")}
               </Link>
             </Button>
           }
@@ -131,8 +133,12 @@ export default function DiagnosisHistoryPage() {
       ) : (
         <section className="space-y-3">
           <SectionHeader
-            title={`${diagnoses.length} ${diagnoses.length === 1 ? "diagnosis" : "diagnoses"}`}
-            subtitle="Latest first"
+            title={
+              diagnoses.length === 1
+                ? t("diagHistory.countSingular", { n: diagnoses.length })
+                : t("diagHistory.countPlural", { n: diagnoses.length })
+            }
+            subtitle={t("diagHistory.latestFirst")}
           />
           {diagnoses.map((d) => {
             const severity = SEVERITY_META[d.severity] ?? SEVERITY_META.medium;
@@ -157,16 +163,18 @@ export default function DiagnosisHistoryPage() {
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                     <p className="text-sm font-semibold text-foreground">
-                      {d.diagnosis || "Crop diagnosis"}
+                      {d.diagnosis || t("diagHistory.cropDiagnosis")}
                     </p>
-                    <Badge variant={severity.variant}>{severity.label}</Badge>
+                    <Badge variant={severity.variant}>{t(severity.labelKey)}</Badge>
                   </div>
                   <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
                     <CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />
                     {formatDate(d.createdAt)} · {d.crop}
                   </p>
                   <div className="mt-1 flex flex-wrap items-center gap-2">
-                    <Badge variant="outline">Confidence: {d.confidence}%</Badge>
+                    <Badge variant="outline">
+                      {t("diagHistory.confidencePercent", { n: d.confidence })}
+                    </Badge>
                   </div>
                 </div>
                 <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
@@ -180,11 +188,11 @@ export default function DiagnosisHistoryPage() {
       <Dialog open={selected !== null} onOpenChange={(open) => !open && setSelected(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{selected?.diagnosis || "Diagnosis detail"}</DialogTitle>
+            <DialogTitle>{selected?.diagnosis || t("diagHistory.diagnosisDetail")}</DialogTitle>
             <DialogDescription>
               {selected
                 ? `${selected.crop} · ${formatDate(selected.createdAt)}`
-                : "Diagnosis details"}
+                : t("diagHistory.diagnosisDetail")}
             </DialogDescription>
           </DialogHeader>
 
@@ -200,9 +208,15 @@ export default function DiagnosisHistoryPage() {
 
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant={SEVERITY_META[selected.severity]?.variant ?? "neutral"}>
-                  {SEVERITY_META[selected.severity]?.label ?? selected.severity} severity
+                  {t("diagHistory.severityLabel", {
+                    level: SEVERITY_META[selected.severity]
+                      ? t(SEVERITY_META[selected.severity].labelKey)
+                      : selected.severity,
+                  })}
                 </Badge>
-                <Badge variant="outline">Confidence: {selected.confidence}%</Badge>
+                <Badge variant="outline">
+                  {t("diagHistory.confidencePercent", { n: selected.confidence })}
+                </Badge>
               </div>
 
               {selected.description ? (
@@ -215,7 +229,7 @@ export default function DiagnosisHistoryPage() {
                 <div className="space-y-1.5">
                   <h4 className="flex items-center gap-2 text-sm font-semibold text-foreground">
                     <Leaf className="h-4 w-4 text-primary" aria-hidden="true" />
-                    Likely causes
+                    {t("diagHistory.likelyCauses")}
                   </h4>
                   <ul className="space-y-1">
                     {selected.causes.map((cause, i) => (
@@ -232,7 +246,7 @@ export default function DiagnosisHistoryPage() {
                 <div className="space-y-1.5 rounded-xl bg-primary-soft p-4">
                   <h4 className="flex items-center gap-2 text-sm font-semibold text-primary">
                     <ListChecks className="h-4 w-4" aria-hidden="true" />
-                    What to do next
+                    {t("diagHistory.whatToDoNext")}
                   </h4>
                   <ol className="space-y-1.5">
                     {selected.recommendedActions.map((action, i) => (
@@ -254,8 +268,7 @@ export default function DiagnosisHistoryPage() {
                 </p>
               ) : (
                 <p className="text-xs text-muted-foreground">
-                  AI guidance is for information only and is not a substitute for advice from a
-                  local agricultural officer.
+                  {t("diagHistory.advisoryNote")}
                 </p>
               )}
             </div>

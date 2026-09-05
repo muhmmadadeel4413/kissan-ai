@@ -11,6 +11,7 @@ import {
   computeHealthScore,
   type HealthInput,
 } from "./farm-health-gauge";
+import { useI18n } from "../../context/PreferencesContext";
 import { cn } from "../../lib/utils";
 
 type HealthBand = "good" | "fair" | "poor";
@@ -23,22 +24,22 @@ function bandFor(score: number): HealthBand {
 
 const BAND_META: Record<
   HealthBand,
-  { label: string; ring: string; chip: string; text: string }
+  { labelKey: string; ring: string; chip: string; text: string }
 > = {
   good: {
-    label: "Good",
+    labelKey: "dashboard.intelligenceGood",
     ring: "text-success",
     chip: "bg-success-soft text-success ring-success/15",
     text: "text-success",
   },
   fair: {
-    label: "Fair",
+    labelKey: "dashboard.intelligenceFair",
     ring: "text-warning",
     chip: "bg-warning-soft text-warning ring-warning/20",
     text: "text-warning",
   },
   poor: {
-    label: "At Risk",
+    labelKey: "dashboard.intelligenceAtRisk",
     ring: "text-danger",
     chip: "bg-danger-soft text-danger ring-danger/15",
     text: "text-danger",
@@ -51,6 +52,7 @@ const BAND_META: Record<
  * Missing signals lower the score; an empty profile shows an honest state.
  */
 export function FarmIntelligenceCard({ input }: { input: HealthInput }) {
+  const { t } = useI18n();
   const hasAnySignal =
     input.riskCount > 0 || input.weatherAvailable || input.hasDiagnosis || input.hasActions;
 
@@ -60,7 +62,7 @@ export function FarmIntelligenceCard({ input }: { input: HealthInput }) {
         <CardContent className="flex h-full flex-col gap-3 p-5">
           <div className="flex items-start justify-between gap-2">
             <p className="text-sm font-semibold text-muted-foreground">
-              AI Farm Intelligence
+              {t("dashboard.aiFarmIntelligence")}
             </p>
             <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary-soft text-primary shadow-soft ring-1 ring-inset ring-primary/15">
               <Activity className="h-5 w-5" aria-hidden="true" />
@@ -70,13 +72,13 @@ export function FarmIntelligenceCard({ input }: { input: HealthInput }) {
             —
           </p>
           <p className="text-xs leading-relaxed text-muted-foreground">
-            Add risks, weather, or a crop check to compute your farm health score.
+            {t("dashboard.addSignals")}
           </p>
           <Link
             to="/assistant"
             className="mt-auto inline-flex items-center gap-0.5 text-xs font-semibold text-primary hover:text-primary-deep transition-colors cursor-pointer"
           >
-            Ask Kissan AI
+            {t("dashboard.askKissanAi")}
             <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
           </Link>
         </CardContent>
@@ -97,7 +99,7 @@ export function FarmIntelligenceCard({ input }: { input: HealthInput }) {
       <CardContent className="flex h-full flex-col gap-3 p-5">
         <div className="flex items-start justify-between gap-2">
           <p className="text-sm font-semibold text-muted-foreground">
-            AI Farm Intelligence
+            {t("dashboard.aiFarmIntelligence")}
           </p>
           <span
             className={cn(
@@ -105,7 +107,7 @@ export function FarmIntelligenceCard({ input }: { input: HealthInput }) {
               meta.chip
             )}
           >
-            {meta.label}
+            {t(meta.labelKey)}
           </span>
         </div>
 
@@ -147,24 +149,24 @@ export function FarmIntelligenceCard({ input }: { input: HealthInput }) {
           <ul className="min-w-0 flex-1 space-y-2 text-[11px]">
             <Signal
               icon={<ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />}
-              label="Risks"
+              label={t("dashboard.risks")}
               value={
                 input.riskCount > 0
-                  ? `${input.riskCount} active`
-                  : "Clear"
+                  ? `${input.riskCount} ${t("dashboard.active")}`
+                  : t("dashboard.clear")
               }
               tone={input.riskCount > 0 ? "bad" : "good"}
             />
             <Signal
               icon={<CloudSun className="h-3.5 w-3.5" aria-hidden="true" />}
-              label="Weather"
-              value={input.weatherAvailable ? "Live" : "Missing"}
+              label={t("dashboard.weatherSignal")}
+              value={input.weatherAvailable ? t("dashboard.live") : t("dashboard.missing")}
               tone={input.weatherAvailable ? "good" : "bad"}
             />
             <Signal
               icon={<Stethoscope className="h-3.5 w-3.5" aria-hidden="true" />}
-              label="Crop check"
-              value={input.hasDiagnosis ? "Available" : "Missing"}
+              label={t("dashboard.cropCheck")}
+              value={input.hasDiagnosis ? t("dashboard.available") : t("dashboard.missing")}
               tone={input.hasDiagnosis ? "good" : "bad"}
             />
           </ul>
@@ -174,9 +176,9 @@ export function FarmIntelligenceCard({ input }: { input: HealthInput }) {
           to="/assistant"
           className="mt-auto inline-flex items-center gap-0.5 text-xs font-semibold text-primary hover:text-primary-deep transition-colors cursor-pointer"
         >
-          <span className={cn("font-semibold", meta.text)}>{meta.label}</span>
+          <span className={cn("font-semibold", meta.text)}>{t(meta.labelKey)}</span>
           <span className="text-muted-foreground font-normal">
-            · Ask Kissan AI why
+            {t("dashboard.askKissanAiWhy")}
           </span>
           <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
         </Link>

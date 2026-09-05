@@ -3,6 +3,7 @@ import { BellRing, ChevronRight, ShieldCheck } from "lucide-react";
 import { Card, CardContent } from "../ui/card";
 import { Button } from "../ui/button";
 import { Skeleton } from "../ui/skeleton";
+import { useI18n } from "../../context/PreferencesContext";
 import type { Level, RiskAlert } from "../../types";
 import { cn } from "../../lib/utils";
 
@@ -14,10 +15,10 @@ const LEVEL_DOT: Record<Level, string> = {
   low: "bg-success",
 };
 
-const LEVEL_LABEL: Record<Level, string> = {
-  high: "High",
-  medium: "Medium",
-  low: "Low",
+const LEVEL_LABEL_KEY: Record<Level, string> = {
+  high: "dashboard.alertLevelHigh",
+  medium: "dashboard.alertLevelMedium",
+  low: "dashboard.alertLevelLow",
 };
 
 /**
@@ -35,6 +36,7 @@ export function ActiveAlertsCard({
   status: Status;
   onRetry: () => void;
 }) {
+  const { t } = useI18n();
   const total = alerts.length;
   const hasHigh = counts.high > 0;
 
@@ -43,7 +45,7 @@ export function ActiveAlertsCard({
       <CardContent className="flex h-full flex-col gap-3 p-5">
         <div className="flex items-start justify-between gap-2">
           <p className="text-sm font-semibold text-muted-foreground">
-            Active Alerts
+            {t("dashboard.activeAlerts")}
           </p>
           <span
             className={cn(
@@ -64,7 +66,7 @@ export function ActiveAlertsCard({
         </div>
 
         {status === "loading" ? (
-          <div className="flex-1 space-y-2" role="status" aria-label="Loading alerts">
+          <div className="flex-1 space-y-2" role="status" aria-label={t("dashboard.loadingAlertsAria")}>
             <Skeleton className="h-8 w-10" />
             <div className="mt-auto flex gap-4 border-t border-border pt-3">
               <Skeleton className="h-5 w-12" />
@@ -75,10 +77,10 @@ export function ActiveAlertsCard({
         ) : status === "error" ? (
           <div className="flex flex-1 flex-col items-start gap-2">
             <p className="text-sm font-semibold text-foreground">
-              Alerts unavailable
+              {t("dashboard.alertsUnavailable")}
             </p>
             <p className="text-xs leading-relaxed text-muted-foreground">
-              We couldn't load your risk alerts right now.
+              {t("dashboard.alertsLoadError")}
             </p>
             <Button
               variant="outline"
@@ -86,7 +88,7 @@ export function ActiveAlertsCard({
               className="mt-auto"
               onClick={onRetry}
             >
-              Try again
+              {t("common.tryAgain")}
             </Button>
           </div>
         ) : (
@@ -96,7 +98,11 @@ export function ActiveAlertsCard({
                 {total}
               </p>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                {total === 0 ? "No active risks detected" : "Risk alert" + (total === 1 ? "" : "s") + " to review"}
+                {total === 0
+                  ? t("dashboard.noActiveRisksShort")
+                  : total === 1
+                    ? t("dashboard.riskAlertToReview")
+                    : t("dashboard.riskAlertsToReview")}
               </p>
             </div>
 
@@ -110,14 +116,14 @@ export function ActiveAlertsCard({
                     className={cn("h-1.5 w-1.5 rounded-full", LEVEL_DOT[level])}
                     aria-hidden="true"
                   />
-                  {counts[level]} {LEVEL_LABEL[level]}
+                  {counts[level]} {t(LEVEL_LABEL_KEY[level])}
                 </span>
               ))}
               <Link
                 to="/risks"
                 className="ml-auto inline-flex items-center gap-0.5 text-xs font-semibold text-primary hover:text-primary-deep transition-colors cursor-pointer"
               >
-                View all
+                {t("dashboard.viewAll")}
                 <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
               </Link>
             </div>
