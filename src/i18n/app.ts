@@ -112,6 +112,7 @@ export const enApp: Record<string, string> = {  /* ---------- App nav (sidebar /
 
     /* ---------- Dashboard Phase 2 Widgets ---------- */
   "dashboard.tasksLoading": "Loading upcoming tasks…",
+  "dashboard.tasksLoadError": "We couldn't load your upcoming tasks.",
   "dashboard.tasksEmpty": "No upcoming tasks",
   "dashboard.tasksEmptyHint": "Schedule events on the Crop Calendar and they'll appear here.",
   "dashboard.openCalendar": "Open Calendar",
@@ -180,6 +181,8 @@ export const enApp: Record<string, string> = {  /* ---------- App nav (sidebar /
   /* ---------- Farm Switcher ---------- */
   "farmSwitcher.myFarms": "My Farms",
   "farmSwitcher.createNew": "Create New Farm",
+  "farmSwitcher.selectFarmAria": "Select farm",
+  "farmSwitcher.untitledFarm": "Untitled farm",
 
   /* ---------- Farm Profile (multi-farm) ---------- */
   "farmProfile.myFarms": "My Farms",
@@ -195,6 +198,48 @@ export const enApp: Record<string, string> = {  /* ---------- App nav (sidebar /
   "farmProfile.deleteCancel": "Cancel",
   "farmProfile.activeBadge": "Active",
   "farmProfile.untitled": "Untitled Farm",
+
+  /* ---------- Dashboard greetings ---------- */
+  "dashboard.greetingMorning": "Good Morning",
+  "dashboard.greetingAfternoon": "Good Afternoon",
+  "dashboard.greetingEvening": "Good Evening",
+  "dashboard.createFarm": "Create Farm",
+  "dashboard.greetingReady": "Your AI farming decision assistant is ready — here's what's happening on your farm today.",
+
+  /* ---------- Dashboard sections ---------- */
+  "dashboard.farmOverview": "Farm Overview",
+  "dashboard.currentCrop": "Current crop",
+  "dashboard.stageUnknown": "Stage unknown",
+  "dashboard.whatShouldIDo": "What Should I Do Today?",
+  "dashboard.whatShouldISub": "Your decision plan, built from real farm data",
+  "dashboard.cropGrowthStage": "Crop Growth Stage",
+  "dashboard.cropGrowthStageSub": "Crop age and current stage",
+  "dashboard.aiYieldPrediction": "AI Yield Prediction",
+  "dashboard.aiYieldPredictionSub": "Estimate range and confidence",
+  "dashboard.farmAtGlance": "Farm at a glance",
+  "dashboard.todayPlanOutlook": "Today's plan and outlook",
+  "dashboard.farmerDefault": "Farmer",
+  "dashboard.riskInfoUnavailable": "Risk information unavailable. Please try again.",
+
+  /* ---------- AppLayout ---------- */
+  "app.searchYourFarm": "Search your farm…",
+  "app.light": "Light",
+  "app.dark": "Dark",
+  "app.farmProfileMenu": "Farm Profile",
+  "app.settingsMenu": "Settings",
+  "app.appearance": "Appearance",
+  "app.settingsPanelAria": "Settings panel",
+  "app.accountAria": "Account — {name}",
+  "app.accountMenuAria": "Account menu",
+  "app.bottomNavAria": "Bottom navigation",
+
+  /* ---------- Common reusable ---------- */
+  "common.somethingWrong": "Something went wrong",
+  "common.couldntLoad": "We couldn't load this right now. Please try again.",
+  "common.tryAgain": "Try again",
+  "common.loadingDefault": "Loading…",
+  "common.guest": "Guest",
+  "common.exportCsv": "Export CSV",
 
   };
 
@@ -307,6 +352,7 @@ export const urApp: Record<string, string> = {  /* ---------- App nav ----------
 
     /* ---------- Dashboard Phase 2 Widgets ---------- */
   "dashboard.tasksLoading": "آنے والے کام لوڈ ہو رہے ہیں…",
+  "dashboard.tasksLoadError": "ہم آپ کے آنے والے کام لوڈ نہیں کر سکے۔",
   "dashboard.tasksEmpty": "کوئی آنے والا کام نہیں",
   "dashboard.tasksEmptyHint": "فصل کیلنڈر پر واقعات شیڈول کریں اور وہ یہاں نظر آئیں گے۔",
   "dashboard.openCalendar": "کیلنڈر کھولیں",
@@ -375,6 +421,8 @@ export const urApp: Record<string, string> = {  /* ---------- App nav ----------
   /* ---------- Farm Switcher ---------- */
   "farmSwitcher.myFarms": "میرے فارم",
   "farmSwitcher.createNew": "نیا فارم بنائیں",
+  "farmSwitcher.selectFarmAria": "فارم منتخب کریں",
+  "farmSwitcher.untitledFarm": "بے نام فارم",
 
   /* ---------- Farm Profile (multi-farm) ---------- */
   "farmProfile.myFarms": "میرے فارم",
@@ -390,5 +438,47 @@ export const urApp: Record<string, string> = {  /* ---------- App nav ----------
   "farmProfile.deleteCancel": "منسوخ کریں",
   "farmProfile.activeBadge": "فعال",
   "farmProfile.untitled": "بغیر عنوان فارم",
+
+  /* ---------- Dashboard greetings ---------- */
+  "dashboard.greetingMorning": "صبح بخیر",
+  "dashboard.greetingAfternoon": "دوپہر بخیر",
+  "dashboard.greetingEvening": "شام بخیر",
+  "dashboard.createFarm": "فارم بنائیں",
+  "dashboard.greetingReady": "آپ کا اے آئی فارمنگ فیصلہ اسسٹنٹ تیار ہے — آج آپ کے فارم پر کیا ہو رہا ہے۔",
+
+  /* ---------- Dashboard sections ---------- */
+  "dashboard.farmOverview": "فارم کا جائزہ",
+  "dashboard.currentCrop": "موجودہ فصل",
+  "dashboard.stageUnknown": "مرحلہ نامعلوم",
+  "dashboard.whatShouldIDo": "آج مجھے کیا کرنا چاہیے؟",
+  "dashboard.whatShouldISub": "آپ کا فیصلہ پلان، حقیقی فارم ڈیٹا سے بنا",
+  "dashboard.cropGrowthStage": "فصل کی نشوونما کا مرحلہ",
+  "dashboard.cropGrowthStageSub": "فصل کی عمر اور موجودہ مرحلہ",
+  "dashboard.aiYieldPrediction": "اے آئی پیداوار کی پیش گوئی",
+  "dashboard.aiYieldPredictionSub": "تخمینہ کی حد اور اعتماد",
+  "dashboard.farmAtGlance": "فارم ایک نظر میں",
+  "dashboard.todayPlanOutlook": "آج کا پلان اور نقطہ نظر",
+  "dashboard.farmerDefault": "کسان",
+  "dashboard.riskInfoUnavailable": "خطرے کی معلومات دستیاب نہیں۔ براہ کرم دوبارہ کوشش کریں۔",
+
+  /* ---------- AppLayout ---------- */
+  "app.searchYourFarm": "اپنے فارم میں تلاش کریں…",
+  "app.light": "روشنی",
+  "app.dark": "تاریک",
+  "app.farmProfileMenu": "فارم پروفائل",
+  "app.settingsMenu": "ترتیبات",
+  "app.appearance": "ظاہری شکل",
+  "app.settingsPanelAria": "ترتیبات کا پینل",
+  "app.accountAria": "اکاؤنٹ — {name}",
+  "app.accountMenuAria": "اکاؤنٹ مینو",
+  "app.bottomNavAria": "نیچے کی نیویگیشن",
+
+  /* ---------- Common reusable ---------- */
+  "common.somethingWrong": "کچھ غلط ہو گیا",
+  "common.couldntLoad": "ہم ابھی یہ لوڈ نہیں کر سکے۔ براہ کرم دوبارہ کوشش کریں۔",
+  "common.tryAgain": "دوبارہ کوشش کریں",
+  "common.loadingDefault": "لوڈ ہو رہا ہے…",
+  "common.guest": "مہمان",
+  "common.exportCsv": "CSV ایکسپورٹ کریں",
 
   };

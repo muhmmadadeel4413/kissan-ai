@@ -20,7 +20,9 @@ import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { PageHeader } from "../components/layout/page-header";
+import CameraCapture from "../components/camera-capture";
 import { useFarm } from "../context/FarmContext";
+import { useI18n } from "../context/PreferencesContext";
 import { buildFarmContext } from "../lib/farm-context";
 import {
   analyzeCropPhoto,
@@ -38,11 +40,11 @@ type Phase = "idle" | "preparing" | "uploading" | "analyzing" | "result" | "erro
 
 const SEVERITY_META: Record<
   Severity,
-  { label: string; variant: "success" | "warning" | "danger" }
+  { labelKey: string; variant: "success" | "warning" | "danger" }
 > = {
-  low: { label: "Low severity", variant: "success" },
-  medium: { label: "Medium severity", variant: "warning" },
-  high: { label: "High severity", variant: "danger" },
+  low: { labelKey: "cropDoctor.lowSeverity", variant: "success" },
+  medium: { labelKey: "cropDoctor.mediumSeverity", variant: "warning" },
+  high: { labelKey: "cropDoctor.highSeverity", variant: "danger" },
 };
 
 /** Compact date label, e.g. "12 Jan · 10:30" — same data, tighter rhythm. */
@@ -60,6 +62,7 @@ function formatDate(iso: string): string {
 export default function CropDoctorPage() {
   const inputRef = useRef<HTMLInputElement>(null);
   const { farm } = useFarm();
+  const { t } = useI18n();
 
   const [phase, setPhase] = useState<Phase>("idle");
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -67,6 +70,7 @@ export default function CropDoctorPage() {
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [diagnosis, setDiagnosis] = useState<Diagnosis | null>(null);
+  const [cameraOpen, setCameraOpen] = useState(false);
 
   // Farm context to make the analysis specific to the farmer's crop.
   const farmContext = farm ? buildFarmContext(farm) : null;
@@ -87,10 +91,10 @@ export default function CropDoctorPage() {
       setRecent(rows.slice(0, RECENT_LIMIT));
     } catch (err) {
       setRecentError(
-        err instanceof Error ? err.message : "We couldn't load your recent diagnoses."
+        err instanceof Error ? err.message : t("dashboard.couldntLoadRecent")
       );
     }
-  }, [farm?.id]);
+  }, [farm?.id, t]);
 
   useEffect(() => {
     void loadRecent();
@@ -109,14 +113,12 @@ export default function CropDoctorPage() {
 
     if (!ACCEPTED.includes(next.type)) {
       setPhase("error");
-      setError("This format isn't supported yet. Please upload a JPEG or PNG photo.");
+      setError(t("cropDoctor.formatUnsupported"));
       return;
     }
     if (next.size > MAX_SIZE_MB * 1024 * 1024) {
       setPhase("error");
-      setError(
-        `This photo is over ${MAX_SIZE_MB} MB. Please upload a smaller image so it can be analyzed.`
-      );
+      setError(t("cropDoctor.tooLarge", { n: MAX_SIZE_MB }));
       return;
     }
 
@@ -127,6 +129,10 @@ export default function CropDoctorPage() {
     setFileName(next.name);
     setPreviewUrl(URL.createObjectURL(next));
     setPhase("idle");
+  }
+
+  function handleCameraCapture(capturedFile: File) {
+    handleFile(capturedFile);
   }
 
   function reset() {
@@ -165,7 +171,7 @@ export default function CropDoctorPage() {
       setPhase("result");
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "The analysis failed. Please try again."
+        err instanceof Error ? err.message : t("cropDoctor.analysisFailed")
       );
       setPhase("error");
     }
@@ -173,21 +179,21 @@ export default function CropDoctorPage() {
 
   const busyLabel =
     phase === "preparing"
-      ? "Preparing your photo…"
+      ? t("cropDoctor.preparing")
       : phase === "uploading"
-        ? "Uploading your photo…"
-        : "Analyzing with AI…";
+        ? t("cropDoctor.uploading")
+        : t("cropDoctor.analyzing");
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title="AI Crop Doctor"
-        subtitle="Diagnose crop problems from a photo"
+        title={t("cropDoctor.title")}
+        subtitle={t("cropDoctor.subtitle")}
         action={
           <Button asChild variant="outline" size="sm">
             <Link to="/diagnosis-history">
               <History className="h-4 w-4" aria-hidden="true" />
-              History
+              {t("diagHistory.viewHistory")}
             </Link>
           </Button>
         }
@@ -200,7 +206,7 @@ export default function CropDoctorPage() {
             <Leaf className="h-4 w-4" aria-hidden="true" />
           </span>
           <p className="min-w-0 text-sm text-foreground">
-            <span className="font-semibold">Analyzing for your {farm.currentCrop} farm</span>
+            <span className="font-semibold">{t("cropDoctor.analyzingForFarm", { crop: farm.currentCrop })}</span>
             <span className="text-muted-foreground">
               {" "}
               · {[farmContext?.growth.stageLabel, farm.location].filter(Boolean).join(" · ")}
@@ -209,16 +215,16 @@ export default function CropDoctorPage() {
         </div>
       ) : (
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border border-border bg-card px-4 py-3 text-sm shadow-soft">
-          <span className="font-semibold text-foreground">No farm selected</span>
+          <span className="font-semibold text-foreground">{t("cropDoctor.noFarmSelected")}</span>
           <span className="text-muted-foreground">
-            — we'll analyze the photo on its own.{" "}
+            {t("cropDoctor.noFarmHint")}{" "}
             <Link
               to="/farm-setup"
               className="font-semibold text-primary underline-offset-2 hover:underline"
             >
-              Set up your farm
+              {t("cropDoctor.setupFarmLink")}
             </Link>{" "}
-            for advice tailored to your crop.
+            {t("cropDoctor.setupFarmHintTail")}
           </span>
         </div>
       )}
@@ -229,7 +235,7 @@ export default function CropDoctorPage() {
         accept={ACCEPTED.join(",")}
         className="hidden"
         onChange={(e) => handleFile(e.target.files?.[0])}
-        aria-label="Choose a crop photo"
+        aria-label={t("cropDoctor.choosePhotoAria")}
       />
 
       {/* Main two-column grid — upload (left) + recent diagnoses (right) */}
@@ -242,11 +248,10 @@ export default function CropDoctorPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg text-foreground">
                 <ImagePlus className="h-5 w-5 text-primary" aria-hidden="true" />
-                Upload Crop Image
+                {t("cropDoctor.uploadCropImage")}
               </CardTitle>
               <CardDescription>
-                Take a clear photo of the affected leaf or crop. Kissan AI analyzes it and
-                suggests what may be wrong, how serious it is, and what to do next.
+                {t("cropDoctor.uploadSubtitle")}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -255,7 +260,7 @@ export default function CropDoctorPage() {
                 <div
                   role="button"
                   tabIndex={0}
-                  aria-label="Upload a crop photo — click or drag and drop a JPEG or PNG image"
+                  aria-label={t("cropDoctor.dropzoneAria")}
                   onClick={openPicker}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {
@@ -275,18 +280,28 @@ export default function CropDoctorPage() {
                   </span>
                   <div className="space-y-1.5">
                     <p className="text-base font-semibold text-foreground">
-                      Drag &amp; drop your crop photo here
+                      {t("cropDoctor.dragDrop")}
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      or click to browse from your device
+                      {t("cropDoctor.orBrowse")}
                     </p>
                   </div>
-                  <Button type="button" onClick={(e) => { e.stopPropagation(); openPicker(); }}>
-                    <ScanLine className="h-4 w-4" aria-hidden="true" />
-                    Browse Image
-                  </Button>
+                  <div className="flex flex-wrap items-center justify-center gap-3">
+                    <Button type="button" onClick={(e) => { e.stopPropagation(); openPicker(); }}>
+                      <ScanLine className="h-4 w-4" aria-hidden="true" />
+                      {t("cropDoctor.browseImage")}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={(e) => { e.stopPropagation(); setCameraOpen(true); }}
+                    >
+                      <Camera className="h-4 w-4" aria-hidden="true" />
+                      {t("cropDoctor.takePhoto")}
+                    </Button>
+                  </div>
                   <p className="text-xs text-muted-foreground">
-                    JPEG, PNG or WebP · up to {MAX_SIZE_MB} MB
+                    {t("cropDoctor.formatHint", { n: MAX_SIZE_MB })}
                   </p>
                 </div>
               ) : null}
@@ -301,7 +316,7 @@ export default function CropDoctorPage() {
                     <div>
                       <p className="text-base font-semibold text-foreground">{busyLabel}</p>
                       <p className="mt-1 text-sm text-muted-foreground">
-                        This usually takes a few seconds. Please keep this page open.
+                        {t("cropDoctor.busyHint")}
                       </p>
                     </div>
                   </div>
@@ -321,9 +336,9 @@ export default function CropDoctorPage() {
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2 text-success">
                       <CheckCircle2 className="h-5 w-5" aria-hidden="true" />
-                      <p className="font-semibold">Photo ready</p>
+                      <p className="font-semibold">{t("cropDoctor.photoReady")}</p>
                     </div>
-                    <Button variant="ghost" size="icon-sm" onClick={reset} aria-label="Remove photo">
+                    <Button variant="ghost" size="icon-sm" onClick={reset} aria-label={t("cropDoctor.removePhoto")}>
                       <X className="h-5 w-5" />
                     </Button>
                   </div>
@@ -335,7 +350,7 @@ export default function CropDoctorPage() {
                   <p className="truncate text-xs text-muted-foreground">{fileName}</p>
                   <Button size="lg" className="w-full" onClick={() => void runAnalysis()}>
                     <Sparkles className="h-4 w-4" aria-hidden="true" />
-                    Analyze Crop
+                    {t("cropDoctor.analyzeCrop")}
                   </Button>
                 </div>
               ) : null}
@@ -344,11 +359,11 @@ export default function CropDoctorPage() {
               {phase === "error" && error ? (
                 <div className="space-y-3 rounded-2xl border border-danger/30 bg-danger-soft/60 p-5 animate-fade-in">
                   <p className="text-sm font-semibold text-danger">
-                    We couldn't analyze that photo
+                    {t("cropDoctor.errorTitle")}
                   </p>
                   <p className="text-sm leading-relaxed text-foreground">{error}</p>
                   <Button variant="outline" size="sm" onClick={reset}>
-                    Try another photo
+                    {t("cropDoctor.tryAnother")}
                   </Button>
                 </div>
               ) : null}
@@ -358,7 +373,7 @@ export default function CropDoctorPage() {
 
         {/* RIGHT — Recent Diagnoses (real history data) */}
         <section
-          aria-label="Recent diagnoses"
+          aria-label={t("cropDoctor.recentDiagnoses")}
           className="flex h-fit flex-col overflow-hidden rounded-2xl bg-gradient-to-b from-primary to-primary-deep text-primary-foreground shadow-lift ring-1 ring-inset ring-white/10"
         >
           <div className="flex items-center gap-3 border-b border-white/10 px-5 py-4">
@@ -367,17 +382,17 @@ export default function CropDoctorPage() {
             </span>
             <div className="min-w-0">
               <h2 className="font-heading text-base font-bold tracking-tight text-primary-foreground">
-                Recent Diagnoses
+                {t("cropDoctor.recentDiagnoses")}
               </h2>
               <p className="text-xs text-primary-foreground/70">
-                Your latest crop health checks
+                {t("cropDoctor.recentDiagnosesSub")}
               </p>
             </div>
           </div>
 
           <div className="flex-1">
             {recent === null && !recentError ? (
-              <div className="space-y-1 p-2" role="status" aria-label="Loading recent diagnoses">
+              <div className="space-y-1 p-2" role="status" aria-label={t("cropDoctor.loadingRecentAria")}>
                 {[0, 1, 2].map((i) => (
                   <div key={i} className="flex items-center gap-3 px-3 py-3">
                     <span className="h-12 w-12 shrink-0 animate-pulse rounded-xl bg-white/15" />
@@ -400,7 +415,7 @@ export default function CropDoctorPage() {
                   className="mt-3"
                   onClick={() => void loadRecent()}
                 >
-                  Try again
+                  {t("common.tryAgain")}
                 </Button>
               </div>
             ) : !recent || recent.length === 0 ? (
@@ -409,10 +424,10 @@ export default function CropDoctorPage() {
                   <ImageOff className="h-6 w-6" aria-hidden="true" />
                 </span>
                 <p className="text-sm font-semibold text-primary-foreground">
-                  No diagnoses yet
+                  {t("cropDoctor.noDiagnosesYet")}
                 </p>
                 <p className="mx-auto mt-1 max-w-[24ch] text-xs leading-relaxed text-primary-foreground/70">
-                  Analyze a crop photo and the result will appear here.
+                  {t("cropDoctor.noDiagnosesDesc")}
                 </p>
               </div>
             ) : (
@@ -439,7 +454,7 @@ export default function CropDoctorPage() {
                         )}
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-semibold text-primary-foreground">
-                            {d.diagnosis || "Crop diagnosis"}
+                            {d.diagnosis || t("cropDoctor.cropDiagnosis")}
                           </p>
                           <p className="mt-1 flex items-center gap-1.5">
                             <span
@@ -453,7 +468,7 @@ export default function CropDoctorPage() {
                               aria-hidden="true"
                             />
                             <span className="text-xs font-medium text-primary-foreground/90">
-                              {severity.label}
+                              {t(severity.labelKey)}
                             </span>
                           </p>
                           <p className="mt-0.5 flex items-center gap-1 text-[11px] text-primary-foreground/70">
@@ -477,7 +492,7 @@ export default function CropDoctorPage() {
             <Button asChild variant="secondary" className="w-full">
               <Link to="/diagnosis-history">
                 <History className="h-4 w-4" aria-hidden="true" />
-                View All History
+                {t("cropDoctor.viewAllHistory")}
               </Link>
             </Button>
           </div>
@@ -486,7 +501,7 @@ export default function CropDoctorPage() {
 
       {/* BOTTOM — How to capture better image? */}
       <section
-        aria-label="How to capture better images"
+        aria-label={t("cropDoctor.howToCapture")}
         className="rounded-2xl border border-primary/15 bg-primary-soft/70 p-6 shadow-soft"
       >
         <div className="flex items-start gap-4">
@@ -495,14 +510,14 @@ export default function CropDoctorPage() {
           </span>
           <div className="min-w-0">
             <h2 className="font-heading text-lg font-bold tracking-tight text-foreground">
-              How to capture better image?
+              {t("cropDoctor.howToCapture")}
             </h2>
             <ul className="mt-3 grid gap-x-8 gap-y-2.5 text-sm leading-relaxed text-foreground sm:grid-cols-2">
               {[
-                "Shoot in good daylight — avoid harsh shadows and flash glare on the leaf.",
-                "Hold the phone 6–10 inches from the affected area for a clear close-up.",
-                "Include a small patch of healthy leaf beside the affected part for comparison.",
-                "Keep the phone steady and let the camera focus before pressing capture.",
+                t("cropDoctor.tip1"),
+                t("cropDoctor.tip2"),
+                t("cropDoctor.tip3"),
+                t("cropDoctor.tip4"),
               ].map((tip) => (
                 <li key={tip} className="flex items-start gap-2.5">
                   <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-accent" aria-hidden="true" />
@@ -513,6 +528,13 @@ export default function CropDoctorPage() {
           </div>
         </div>
       </section>
+
+      {/* Camera capture dialog — only activates when the user clicks "Take Photo". */}
+      <CameraCapture
+        open={cameraOpen}
+        onOpenChange={setCameraOpen}
+        onCapture={handleCameraCapture}
+      />
     </div>
   );
 }
@@ -528,6 +550,7 @@ function DiagnosisResult({
   diagnosis: Diagnosis;
   onReset: () => void;
 }) {
+  const { t } = useI18n();
   const severity = SEVERITY_META[diagnosis.severity] ?? SEVERITY_META.medium;
   const causes = diagnosis.causes ?? [];
   const actions = diagnosis.recommendedActions ?? [];
@@ -539,14 +562,14 @@ function DiagnosisResult({
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                AI Diagnosis · {diagnosis.crop}
+                {t("cropDoctor.aiDiagnosis", { crop: diagnosis.crop })}
               </p>
               <CardTitle className="mt-1 text-xl text-foreground">
                 {diagnosis.diagnosis}
               </CardTitle>
             </div>
             <Badge variant={severity.variant} className="shrink-0">
-              {severity.label}
+              {t(severity.labelKey)}
             </Badge>
           </div>
           {diagnosis.imageUrl ? (
@@ -557,7 +580,9 @@ function DiagnosisResult({
             />
           ) : null}
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="outline">Confidence: {diagnosis.confidence}%</Badge>
+            <Badge variant="outline">
+              {t("diagHistory.confidencePercent", { n: diagnosis.confidence })}
+            </Badge>
             <Badge variant="neutral">
               {new Date(diagnosis.createdAt).toLocaleString()}
             </Badge>
@@ -566,7 +591,7 @@ function DiagnosisResult({
         <CardContent className="space-y-5">
           {diagnosis.description ? (
             <div className="space-y-1.5">
-              <h3 className="text-sm font-semibold text-foreground">What's happening</h3>
+              <h3 className="text-sm font-semibold text-foreground">{t("cropDoctor.whatsHappening")}</h3>
               <p className="text-sm leading-relaxed text-muted-foreground">
                 {diagnosis.description}
               </p>
@@ -575,7 +600,7 @@ function DiagnosisResult({
 
           {causes.length > 0 ? (
             <div className="space-y-2">
-              <h3 className="text-sm font-semibold text-foreground">Likely causes</h3>
+              <h3 className="text-sm font-semibold text-foreground">{t("cropDoctor.likelyCauses")}</h3>
               <ul className="space-y-1.5">
                 {causes.map((cause, i) => (
                   <li key={i} className="flex items-start gap-2 text-sm text-muted-foreground">
@@ -591,7 +616,7 @@ function DiagnosisResult({
             <div className="space-y-2 rounded-xl bg-primary-soft p-4">
               <h3 className="flex items-center gap-2 text-sm font-semibold text-primary">
                 <ListChecks className="h-4 w-4" aria-hidden="true" />
-                What to do next
+                {t("cropDoctor.whatToDoNext")}
               </h3>
               <ol className="space-y-2">
                 {actions.map((action, i) => (
@@ -612,8 +637,7 @@ function DiagnosisResult({
             </p>
           ) : (
             <p className="text-xs text-muted-foreground">
-              AI guidance is for information only and is not a substitute for advice from a
-              local agricultural officer.
+              {t("cropDoctor.advisoryNote")}
             </p>
           )}
         </CardContent>
@@ -622,12 +646,12 @@ function DiagnosisResult({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Button variant="outline" onClick={onReset}>
           <ScanLine className="h-4 w-4" aria-hidden="true" />
-          Analyze another
+          {t("cropDoctor.analyzeAnother")}
         </Button>
         <Button asChild>
           <Link to="/diagnosis-history">
             <History className="h-4 w-4" aria-hidden="true" />
-            View all diagnoses
+            {t("cropDoctor.viewAllDiagnoses")}
           </Link>
         </Button>
       </div>

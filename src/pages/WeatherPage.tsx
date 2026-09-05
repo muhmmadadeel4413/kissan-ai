@@ -23,6 +23,7 @@ import { PageHeader, SectionHeader } from "../components/layout/page-header";
 import { EmptyState } from "../components/layout/empty-state";
 import { ErrorState } from "../components/layout/error-state";
 import { useFarm } from "../context/FarmContext";
+import { useI18n } from "../context/PreferencesContext";
 import { useFarmWeather } from "../hooks/useFarmWeather";
 import {
   buildWeatherInsights,
@@ -74,6 +75,7 @@ function TodayWeather({
   current: CurrentWeather;
   location: WeatherLocation;
 }) {
+  const { t } = useI18n();
   const updated = new Date(current.capturedAt).toLocaleTimeString([], {
     hour: "2-digit",
     minute: "2-digit",
@@ -82,22 +84,22 @@ function TodayWeather({
   const stats = [
     {
       icon: <Thermometer className="h-5 w-5" aria-hidden="true" />,
-      label: "Feels like",
+      label: t("weather.feelsLike"),
       value: `${Math.round(current.feelsLike)}°C`,
     },
     {
       icon: <Droplets className="h-5 w-5" aria-hidden="true" />,
-      label: "Humidity",
+      label: t("weather.humidity"),
       value: `${current.humidity}%`,
     },
     {
       icon: <Wind className="h-5 w-5" aria-hidden="true" />,
-      label: "Wind",
+      label: t("weather.wind"),
       value: `${current.windSpeed} km/h`,
     },
     {
       icon: <Umbrella className="h-5 w-5" aria-hidden="true" />,
-      label: "Rain chance",
+      label: t("weather.rainChance"),
       value: `${current.rainProbability}%`,
     },
   ];
@@ -126,7 +128,7 @@ function TodayWeather({
                 <MapPin className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                 <span className="truncate">
                   {location.name}
-                  {location.country ? `, ${location.country}` : ""} · Updated {updated}
+                  {location.country ? `, ${location.country}` : ""} · {t("weather.updatedAt", { time: updated })}
                 </span>
               </p>
             </div>
@@ -139,7 +141,7 @@ function TodayWeather({
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-60" />
               <span className="relative inline-flex h-2 w-2 rounded-full bg-success" />
             </span>
-            Live conditions
+            {t("weather.liveConditions")}
           </Badge>
         </div>
       </div>
@@ -174,22 +176,24 @@ function TodayWeather({
 /* ------------------------------------------------------------------ */
 
 function InsightBadge({ level }: { level: InsightLevel }) {
-  const config: Record<InsightLevel, { label: string; variant: "success" | "warning" | "danger" }> = {
-    high: { label: "Action recommended", variant: "danger" },
-    medium: { label: "Keep an eye on", variant: "warning" },
-    low: { label: "Good conditions", variant: "success" },
+  const { t } = useI18n();
+  const config: Record<InsightLevel, { labelKey: string; variant: "success" | "warning" | "danger" }> = {
+    high: { labelKey: "weather.actionRecommended", variant: "danger" },
+    medium: { labelKey: "weather.keepEyeOn", variant: "warning" },
+    low: { labelKey: "weather.goodConditions", variant: "success" },
   };
-  const { label, variant } = config[level];
-  return <Badge variant={variant}>{label}</Badge>;
+  const { labelKey, variant } = config[level];
+  return <Badge variant={variant}>{t(labelKey)}</Badge>;
 }
 
 function FarmingImpact({ insights }: { insights: WeatherInsight[] }) {
+  const { t } = useI18n();
   if (insights.length === 0) {
     return (
       <EmptyState
         icon={<CloudSun className="h-6 w-6" />}
-        title="No weather notes right now"
-        description="Conditions look balanced — no urgent farm actions based on the current weather."
+        title={t("weather.noWeatherNotes")}
+        description={t("weather.conditionsBalanced")}
       />
     );
   }
@@ -248,12 +252,13 @@ function FarmingImpact({ insights }: { insights: WeatherInsight[] }) {
 /* ------------------------------------------------------------------ */
 
 function ForecastDayCard({ day, index }: { day: WeatherForecastDay; index: number }) {
+  const { t } = useI18n();
   const date = new Date(day.date + "T00:00:00");
   const isToday = index === 0;
   const label = isToday
-    ? "Today"
+    ? t("weather.today")
     : index === 1
-      ? "Tomorrow"
+      ? t("weather.tomorrow")
       : date.toLocaleDateString(undefined, { weekday: "short" });
 
   return (
@@ -278,7 +283,7 @@ function ForecastDayCard({ day, index }: { day: WeatherForecastDay; index: numbe
       </p>
       <p className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
         <Droplets className="h-3 w-3 text-primary" aria-hidden="true" />
-        {day.rainProbability}% rain
+        {t("weather.rainPercent", { n: day.rainProbability })}
       </p>
     </Card>
   );
@@ -290,6 +295,7 @@ function ForecastDayCard({ day, index }: { day: WeatherForecastDay; index: numbe
 
 export default function WeatherPage() {
   const { farm } = useFarm();
+  const { t } = useI18n();
   const { status, weather, error, retry } = useFarmWeather();
 
   if (!farm) {
@@ -297,11 +303,11 @@ export default function WeatherPage() {
       <div className="mx-auto max-w-xl">
         <EmptyState
           icon={<Sprout className="h-6 w-6" />}
-          title="Set up your farm to unlock Kissan AI"
-          description="Add your farmer, farm, and crop details once — live weather will then be tailored to your farm's location."
+          title={t("dashboard.setupTitle")}
+          description={t("weather.setupForWeather")}
           action={
             <Button asChild size="lg">
-              <Link to="/farm-setup">Create Farm</Link>
+              <Link to="/farm-setup">{t("dashboard.createFarm")}</Link>
             </Button>
           }
         />
@@ -315,21 +321,21 @@ export default function WeatherPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Weather Intelligence"
-        subtitle={`Live conditions for ${farm.location}`}
+        title={t("weather.title")}
+        subtitle={t("weather.liveConditionsFor", { location: farm.location })}
       />
 
       {status === "error" ? (
         <ErrorState
-          title="Weather is unavailable right now"
-          message={error ?? "We couldn't load the weather. Please try again."}
+          title={t("weather.unavailableTitle")}
+          message={error ?? t("weather.unavailableDefault")}
           onRetry={retry}
         />
       ) : null}
 
       {/* Today's Weather */}
       <section className="space-y-3">
-        <SectionHeader title="Today's Weather" subtitle="What's happening right now" />
+        <SectionHeader title={t("weather.todayWeather")} subtitle={t("weather.todayWeatherSub")} />
         {loading ? (
           <Card className="overflow-hidden">
             <div className="space-y-5 p-6">
@@ -355,8 +361,8 @@ export default function WeatherPage() {
       {/* Farming Impact */}
       <section className="space-y-3">
         <SectionHeader
-          title="Farming Impact"
-          subtitle="What this weather means for your farm"
+          title={t("weather.farmingImpact")}
+          subtitle={t("weather.farmingImpactSub")}
         />
         {loading ? (
           <div className="space-y-2">
@@ -371,8 +377,8 @@ export default function WeatherPage() {
       {/* 5 Day Forecast */}
       <section className="space-y-3">
         <SectionHeader
-          title="5 Day Forecast"
-          subtitle="The week ahead for your farm"
+          title={t("weather.fiveDayForecast")}
+          subtitle={t("weather.weekAhead")}
         />
         {loading ? (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
@@ -392,8 +398,7 @@ export default function WeatherPage() {
       {status === "error" ? (
         <Card className="bg-muted/50">
           <CardContent className="py-4 text-xs text-muted-foreground">
-            Live weather needs the weather provider to be configured on the server. You can
-            try again, or check your farm location is spelled correctly on the Farm Profile.
+            {t("weather.providerError")}
           </CardContent>
         </Card>
       ) : null}

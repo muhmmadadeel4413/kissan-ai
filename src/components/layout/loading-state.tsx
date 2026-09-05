@@ -1,4 +1,5 @@
 import { Skeleton } from "../ui/skeleton";
+import { useI18n } from "../../context/PreferencesContext";
 import { cn } from "../../lib/utils";
 
 /**
@@ -7,16 +8,18 @@ import { cn } from "../../lib/utils";
  */
 export function LoadingState({
   rows = 3,
-  title = "Loading…",
+  title,
   className,
 }: {
   rows?: number;
   title?: string;
   className?: string;
 }) {
+  const { t } = useI18n();
+  const resolvedTitle = title ?? t("common.loadingDefault");
   return (
-    <div className={cn("space-y-4", className)} role="status" aria-label={title}>
-      <span className="sr-only">{title}</span>
+    <div className={cn("space-y-4", className)} role="status" aria-label={resolvedTitle}>
+      <span className="sr-only">{resolvedTitle}</span>
       {Array.from({ length: rows }).map((_, i) => (
         <div key={i} className="space-y-3 rounded-2xl border border-border bg-card p-5 shadow-soft">
           <div className="flex items-center justify-between gap-4">

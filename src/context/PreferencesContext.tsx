@@ -130,7 +130,10 @@ export function usePreferences(): PreferencesContextValue {
 }
 
 /** Convenience hook for components that only need translations. */
-export function useI18n(): { t: (key: string) => string; language: Language } {
+export function useI18n(): {
+  t: (key: string, vars?: Record<string, string | number>) => string;
+  language: Language;
+} {
   const { t, language } = usePreferences();
   return { t, language };
 }

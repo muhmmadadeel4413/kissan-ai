@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { ChevronRight, TrendingUp } from "lucide-react";
 import { Card, CardContent } from "../ui/card";
 import { Badge } from "../ui/badge";
+import { useI18n } from "../../context/PreferencesContext";
 import type { Farm } from "../../types";
 
 /**
@@ -19,12 +20,13 @@ export function YieldPredictionCard({
   farm: Farm;
   compact?: boolean;
 }) {
+  const { t } = useI18n();
   return (
     <Card className="h-full">
       <CardContent className={compact ? "flex h-full flex-col gap-2 p-4" : "flex h-full flex-col gap-3 p-5"}>
         <div className="flex items-start justify-between gap-2">
           <p className="text-sm font-semibold text-muted-foreground">
-            AI Yield Prediction
+            {t("dashboard.aiYieldPrediction")}
           </p>
           <span
             className={
@@ -41,25 +43,26 @@ export function YieldPredictionCard({
             —
           </p>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Estimated yield · {farm.currentCrop || "your crop"}
+            {farm.currentCrop
+              ? t("dashboard.estimatedYield", { crop: farm.currentCrop })
+              : t("dashboard.estimatedYieldDefault")}
           </p>
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <Badge variant="neutral">Range: — – —</Badge>
-          <Badge variant="neutral">Confidence: —</Badge>
+          <Badge variant="neutral">{t("dashboard.rangeDash")}</Badge>
+          <Badge variant="neutral">{t("dashboard.confidenceDash")}</Badge>
         </div>
 
         <p className="text-xs leading-relaxed text-muted-foreground">
-          Yield prediction needs crop, weather, and growth history. We won&apos;t
-          show a made-up estimate.
+          {t("dashboard.yieldNeedsData")}
         </p>
 
         <Link
           to="/yield"
           className="mt-auto inline-flex items-center gap-0.5 text-xs font-semibold text-primary hover:text-primary-deep transition-colors cursor-pointer"
         >
-          View Yield
+          {t("dashboard.viewYield")}
           <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
         </Link>
       </CardContent>

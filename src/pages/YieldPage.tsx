@@ -16,6 +16,7 @@ import { Alert, AlertDescription } from "../components/ui/alert";
 import { PageHeader } from "../components/layout/page-header";
 import { EmptyState } from "../components/layout/empty-state";
 import { useFarm } from "../context/FarmContext";
+import { useI18n } from "../context/PreferencesContext";
 import { buildFarmContext } from "../lib/farm-context";
 import { estimateYieldForFarm, buildYieldComparison } from "../lib/yield-service";
 import { cn } from "../lib/utils";
@@ -78,6 +79,7 @@ function MetricTile({
 
 export default function YieldPage() {
   const { farm } = useFarm();
+  const { t } = useI18n();
 
   const estimate = React.useMemo(() => (farm ? estimateYieldForFarm(farm) : null), [farm]);
   const chartData = React.useMemo(
@@ -93,11 +95,11 @@ export default function YieldPage() {
       <div className="mx-auto max-w-xl">
         <EmptyState
           icon={<TrendingUp className="h-6 w-6" />}
-          title="AI Yield Prediction"
-          description="Set up your farm profile first — yield prediction is built from your real crop, planting date, soil, and irrigation data."
+          title={t("yield.title")}
+          description={t("yield.setupFirst")}
           action={
             <Button asChild size="lg">
-              <Link to="/farm-setup">Set up my farm</Link>
+              <Link to="/farm-setup">{t("yield.setupMyFarm")}</Link>
             </Button>
           }
         />
@@ -106,14 +108,18 @@ export default function YieldPage() {
   }
 
   const canEstimate = Boolean(farm.currentCrop?.trim());
-  const stageLabel = context?.growth.stageLabel ?? "Growth stage unavailable";
+  const stageLabel = context?.growth.stageLabel ?? t("farm.growthStageUnavailable");
   const ageKnown = context?.growth.cropAgeDays !== null;
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title="AI Yield Prediction"
-        subtitle={`Expected yield for your ${farm.currentCrop || "crop"} — an estimate built from your saved farm profile, not a guess.`}
+        title={t("yield.title")}
+        subtitle={
+          farm.currentCrop
+            ? t("yield.subtitle", { crop: farm.currentCrop })
+            : t("yield.subtitleDefault")
+        }
       />
 
       {!canEstimate ? (
@@ -123,14 +129,13 @@ export default function YieldPage() {
               <Sprout className="h-7 w-7" aria-hidden="true" />
             </span>
             <div>
-              <p className="text-lg font-bold text-foreground">Add your crop to see a prediction</p>
+              <p className="text-lg font-bold text-foreground">{t("yield.addCropTitle")}</p>
               <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
-                Yield prediction starts with the crop you&apos;re growing. Add it to your farm
-                profile and we&apos;ll estimate the expected yield from your real farm data.
+                {t("yield.addCropDesc")}
               </p>
             </div>
             <Button asChild variant="outline">
-              <Link to="/farm-profile">Update farm profile</Link>
+              <Link to="/farm-profile">{t("yield.updateFarmProfile")}</Link>
             </Button>
           </CardContent>
         </Card>
@@ -145,17 +150,17 @@ export default function YieldPage() {
                     <TrendingUp className="h-5 w-5" aria-hidden="true" />
                   </span>
                   <div>
-                    <p className="font-heading text-base font-bold text-foreground">Expected Yield</p>
+                    <p className="font-heading text-base font-bold text-foreground">{t("yield.expectedYield")}</p>
                     <p className="text-xs text-muted-foreground">{farm.currentCrop}</p>
                   </div>
                 </div>
-                <Badge variant="success">Estimate</Badge>
+                <Badge variant="success">{t("yield.estimate")}</Badge>
               </div>
 
               {/* Big yield number */}
               <div className="rounded-2xl border border-primary/15 bg-primary-soft/40 p-5 text-center">
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Predicted yield
+                  {t("yield.predictedYield")}
                 </p>
                 <p className="mt-2 font-heading text-5xl font-extrabold tracking-tight text-foreground sm:text-6xl">
                   {estimate?.estimatedYield.toFixed(1)}
@@ -170,7 +175,7 @@ export default function YieldPage() {
                   )}
                 >
                   {(estimate?.deltaPercent ?? 0) >= 0 ? "+" : ""}
-                  {estimate?.deltaPercent}% vs reference season
+                  {t("yield.vsReference", { n: estimate?.deltaPercent ?? 0 })}
                 </p>
               </div>
 
@@ -178,18 +183,18 @@ export default function YieldPage() {
               <div className="grid grid-cols-2 gap-3">
                 <MetricTile
                   icon={<ShieldCheck className="h-4 w-4" aria-hidden="true" />}
-                  label="Confidence"
+                  label={t("yield.confidence")}
                   value={`${estimate?.confidence}%`}
-                  sub="Data completeness"
+                  sub={t("yield.dataCompleteness")}
                 />
                 <MetricTile
                   icon={<CalendarClock className="h-4 w-4" aria-hidden="true" />}
-                  label="Harvest in"
-                  value={estimate?.daysToHarvest !== null ? `${estimate?.daysToHarvest} days` : "—"}
+                  label={t("yield.harvestIn")}
+                  value={estimate?.daysToHarvest != null ? t("yield.days", { n: estimate.daysToHarvest }) : "—"}
                   sub={
                     estimate?.harvestDate
-                      ? `Est. ${formatHarvestDate(estimate.harvestDate)}`
-                      : "Add planting date"
+                      ? t("yield.estDate", { date: formatHarvestDate(estimate.harvestDate) })
+                      : t("yield.addPlantingDate")
                   }
                 />
               </div>
@@ -197,18 +202,20 @@ export default function YieldPage() {
               {/* Range + crop age */}
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant="neutral">
-                  Range: {estimate?.lowerBound.toFixed(1)} – {estimate?.upperBound.toFixed(1)}{" "}
-                  {estimate?.unit}
+                  {t("yield.range", {
+                    low: estimate?.lowerBound.toFixed(1) ?? "—",
+                    high: estimate?.upperBound.toFixed(1) ?? "—",
+                    unit: estimate?.unit ?? "",
+                  })}
                 </Badge>
                 {ageKnown ? (
                   <Badge variant="neutral">
-                    {context?.growth.cropAgeDays} days since planting
+                    {t("yield.daysSincePlanting", { n: context?.growth.cropAgeDays ?? 0 })}
                   </Badge>
                 ) : null}
               </div>
               <p className="text-xs leading-relaxed text-muted-foreground">
-                {stageLabel} · Based on your saved crop, planting date, soil, and irrigation
-                method.
+                {stageLabel} · {t("yield.basedOnSaved")}
               </p>
 
               {/* View Detailed Analysis — functional disclosure */}
@@ -219,7 +226,7 @@ export default function YieldPage() {
                   aria-expanded={analysisOpen}
                   onClick={() => setAnalysisOpen((o) => !o)}
                 >
-                  View Detailed Analysis
+                  {t("yield.viewDetailedAnalysis")}
                   <ChevronDown
                     className={cn(
                       "h-4 w-4 transition-transform duration-200",
@@ -237,7 +244,7 @@ export default function YieldPage() {
             <React.Suspense
               fallback={
                 <div className="flex h-72 items-center justify-center rounded-2xl border border-border bg-card">
-                  <LoadingState rows={2} title="Loading chart…" />
+                  <LoadingState rows={2} title={t("yield.loadingChart")} />
                 </div>
               }
             >
@@ -266,7 +273,7 @@ export default function YieldPage() {
                       <Leaf className="h-4 w-4" aria-hidden="true" />
                     </span>
                     <p className="font-heading text-sm font-bold text-foreground">
-                      What shaped this prediction
+                      {t("yield.whatShaped")}
                     </p>
                   </div>
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -284,7 +291,7 @@ export default function YieldPage() {
                     {estimate.missingInputs.length > 0 ? (
                       <div className="rounded-xl border border-dashed border-warning/50 bg-warning/5 p-3">
                         <p className="text-[11px] font-semibold uppercase tracking-wide text-warning">
-                          Missing (widen the range)
+                          {t("yield.missingWidenRange")}
                         </p>
                         <p className="mt-1 text-sm font-medium text-foreground">
                           {estimate.missingInputs.join(", ")}
@@ -293,10 +300,7 @@ export default function YieldPage() {
                     ) : null}
                   </div>
                   <p className="text-xs leading-relaxed text-muted-foreground">
-                    The estimate compares your farm&apos;s recorded conditions against a typical
-                    regional baseline for {farm.currentCrop}. Confidence reflects how complete
-                    your farm profile is — add your variety, soil type, irrigation method, and
-                    planting date to tighten the range.
+                    {t("yield.estimateComparison", { crop: farm.currentCrop })}
                   </p>
                 </CardContent>
               </Card>
@@ -309,8 +313,7 @@ export default function YieldPage() {
       <Alert variant="info">
         <Info className="h-5 w-5" aria-hidden="true" />
         <AlertDescription>
-          Yield predictions are estimates based on available farm information and conditions.
-          They are not guaranteed harvest results.
+          {t("yield.disclaimer")}
         </AlertDescription>
       </Alert>
     </div>

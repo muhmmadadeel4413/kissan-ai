@@ -75,7 +75,7 @@ export function FarmSwitcher({ className }: { className?: string }) {
       {open ? (
         <div
           role="listbox"
-          aria-label="Select farm"
+          aria-label={t("farmSwitcher.selectFarmAria")}
           className="absolute left-0 top-full z-50 mt-2 w-64 overflow-hidden rounded-2xl border border-border bg-background p-1.5 shadow-pop animate-slide-in"
         >
           <p className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -83,7 +83,7 @@ export function FarmSwitcher({ className }: { className?: string }) {
           </p>
           {farms.map((f) => {
             const isActive = f.id === farm?.id;
-            const displayName = f.farmName || f.currentCrop || "Untitled farm";
+            const displayName = f.farmName || f.currentCrop || t("farmSwitcher.untitledFarm");
             const subtitle = [f.landArea, f.currentCrop, f.location].filter(Boolean).slice(0, 2).join(" • ");
             return (
               <button
@@ -124,7 +124,7 @@ export function FarmSwitcher({ className }: { className?: string }) {
             type="button"
             onClick={() => {
               close();
-              navigate("/farm-setup");
+              navigate("/farm-setup?create=new");
             }}
             className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-medium text-primary transition-colors hover:bg-primary-soft cursor-pointer"
           >

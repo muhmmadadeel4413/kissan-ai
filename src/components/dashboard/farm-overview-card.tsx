@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { Ruler, Sprout } from "lucide-react";
 import { Card, CardContent } from "../ui/card";
+import { useI18n } from "../../context/PreferencesContext";
 import type { Farm, CropGrowthInfo } from "../../types";
 
 /**
@@ -15,16 +16,17 @@ export function FarmOverviewCard({
   farm: Farm;
   growth: CropGrowthInfo;
 }) {
+  const { t } = useI18n();
   const stageKnown =
     growth.growthStage !== "unknown" && growth.growthStage !== "not_started";
-  const stageLabel = stageKnown ? growth.stageLabel : "Stage unknown";
+  const stageLabel = stageKnown ? growth.stageLabel : t("dashboard.stageUnknown");
 
   return (
     <Card className="h-full transition-shadow duration-200 hover:shadow-lift">
       <CardContent className="flex h-full flex-col gap-3 p-5">
         <div className="flex items-start justify-between gap-2">
           <p className="text-sm font-semibold text-muted-foreground">
-            Farm Overview
+            {t("dashboard.farmOverview")}
           </p>
           <Link
             to="/farm-profile"
@@ -39,7 +41,7 @@ export function FarmOverviewCard({
           <p className="font-heading text-2xl font-bold tracking-tight text-foreground">
             {farm.currentCrop}
           </p>
-          <p className="mt-0.5 text-xs text-muted-foreground">Current crop</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">{t("dashboard.currentCrop")}</p>
         </div>
 
         <div className="mt-auto flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-border pt-3">

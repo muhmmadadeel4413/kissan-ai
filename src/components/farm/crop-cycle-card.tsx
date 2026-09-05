@@ -2,6 +2,7 @@ import { CalendarClock, MapPin, Sprout } from "lucide-react";
 import { Card, CardContent } from "../ui/card";
 import { Badge } from "../ui/badge";
 import { getCropGrowthConfig } from "../../lib/growth-stage";
+import { useI18n } from "../../context/PreferencesContext";
 import type { CropGrowthInfo, Farm } from "../../types";
 import { cn } from "../../lib/utils";
 
@@ -47,6 +48,7 @@ export function CropCycleCard({
   farm: Farm;
   growth: CropGrowthInfo;
 }) {
+  const { t } = useI18n();
   const config = getCropGrowthConfig(farm.currentCrop);
   const planting = farm.plantingDate;
   const ageKnown = growth.cropAgeDays !== null;
@@ -71,10 +73,10 @@ export function CropCycleCard({
             </span>
             <div className="min-w-0">
               <p className="font-heading text-lg font-bold tracking-tight text-foreground">
-                {farm.currentCrop || "No crop set"}
+                {farm.currentCrop || t("farm.noCropSet")}
               </p>
               <p className="truncate text-xs text-muted-foreground">
-                {farm.currentCropVariety || "Variety not recorded"}
+                {farm.currentCropVariety || t("farm.varietyNotRecorded")}
               </p>
             </div>
           </div>
@@ -89,7 +91,7 @@ export function CropCycleCard({
             <div className="flex items-center gap-1.5 text-primary">
               <Sprout className="h-3.5 w-3.5" aria-hidden="true" />
               <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                Sowing date
+                {t("farm.sowingDate")}
               </p>
             </div>
             <p className="mt-1 text-sm font-bold text-foreground">
@@ -100,7 +102,7 @@ export function CropCycleCard({
             <div className="flex items-center gap-1.5 text-primary">
               <CalendarClock className="h-3.5 w-3.5" aria-hidden="true" />
               <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                Est. harvest
+                {t("farm.estHarvest")}
               </p>
             </div>
             <p className="mt-1 text-sm font-bold text-foreground">{formatShort(harvestDate)}</p>
@@ -112,11 +114,14 @@ export function CropCycleCard({
           <div className="pt-1">
             <div className="flex items-center justify-between text-xs text-muted-foreground">
               <span>
-                Day {ageKnown ? growth.cropAgeDays : 0} of {config.totalDays}
+                {t("farm.dayOfTotal", {
+                  x: ageKnown && growth.cropAgeDays !== null ? growth.cropAgeDays : 0,
+                  y: config.totalDays,
+                })}
               </span>
               <span className="inline-flex items-center gap-1">
                 <MapPin className="h-3 w-3" aria-hidden="true" />
-                Current stage
+                {t("farm.currentStage")}
               </span>
             </div>
 
@@ -140,9 +145,9 @@ export function CropCycleCard({
 
             {/* Day ruler */}
             <div className="mt-1.5 flex w-full justify-between text-[10px] text-muted-foreground">
-              <span>Day 0</span>
-              <span>Day {Math.round(config.totalDays / 2)}</span>
-              <span>Day {config.totalDays}</span>
+              <span>{t("farm.day0")}</span>
+              <span>{t("farm.dayN", { n: Math.round(config.totalDays / 2) })}</span>
+              <span>{t("farm.dayN", { n: config.totalDays })}</span>
             </div>
 
             {/* Stage labels */}
@@ -177,8 +182,8 @@ export function CropCycleCard({
         ) : (
           <p className="text-xs leading-relaxed text-muted-foreground">
             {!planting
-              ? "Add a planting date to your farm profile to see the growth timeline."
-              : "Growth-stage configuration isn't available for this crop yet."}
+              ? t("farm.addPlantingDate")
+              : t("farm.growthStageConfigUnavailable")}
           </p>
         )}
       </CardContent>
