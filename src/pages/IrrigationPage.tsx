@@ -190,9 +190,33 @@ export default function IrrigationPage() {
         <IrrigationFarmContextCard farm={farm} />
       </section>
 
-      {/* Weather note — honest degradation, never a fake value */}
+      {/* Weather note — honest degradation with actionable fix button */}
       {weatherUnavailable ? (
-        <InfoNote text={t("irrigation.weatherUnavailable")} tone="neutral" />
+        <div className="flex flex-col gap-3 rounded-2xl border border-border/70 bg-muted/30 p-4 sm:flex-row sm:items-center sm:justify-between text-sm">
+          <div className="flex items-start gap-2.5 min-w-0">
+            <CloudSun className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+            <div className="min-w-0">
+              <p className="font-medium text-foreground">
+                {weather.status === "error" && weather.error
+                  ? weather.error
+                  : t("irrigation.weatherUnavailable")}
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {weather.status === "error"
+                  ? "Irrigation guidance will proceed using your crop and soil data, but accurate weather makes recommendations much better."
+                  : "Live weather is currently unavailable for this farm. Guidance will proceed using saved crop and soil data."}
+              </p>
+            </div>
+          </div>
+          {farm?.id ? (
+            <Button asChild variant="outline" size="sm" className="shrink-0">
+              <Link to={`/farm-setup?edit=${farm.id}`}>
+                <MapPin className="mr-1.5 h-3.5 w-3.5" />
+                {t("farmProfile.editBtn")}
+              </Link>
+            </Button>
+          ) : null}
+        </div>
       ) : null}
 
       {/* Action — Get Irrigation Advice */}
@@ -446,7 +470,7 @@ function CurrentRecommendationCard({
   ];
 
   const waterNeed =
-    recommendation.waterGuidance.relative || t("irrigation.waterCantEstimate");
+    recommendation.waterGuidance?.relative || t("irrigation.waterCantEstimate");
 
   return (
     <Card className="h-full">
@@ -676,7 +700,7 @@ function HistoryRow({
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <Badge variant={meta.variant === "neutral" ? "outline" : meta.variant}>
-              {t("irrigation.urgency." + rec.urgency)}
+              {t("irrigation.urgency." + (rec.urgency || "low"))}
             </Badge>
           </div>
         </button>
@@ -751,7 +775,7 @@ function ResultCard({
               <div>
                 <p className="font-semibold text-foreground">{t("irrigation.waterGuidance")}</p>
                 <p className="mt-0.5 leading-relaxed text-foreground/90">
-                  {recommendation.waterGuidance.relative || t("irrigation.waterCantEstimate")}
+                  {recommendation.waterGuidance?.relative || t("irrigation.waterCantEstimate")}
                 </p>
               </div>
             </div>

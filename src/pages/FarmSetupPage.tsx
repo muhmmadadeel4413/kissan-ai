@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, MapPin, Sparkles } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Input } from "../components/ui/input";
@@ -13,6 +13,7 @@ import { useFarm } from "../context/FarmContext";
 import { useI18n } from "../context/PreferencesContext";
 import { FarmSetupInput } from "../types";
 import { cn } from "../lib/utils";
+import { resolveLocation, findLocationSuggestions } from "../lib/location-matcher";
 
 const SOIL_TYPES = ["Clay", "Sandy", "Loamy", "Silt", "Saline", "Mixed"];
 const IRRIGATION_METHODS = ["Drip", "Flood / Furrow", "Sprinkler", "Canal", "Rain-fed"];
@@ -97,6 +98,25 @@ export default function FarmSetupPage() {
   const [errors, setErrors] = useState<FormErrors>({});
   const [saved, setSaved] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [locationFocused, setLocationFocused] = useState(false);
+
+  const locationSuggestions = useMemo(() => {
+    if (!form.location || form.location.trim().length === 0) return [];
+    return findLocationSuggestions(form.location, 5);
+  }, [form.location]);
+
+  const resolvedLocationMatch = useMemo(() => {
+    if (!form.location || form.location.trim().length < 3) return null;
+    const res = resolveLocation(form.location);
+    if (
+      res &&
+      res.confidence >= 0.75 &&
+      res.name.toLowerCase() !== form.location.trim().toLowerCase()
+    ) {
+      return res;
+    }
+    return null;
+  }, [form.location]);
 
   // The AppLayout gates rendering until status is settled, but guard here too
   // so this page never mounts a stale (empty) form while the farm loads.
@@ -157,10 +177,20 @@ export default function FarmSetupPage() {
 
     setSubmitError(null);
     try {
+      const formToSubmit = { ...form };
+      const resolved = resolveLocation(form.location);
+      if (
+        resolved &&
+        resolved.confidence >= 0.8 &&
+        form.location.trim().toLowerCase() !== resolved.formatted.toLowerCase()
+      ) {
+        formToSubmit.location = resolved.formatted;
+      }
+
       if (isEditMode) {
-        await updateFarm(targetFarm!.id, form);
+        await updateFarm(targetFarm!.id, formToSubmit);
       } else {
-        await createFarm(form);
+        await createFarm(formToSubmit);
       }
       setSaved(true);
       // Navigate to farm profile list after save
@@ -251,16 +281,72 @@ export default function FarmSetupPage() {
               placeholder={t("farmSetup.farmNamePlaceholder")}
             />
           </div>
-          <div className="space-y-2">
+          <div className="space-y-2 relative">
             <Label htmlFor="location">{t("farmSetup.location")}</Label>
-            <Input
-              id="location"
-              value={form.location}
-              onChange={(e) => setField("location", e.target.value)}
-              placeholder={t("farmSetup.locationPlaceholder")}
-              aria-invalid={Boolean(errors.location)}
-              className={fieldClass(Boolean(errors.location))}
-            />
+            <div className="relative">
+              <Input
+                id="location"
+                value={form.location}
+                onChange={(e) => {
+                  setField("location", e.target.value);
+                  setLocationFocused(true);
+                }}
+                onFocus={() => setLocationFocused(true)}
+                onBlur={() => {
+                  // Small delay to allow click events on suggestions
+                  window.setTimeout(() => setLocationFocused(false), 200);
+                }}
+                placeholder={t("farmSetup.locationPlaceholder")}
+                aria-invalid={Boolean(errors.location)}
+                className={fieldClass(Boolean(errors.location))}
+              />
+            </div>
+
+            {/* Smart "Did you mean?" suggestion chip when typo is detected */}
+            {resolvedLocationMatch ? (
+              <div className="flex items-center gap-2 rounded-xl bg-primary/10 border border-primary/20 px-3 py-2 text-xs text-foreground animate-fade-in">
+                <Sparkles className="h-3.5 w-3.5 text-primary shrink-0" />
+                <span>
+                  Did you mean <strong>{resolvedLocationMatch.formatted}</strong>?
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setField("location", resolvedLocationMatch.formatted);
+                    setLocationFocused(false);
+                  }}
+                  className="ml-auto font-semibold text-primary underline hover:text-primary-deep cursor-pointer"
+                >
+                  Apply
+                </button>
+              </div>
+            ) : null}
+
+            {/* Suggestions dropdown */}
+            {locationFocused && locationSuggestions.length > 0 ? (
+              <div className="absolute z-50 left-0 right-0 top-full mt-1 max-h-56 overflow-auto rounded-xl border border-border bg-popover p-1 shadow-lg animate-fade-in">
+                <p className="px-2.5 py-1 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                  Select Verified District / City
+                </p>
+                {locationSuggestions.map((s) => (
+                  <button
+                    key={`${s.name}-${s.admin1}`}
+                    type="button"
+                    onMouseDown={(e) => {
+                      e.preventDefault(); // prevent input blur
+                      setField("location", `${s.name}, ${s.admin1}`);
+                      setLocationFocused(false);
+                    }}
+                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm hover:bg-muted/80 transition-colors cursor-pointer"
+                  >
+                    <MapPin className="h-3.5 w-3.5 text-primary shrink-0" />
+                    <span className="font-medium text-foreground">{s.name}</span>
+                    <span className="text-xs text-muted-foreground">({s.admin1}, {s.country})</span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+
             <FieldError message={errors.location} />
           </div>
           <div className="space-y-2">

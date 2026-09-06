@@ -16,7 +16,37 @@ import { supabase } from "./supabase";
  * and remains marked as unavailable.
  */
 
-export type STTLanguageCode = "auto" | "en-IN" | "ur-IN" | "pa-IN";
+export type STTLanguageCode = "unknown" | "auto" | "en-IN" | "ur-IN" | "pa-IN";
+
+/**
+ * Normalize STT language codes for Sarvam AI.
+ * Sarvam Saaras v3 expects "unknown" for auto-detection (not "auto").
+ */
+export function normalizeSttLanguage(language?: string | null): string {
+  const trimmed = language?.trim();
+  if (!trimmed || trimmed === "auto" || trimmed === "unknown") {
+    return "unknown";
+  }
+  const lower = trimmed.toLowerCase();
+  const map: Record<string, string> = {
+    "auto": "unknown",
+    "unknown": "unknown",
+    "urdu": "ur-IN",
+    "ur": "ur-IN",
+    "ur-pk": "ur-IN",
+    "ur-in": "ur-IN",
+    "english": "en-IN",
+    "en": "en-IN",
+    "en-us": "en-IN",
+    "en-gb": "en-IN",
+    "en-in": "en-IN",
+    "punjabi": "pa-IN",
+    "pa": "pa-IN",
+    "pa-pk": "pa-IN",
+    "pa-in": "pa-IN",
+  };
+  return map[lower] || trimmed;
+}
 
 export interface STTSession {
   /** Stop recording and finalize the transcript (mic stops immediately). */
@@ -125,13 +155,14 @@ function writeString(view: DataView, offset: number, str: string): void {
 /**
  * Upload a WAV blob to the sarvam-stt Edge Function and return the transcript.
  */
-async function uploadToSarvam(
+export async function uploadToSarvam(
   wavBlob: Blob,
   language: STTLanguageCode
 ): Promise<{ transcript: string; languageCode: string | null }> {
+  const normalizedLang = normalizeSttLanguage(language);
   const formData = new FormData();
   formData.append("file", wavBlob, "audio.wav");
-  formData.append("language_code", language);
+  formData.append("language_code", normalizedLang);
   formData.append("model", "saaras:v3");
   formData.append("mode", "transcribe");
 
@@ -140,12 +171,34 @@ async function uploadToSarvam(
   });
 
   if (error) {
-    // Supabase wraps the Edge Function response; extract the error message
-    const msg =
-      (data as { error?: string } | null)?.error ??
-      (error instanceof Error ? error.message : null) ??
-      "Voice recognition is temporarily unavailable. Please try again.";
-    throw new Error(msg);
+    let msg: string | null = null;
+    if (data && typeof data === "object" && "error" in data && typeof (data as { error: unknown }).error === "string") {
+      msg = (data as { error: string }).error;
+    } else if (
+      "context" in error &&
+      error.context &&
+      typeof error.context === "object" &&
+      "json" in error.context &&
+      typeof error.context.json === "function"
+    ) {
+      try {
+        const cloned =
+          typeof error.context.clone === "function"
+            ? error.context.clone()
+            : error.context;
+        const errJson = await cloned.json();
+        if (errJson && typeof errJson === "object" && typeof errJson.error === "string") {
+          msg = errJson.error;
+        }
+      } catch {
+        // ignore
+      }
+    }
+    throw new Error(
+      msg ||
+      (error instanceof Error ? error.message : null) ||
+      "Voice recognition is temporarily unavailable. Please try again."
+    );
   }
 
   const result = data as {

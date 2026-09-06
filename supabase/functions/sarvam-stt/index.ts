@@ -114,9 +114,30 @@ Deno.serve(async (req: Request) => {
     );
   }
 
-  const languageCode = formData.get("language_code")?.toString() ?? "auto";
-  const model = formData.get("model")?.toString() ?? "saaras:v3";
-  const mode = formData.get("mode")?.toString() ?? "transcribe";
+  const rawLang = formData.get("language_code")?.toString()?.trim() || "unknown";
+  const model = formData.get("model")?.toString() || "saaras:v3";
+  const mode = formData.get("mode")?.toString() || "transcribe";
+
+  // Normalize language_code for Sarvam AI Saaras v3.
+  // Sarvam requires "unknown" for auto-detection; passing "auto" triggers HTTP 400.
+  const langMap: Record<string, string> = {
+    "auto": "unknown",
+    "unknown": "unknown",
+    "urdu": "ur-IN",
+    "ur": "ur-IN",
+    "ur-pk": "ur-IN",
+    "ur-in": "ur-IN",
+    "english": "en-IN",
+    "en": "en-IN",
+    "en-us": "en-IN",
+    "en-gb": "en-IN",
+    "en-in": "en-IN",
+    "punjabi": "pa-IN",
+    "pa": "pa-IN",
+    "pa-pk": "pa-IN",
+    "pa-in": "pa-IN",
+  };
+  const languageCode = langMap[rawLang.toLowerCase()] || rawLang;
 
   // Build the multipart form data for Sarvam
   const sarvamFormData = new FormData();

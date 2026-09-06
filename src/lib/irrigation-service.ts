@@ -48,11 +48,60 @@ export interface IrrigationWeatherInput {
   }>;
 }
 
+function normalizeRecommendation(raw: unknown): IrrigationRecommendation {
+  if (!raw || typeof raw !== "object") return sanitizeEmptyRecommendation();
+  const r = raw as Record<string, unknown>;
+
+  const status = (String(r.status ?? r.irrigation_status ?? "adequate")) as IrrigationRecommendation["status"];
+  const urgency = (String(r.urgency ?? "low")) as IrrigationRecommendation["urgency"];
+  const recommendation = String(r.recommendation ?? r.summary ?? "");
+
+  const rawWg = (typeof r.waterGuidance === "object" && r.waterGuidance
+    ? r.waterGuidance
+    : typeof r.water_guidance === "object" && r.water_guidance
+    ? r.water_guidance
+    : {}) as Record<string, unknown>;
+
+  const waterGuidance = {
+    amount: String(rawWg.amount ?? ""),
+    unit: String(rawWg.unit ?? ""),
+    confidence: Number(rawWg.confidence ?? 0),
+    relative: String(rawWg.relative ?? r.water_guidance_relative ?? ""),
+  };
+
+  const rawTiming = (typeof r.timing === "object" && r.timing ? r.timing : null) as Record<string, unknown> | null;
+  const timing = rawTiming
+    ? {
+        recommended_time: String(rawTiming.recommended_time ?? rawTiming.recommendedTime ?? ""),
+        reason: String(rawTiming.reason ?? ""),
+      }
+    : null;
+
+  return {
+    status,
+    urgency,
+    recommendation,
+    timing,
+    waterGuidance,
+    weatherImpact: String(r.weatherImpact ?? r.weather_impact ?? ""),
+    soilImpact: String(r.soilImpact ?? r.soil_impact ?? ""),
+    cropStageImpact: String(r.cropStageImpact ?? r.crop_stage_impact ?? ""),
+    rainAdjustment: String(r.rainAdjustment ?? r.rain_adjustment ?? ""),
+    nextCheck: String(r.nextCheck ?? r.next_check ?? ""),
+    importantNotes: (Array.isArray(r.importantNotes)
+      ? r.importantNotes
+      : Array.isArray(r.important_notes)
+      ? r.important_notes
+      : []) as string[],
+    limitations: (Array.isArray(r.limitations) ? r.limitations : []) as string[],
+  };
+}
+
 function mapRow(row: IrrigationRecommendationRow): IrrigationRecommendationRecord {
   return {
     id: row.id,
     farmId: row.farm_id,
-    recommendation: row.recommendation ?? sanitizeEmptyRecommendation(),
+    recommendation: normalizeRecommendation(row.recommendation),
     summary: row.summary ?? "",
     limitations: Array.isArray(row.limitations) ? row.limitations : [],
     needsMoreInformation: row.needs_more_information ?? false,
