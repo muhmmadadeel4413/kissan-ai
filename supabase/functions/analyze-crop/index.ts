@@ -60,15 +60,17 @@ const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta";
 
 /**
  * Call Gemini's generateContent endpoint with a bounded retry on transient
- * failures (429 rate-limit / 5xx). Throws a dedicated error when the quota
- * is exhausted so the caller can reply with an honest, actionable message.
+ * failures (429 rate-limit / 5xx). Uses exponential backoff with jitter and
+ * respects the Retry-After header when present. Throws a dedicated error
+ * when the quota is exhausted so the caller can reply with an honest,
+ * actionable message.
  */
 async function callGemini(
   apiKey: string,
   body: Record<string, unknown>
 ): Promise<{ text: string }> {
   const url = `${GEMINI_BASE}/models/${MODEL}:generateContent?key=${apiKey}`;
-  const maxAttempts = 3;
+  const maxAttempts = 4;
   let lastError = "Kissan AI is temporarily unavailable. Please try again.";
   let quotaExhausted = false;
 
@@ -108,13 +110,24 @@ async function callGemini(
     if (resp.status === 429) {
       quotaExhausted = true;
       if (attempt < maxAttempts) {
-        await new Promise((r) => setTimeout(r, 5000 * attempt));
+        // Respect Retry-After header when present; otherwise exponential backoff with jitter
+        const retryAfter = resp.headers.get("retry-after");
+        let delay: number;
+        if (retryAfter) {
+          const parsed = parseInt(retryAfter, 10);
+          delay = Number.isFinite(parsed) ? Math.min(parsed * 1000, 60_000) : 10_000;
+        } else {
+          const base = Math.min(5_000 * 2 ** (attempt - 1), 30_000);
+          delay = base + Math.random() * 2_000;
+        }
+        await new Promise((r) => setTimeout(r, delay));
         continue;
       }
       break;
     }
     if (resp.status >= 500 && attempt < maxAttempts) {
-      await new Promise((r) => setTimeout(r, 1500 * attempt));
+      const base = Math.min(2_000 * 2 ** (attempt - 1), 10_000);
+      await new Promise((r) => setTimeout(r, base + Math.random() * 1_000));
       continue;
     }
     break;

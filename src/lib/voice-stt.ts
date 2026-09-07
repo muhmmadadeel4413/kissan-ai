@@ -146,6 +146,47 @@ function encodeWav(samples: Int16Array): Blob {
   return new Blob([buffer], { type: "audio/wav" });
 }
 
+/** True only in Vite dev mode — stripped from production bundles. */
+const IS_DEV = import.meta.env.DEV;
+
+/**
+ * Compute lightweight audio diagnostics for an Int16 PCM buffer.
+ * Returns peak amplitude (0..1), RMS (0..1), silent-frame %, and clipping %.
+ */
+function computeAudioDiagnostics(samples: Int16Array): {
+  peak: number;
+  rms: number;
+  silentPct: number;
+  clippingPct: number;
+} {
+  if (samples.length === 0) {
+    return { peak: 0, rms: 0, silentPct: 100, clippingPct: 0 };
+  }
+
+  let peakAbs = 0;
+  let sumSq = 0;
+  let silentFrames = 0;
+  let clippingFrames = 0;
+  const SILENT_THRESHOLD = 327; // ~1% of 32768
+  const CLIP_THRESHOLD = 32000; // ~97.7% of 32768
+
+  for (let i = 0; i < samples.length; i++) {
+    const abs = Math.abs(samples[i]);
+    if (abs > peakAbs) peakAbs = abs;
+    sumSq += samples[i] * samples[i];
+    if (abs < SILENT_THRESHOLD) silentFrames++;
+    if (abs >= CLIP_THRESHOLD) clippingFrames++;
+  }
+
+  const rms = Math.sqrt(sumSq / samples.length) / 32768;
+  return {
+    peak: peakAbs / 32768,
+    rms,
+    silentPct: (silentFrames / samples.length) * 100,
+    clippingPct: (clippingFrames / samples.length) * 100,
+  };
+}
+
 function writeString(view: DataView, offset: number, str: string): void {
   for (let i = 0; i < str.length; i++) {
     view.setUint8(offset + i, str.charCodeAt(i));
@@ -160,6 +201,12 @@ export async function uploadToSarvam(
   language: STTLanguageCode
 ): Promise<{ transcript: string; languageCode: string | null }> {
   const normalizedLang = normalizeSttLanguage(language);
+
+  if (IS_DEV) {
+    console.debug("[STT] uploadToSarvam: wav=%dB lang=%s model=saaras:v3 mode=transcribe",
+      wavBlob.size, normalizedLang);
+  }
+
   const formData = new FormData();
   formData.append("file", wavBlob, "audio.wav");
   formData.append("language_code", normalizedLang);
@@ -315,10 +362,18 @@ export async function startSTT(
     }
   };
 
+  if (IS_DEV) {
+    console.debug("[STT] Recording started (lang=%s, rate=%dHz)", language, SAMPLE_RATE);
+  }
+
   return {
     async stop() {
       if (stopped || cancelled) return;
       stopped = true;
+
+      if (IS_DEV) {
+        console.debug("[STT] Recording stopped by user");
+      }
 
       // Stop the microphone immediately.
       try {
@@ -343,10 +398,13 @@ export async function startSTT(
       }
 
       // Check for empty/very short recordings
-      if (totalSamples < SAMPLE_RATE / 4) {
-        // Less than 250ms of audio
+      if (totalSamples < SAMPLE_RATE / 2) {
+        // Less than 500ms of audio — too short for meaningful transcription
+        if (IS_DEV) {
+          console.debug("[STT] Recording too short: %d samples (%.0fms)", totalSamples, (totalSamples / SAMPLE_RATE) * 1000);
+        }
         callbacks.onError(
-          "We couldn't hear a clear question. Please try again or type it."
+          "Recording too short. Please speak a bit longer and try again."
         );
         teardown();
         return;
@@ -363,16 +421,38 @@ export async function startSTT(
 
         // Encode to WAV and upload
         const wavBlob = encodeWav(merged);
+
+        if (IS_DEV) {
+          const diag = computeAudioDiagnostics(merged);
+          console.debug("[STT] Recording stopped: samples=%d wav=%dB peak=%.3f rms=%.3f silent=%.1f%% clipping=%.1f%%",
+            totalSamples, wavBlob.size, diag.peak, diag.rms, diag.silentPct, diag.clippingPct);
+          if (diag.peak < 0.01) {
+            console.warn("[STT] Extremely low signal detected — audio may be silent or mic muted.");
+          }
+          if (diag.clippingPct > 1) {
+            console.warn("[STT] Clipping detected (%.1f%%) — audio may be distorted.", diag.clippingPct);
+          }
+        }
+
         const result = await uploadToSarvam(wavBlob, language);
 
         if (result.transcript) {
+          if (IS_DEV) {
+            console.debug("[STT] Transcript received (%d chars)", result.transcript.length);
+          }
           callbacks.onFinal(result.transcript);
         } else {
+          if (IS_DEV) {
+            console.debug("[STT] Empty transcript returned from Sarvam");
+          }
           callbacks.onError(
-            "We couldn't hear a clear question. Please try again or type it."
+            "No speech detected in your recording. Please try speaking clearly or type your question."
           );
         }
       } catch (err) {
+        if (IS_DEV) {
+          console.error("[STT] Upload/transcription error:", err);
+        }
         callbacks.onError(
           err instanceof Error
             ? err.message

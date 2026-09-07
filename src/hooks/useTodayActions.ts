@@ -82,6 +82,7 @@ export function useTodayActions() {
   /* ------------------------------------------------------------------ */
   const runGenerate = React.useCallback(async () => {
     if (!farm || !farmId) return;
+    if (generating) return; // prevent duplicate concurrent requests
     setGenerating(true);
     setError(null);
     try {
@@ -123,7 +124,7 @@ export function useTodayActions() {
       setGenerating(false);
       setTriedGenerate(true);
     }
-  }, [farm, farmId, weather, actions.length]);
+  }, [farm, farmId, weather, actions.length, generating]);
 
   /* ------------------------------------------------------------------ */
   /* Auto-generate only when no actions exist for today + weather ready  */

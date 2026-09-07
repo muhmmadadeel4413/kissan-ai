@@ -108,6 +108,7 @@ export default function CropRecommendationPage() {
   }, [farm.id, historyReload]);
 
   const runRecommendations = async () => {
+    if (runStatus === "loading") return; // prevent duplicate submissions
     setRunStatus("loading");
     setRunError(null);
     setResult(null);

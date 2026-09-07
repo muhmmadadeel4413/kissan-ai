@@ -348,7 +348,7 @@ export default function CropDoctorPage() {
                     className="max-h-72 w-full rounded-xl object-contain bg-muted"
                   />
                   <p className="truncate text-xs text-muted-foreground">{fileName}</p>
-                  <Button size="lg" className="w-full" onClick={() => void runAnalysis()}>
+                  <Button size="lg" className="w-full" onClick={() => void runAnalysis()} disabled={busy}>
                     <Sparkles className="h-4 w-4" aria-hidden="true" />
                     {t("cropDoctor.analyzeCrop")}
                   </Button>

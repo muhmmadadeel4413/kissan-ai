@@ -251,7 +251,7 @@ export function useVoiceInput(
     finalTimerRef.current = window.setTimeout(() => {
       if (!gotFinalRef.current) {
         setVoiceState("error");
-        setError("We couldn't hear a clear question. Please try again or type it.");
+        setError("Voice recognition is taking too long. Please check your connection and try again, or type your question.");
         setPartial("");
       }
     }, FINAL_TIMEOUT_MS);
