@@ -101,9 +101,9 @@ Voice input is integrated into the AI Chat page. The implementation uses:
 | **Routing** | react-router-dom v7 (code-split per route with lazy loading) |
 | **Backend / Database** | Supabase (PostgreSQL, Row Level Security, Auth, Storage, Edge Functions) |
 | **Edge Functions** | Supabase Edge Functions (Deno runtime) |
-| **AI Provider** | Google Gemini `gemini-3.5-flash` (via server-side Edge Functions) |
+| **AI Provider** | Google Gemini `gemini-3.5-flash` (via server-side Edge Functions), RouterOpen Source |
 | **Weather API** | Open-Meteo (free, no API key required) |
-| **Speech-to-Text** | Sarvam AI `saaras:v3` (via `sarvam-stt` Edge Function) |
+| **Speech-to-Text** | Sarvam AI `saaras:v3` (via `sarvam-stt` Edge Function),Groq |
 | **Text-to-Speech** | Browser `speechSynthesis` API |
 | **Testing** | Vitest |
 | **Linting** | ESLint + Prettier |
