@@ -96,7 +96,7 @@ describe("voice-stt & voice-languages", () => {
       const fd1 = capturedFormData as FormData | null;
       expect(fd1).not.toBeNull();
       expect(fd1?.get("language_code")).toBe("unknown");
-      expect(fd1?.get("model")).toBe("saaras:v3");
+      expect(fd1?.get("model")).toBe("saaras:v4");
       expect(fd1?.get("mode")).toBe("transcribe");
     });
 

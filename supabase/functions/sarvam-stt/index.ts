@@ -1,27 +1,12 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
-/**
- * sarvam-stt
- *
- * Secure proxy for Sarvam AI Speech-to-Text REST API.
- *
- * Security model:
- *  - The SARVAM_API_KEY lives ONLY in Supabase Edge Function secrets;
- *    it never reaches the browser.
- *  - The browser uploads audio to this function, which forwards it to
- *    Sarvam with the server-side API key.
- *  - CORS is handled because this is always called from the browser.
- *  - Lightweight Bearer JWT validation (anon-based app).
- */
-
-const corsHeaders = {
+const BASE_CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-/** Origins permitted to call this Edge Function (preflight gate). */
 const ALLOWED_ORIGINS = [
   "http://localhost:5173",
   "https://kissan-ai-rho.vercel.app",
@@ -32,61 +17,102 @@ const ALLOWED_ORIGINS = [
 
 function corsForOrigin(req: Request): Record<string, string> {
   const origin = req.headers.get("origin") ?? "";
+
   return {
-    ...corsHeaders,
+    ...BASE_CORS_HEADERS,
     "Access-Control-Allow-Origin": ALLOWED_ORIGINS.includes(origin)
       ? origin
       : ALLOWED_ORIGINS[0],
   };
 }
 
-function json(data: unknown, status = 200): Response {
+function json(
+  req: Request,
+  data: unknown,
+  status = 200
+): Response {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { "Content-Type": "application/json", ...corsHeaders },
+    headers: {
+      "Content-Type": "application/json",
+      ...corsForOrigin(req),
+    },
   });
 }
 
-/** Map Sarvam API errors to user-friendly messages. */
 function friendlyError(status: number, body: string): string {
+  const lowerBody = body.toLowerCase();
+
   if (status === 401 || status === 403) {
     return "Voice recognition isn't set up correctly. Please try again later or type your question.";
   }
+
   if (status === 413) {
     return "Your recording is too long. Please try a shorter question.";
   }
+
   if (status === 429) {
     return "Voice recognition is busy right now. Wait a moment and try again, or type your question instead.";
   }
+
   if (status === 400) {
-    // Check if it's a language/format issue
-    if (body.toLowerCase().includes("language") || body.toLowerCase().includes("unsupported")) {
+    if (
+      lowerBody.includes("language") ||
+      lowerBody.includes("unsupported")
+    ) {
       return "Voice recognition for this language isn't available. You can type your question instead.";
     }
+
     return "We couldn't process your recording. Please try again or type your question.";
   }
+
   return "Voice recognition is temporarily unavailable. Please try again or type your question.";
 }
 
 Deno.serve(async (req: Request) => {
   // CORS preflight
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsForOrigin(req) });
+    return new Response("ok", {
+      headers: corsForOrigin(req),
+    });
   }
 
-  // Lightweight JWT sanity check (anon-based app).
-  const auth = req.headers.get("Authorization") ?? "";
-  if (!auth.startsWith("Bearer ") || auth.split(".").length !== 3) {
+  // Only POST is supported
+  if (req.method !== "POST") {
     return json(
-      { error: "This request is not authorized. Please try again." },
+      req,
+      { error: "Method not allowed." },
+      405
+    );
+  }
+
+  // Lightweight JWT sanity check
+  const auth = req.headers.get("Authorization") ?? "";
+
+  if (
+    !auth.startsWith("Bearer ") ||
+    auth.split(".").length !== 3
+  ) {
+    return json(
+      req,
+      {
+        error:
+          "This request is not authorized. Please try again.",
+      },
       401
     );
   }
 
+  // Sarvam API key must remain server-side
   const apiKey = Deno.env.get("SARVAM_API_KEY");
+
   if (!apiKey) {
-    console.error("sarvam-stt: SARVAM_API_KEY is not configured");
+    console.error(
+      "sarvam-stt: SARVAM_API_KEY is not configured"
+    );
+
     return json(
+      req,
       {
         error:
           "Voice recognition isn't set up yet. Please try again later or type your question.",
@@ -95,71 +121,136 @@ Deno.serve(async (req: Request) => {
     );
   }
 
-  // Parse the incoming multipart form data
+  // Parse multipart form data
   let formData: FormData;
+
   try {
     formData = await req.formData();
-  } catch (err) {
-    console.error("sarvam-stt: failed to parse form data", err);
+  } catch (error) {
+    console.error(
+      "sarvam-stt: failed to parse form data",
+      error
+    );
+
     return json(
-      { error: "Invalid request format. Please try again." },
+      req,
+      {
+        error:
+          "Invalid request format. Please try again.",
+      },
       400
     );
   }
 
   const audioFile = formData.get("file");
+
   if (!audioFile || !(audioFile instanceof Blob)) {
     return json(
-      { error: "No audio file provided. Please record your question." },
+      req,
+      {
+        error:
+          "No audio file provided. Please record your question.",
+      },
       400
     );
   }
 
-  const rawLang = formData.get("language_code")?.toString()?.trim() || "unknown";
-  const model = formData.get("model")?.toString() || "saaras:v3";
-  const mode = formData.get("mode")?.toString() || "transcribe";
+  const rawLang =
+    formData.get("language_code")?.toString()?.trim() ||
+    "unknown";
 
-  // Normalize language_code for Sarvam AI Saaras v3.
-  // Sarvam requires "unknown" for auto-detection; passing "auto" triggers HTTP 400.
-  const langMap: Record<string, string> = {
-    "auto": "unknown",
-    "unknown": "unknown",
-    "urdu": "ur-IN",
-    "ur": "ur-IN",
+  const requestedModel =
+    formData.get("model")?.toString()?.trim() ||
+    "saaras:v4";
+
+  const requestedMode =
+    formData.get("mode")?.toString()?.trim() ||
+    "transcribe";
+
+  // Saraiki is intentionally unsupported for voice recognition.
+  if (rawLang.toLowerCase() === "saraiki") {
+    return json(
+      req,
+      {
+        error:
+          "Saraiki voice recognition is not available yet. Please type your question instead.",
+      },
+      400
+    );
+  }
+
+  // Normalize language codes for Sarvam Saaras v4.
+  //
+  // Sarvam uses "unknown" for automatic language detection.
+  const languageMap: Record<string, string> = {
+    auto: "unknown",
+    unknown: "unknown",
+
+    urdu: "ur-IN",
+    ur: "ur-IN",
     "ur-pk": "ur-IN",
     "ur-in": "ur-IN",
-    "english": "en-IN",
-    "en": "en-IN",
+
+    english: "en-IN",
+    en: "en-IN",
     "en-us": "en-IN",
     "en-gb": "en-IN",
     "en-in": "en-IN",
-    "punjabi": "pa-IN",
-    "pa": "pa-IN",
+
+    punjabi: "pa-IN",
+    pa: "pa-IN",
     "pa-pk": "pa-IN",
     "pa-in": "pa-IN",
   };
-  const languageCode = langMap[rawLang.toLowerCase()] || rawLang;
 
-  // Build the multipart form data for Sarvam
+  const languageCode =
+    languageMap[rawLang.toLowerCase()] || rawLang;
+
+  // Build request for Sarvam
   const sarvamFormData = new FormData();
-  sarvamFormData.append("file", audioFile, "audio.wav");
-  sarvamFormData.append("model", model);
-  sarvamFormData.append("mode", mode);
-  sarvamFormData.append("language_code", languageCode);
 
-  // Forward to Sarvam STT API
-  let resp: Response;
+  sarvamFormData.append(
+    "file",
+    audioFile,
+    "audio.wav"
+  );
+
+  sarvamFormData.append(
+    "model",
+    requestedModel
+  );
+
+  sarvamFormData.append(
+    "mode",
+    requestedMode
+  );
+
+  sarvamFormData.append(
+    "language_code",
+    languageCode
+  );
+
+  let response: Response;
+
   try {
-    resp = await fetch("https://api.sarvam.ai/speech-to-text", {
-      method: "POST",
-      headers: {
-        "api-subscription-key": apiKey,
-      },
-      body: sarvamFormData,
-    });
-  } catch (err) {
-    console.error("sarvam-stt: network error", err);
+    response = await fetch(
+      "https://api.sarvam.ai/speech-to-text",
+      {
+        method: "POST",
+        headers: {
+          "api-subscription-key": apiKey,
+        },
+        body: sarvamFormData,
+      }
+    );
+  } catch (error) {
+    console.error(
+      "sarvam-stt: network error",
+      error
+    );
+
     return json(
+      req,
       {
         error:
           "Voice recognition is temporarily unavailable. Please try again.",
@@ -168,36 +259,59 @@ Deno.serve(async (req: Request) => {
     );
   }
 
-  const respBody = await resp.text();
+  const responseBody = await response.text();
 
-  if (!resp.ok) {
+  if (!response.ok) {
     console.error(
       "sarvam-stt: provider error",
-      resp.status,
-      respBody.slice(0, 300)
+      response.status,
+      responseBody.slice(0, 500)
     );
-    return json({ error: friendlyError(resp.status, respBody) }, resp.status);
+
+    return json(
+      req,
+      {
+        error: friendlyError(
+          response.status,
+          responseBody
+        ),
+      },
+      response.status
+    );
   }
 
-  // Parse Sarvam response
   let data: {
     transcript?: string;
     language_code?: string;
     request_id?: string;
   };
+
   try {
-    data = JSON.parse(respBody);
+    data = JSON.parse(responseBody);
   } catch {
-    console.error("sarvam-stt: invalid JSON response", respBody.slice(0, 300));
+    console.error(
+      "sarvam-stt: invalid JSON response",
+      responseBody.slice(0, 500)
+    );
+
     return json(
-      { error: "Voice recognition returned an invalid response. Please try again." },
+      req,
+      {
+        error:
+          "Voice recognition returned an invalid response. Please try again.",
+      },
       502
     );
   }
 
-  const transcript = data.transcript ?? "";
+  const transcript =
+    typeof data.transcript === "string"
+      ? data.transcript.trim()
+      : "";
+
   if (!transcript) {
     return json(
+      req,
       {
         error:
           "We couldn't hear a clear question. Please try again or type it.",
@@ -206,9 +320,20 @@ Deno.serve(async (req: Request) => {
     );
   }
 
-  return json({
+  console.log(
+    "sarvam-stt: transcription successful",
+    {
+      language_code: data.language_code ?? null,
+      transcript_length: transcript.length,
+      request_id: data.request_id ?? null,
+    }
+  );
+
+  return json(req, {
     transcript,
-    language_code: data.language_code ?? null,
-    request_id: data.request_id ?? null,
+    language_code:
+      data.language_code ?? null,
+    request_id:
+      data.request_id ?? null,
   });
 });
