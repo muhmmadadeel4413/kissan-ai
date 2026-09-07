@@ -7,7 +7,8 @@ import { getWeather, type WeatherData } from "../lib/weather-service";
  *
  * Integrates live weather with the existing Farm Context: it reads the active
  * farm (and its saved location) from `useFarm()`, fetches real weather through
- * the Edge Function, and exposes loading / ready / error states plus a retry.
+ * the Edge Function (with resilient fallback and fuzzy correction), and exposes
+ * loading / ready / error states plus a retry.
  * Both the Dashboard summary and the Weather page share this single source, so
  * they always show the same values and never duplicate the fetch.
  */
@@ -33,12 +34,22 @@ export function useFarmWeather() {
     setStatus("loading");
     setError(null);
 
-    const maxRetries = 3;
+    const maxRetries = 2;
     const baseDelay = 1000;
+
+    function isPermanentError(err: unknown): boolean {
+      const msg = err instanceof Error ? err.message : String(err);
+      return (
+        msg.includes("couldn't find") ||
+        msg.includes("on the map") ||
+        msg.includes("Add your farm location")
+      );
+    }
 
     function fetchWithRetry(retriesLeft: number): Promise<WeatherData> {
       return getWeather(farm!.location).catch((err: unknown) => {
-        if (retriesLeft > 0) {
+        // Only retry transient network/server failures; permanent validation errors should fail fast
+        if (retriesLeft > 0 && !isPermanentError(err)) {
           const delay = baseDelay * Math.pow(2, maxRetries - retriesLeft);
           return new Promise<WeatherData>((resolve) =>
             window.setTimeout(() => resolve(fetchWithRetry(retriesLeft - 1)), delay)

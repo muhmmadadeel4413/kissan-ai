@@ -103,49 +103,221 @@ const PROVINCE_TO_CITY: Record<string, string> = {
 };
 
 /**
- * Known city aliases for Pakistan (common spellings and major cities).
- * Used as fallback when geocoding fails for partial matches.
+ * Compute Damerau-Levenshtein distance between two strings.
+ * Handles insertions, deletions, substitutions, and adjacent transpositions.
+ * For example: "fasialabad" vs "faisalabad" has distance 1 (transposition of 'si' and 'is').
  */
-const PAKISTAN_CITIES = [
-  "Karachi",
-  "Lahore",
-  "Islamabad",
-  "Rawalpindi",
-  "Faisalabad",
-  "Multan",
-  "Peshawar",
-  "Quetta",
-  "Sialkot",
-  "Gujranwala",
-  "Hyderabad",
-  "Bahawalpur",
-  "Sargodha",
-  "Sukkur",
-  "Larkana",
-  "Abbottabad",
-  "Mardan",
-  "Muzaffarabad",
-  "Gilgit",
-  "Chiniot",
-  "Jhang",
-  "Sahiwal",
-  "Okara",
-  "Wah",
-  "Dera Ghazi Khan",
-  "Mingora",
-  "Mirpur Khas",
-  "Nawabshah",
-  "Khanewal",
-  "Jacobabad",
+function damerauLevenshteinDistance(a: string, b: string): number {
+  const al = a.length;
+  const bl = b.length;
+  if (al === 0) return bl;
+  if (bl === 0) return al;
+
+  const matrix: number[][] = [];
+  for (let i = 0; i <= al; i++) {
+    matrix[i] = [i];
+  }
+  for (let j = 0; j <= bl; j++) {
+    matrix[0][j] = j;
+  }
+
+  for (let i = 1; i <= al; i++) {
+    for (let j = 1; j <= bl; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      let min = Math.min(
+        matrix[i - 1][j] + 1,
+        matrix[i][j - 1] + 1,
+        matrix[i - 1][j - 1] + cost
+      );
+
+      if (
+        i > 1 &&
+        j > 1 &&
+        a[i - 1] === b[j - 2] &&
+        a[i - 2] === b[j - 1]
+      ) {
+        min = Math.min(min, matrix[i - 2][j - 2] + 1);
+      }
+
+      matrix[i][j] = min;
+    }
+  }
+
+  return matrix[al][bl];
+}
+
+function stringSimilarity(a: string, b: string): number {
+  const s1 = a.trim().toLowerCase();
+  const s2 = b.trim().toLowerCase();
+  if (s1 === s2) return 1.0;
+  const maxLen = Math.max(s1.length, s2.length);
+  if (maxLen === 0) return 1.0;
+  const dist = damerauLevenshteinDistance(s1, s2);
+  return Math.max(0, 1.0 - dist / maxLen);
+}
+
+function cleanStr(str: string): string {
+  return str
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+interface DistrictCoord {
+  name: string;
+  admin1: string;
+  country: string;
+  lat: number;
+  lon: number;
+  tz: string;
+  aliases: string[];
+}
+
+/**
+ * Pre-configured coordinates and aliases for major agricultural districts & cities.
+ * Enables zero-latency fallback and guarantees geocoding resilience even during
+ * external API outages or extreme misspellings.
+ */
+const KNOWN_DISTRICTS: DistrictCoord[] = [
+  // Punjab
+  { name: "Faisalabad", admin1: "Punjab", country: "Pakistan", lat: 31.4187, lon: 73.0791, tz: "Asia/Karachi", aliases: ["fasialabad", "faislabad", "fsd", "lyallpur", "faisal abad"] },
+  { name: "Lahore", admin1: "Punjab", country: "Pakistan", lat: 31.5497, lon: 74.3436, tz: "Asia/Karachi", aliases: ["lahor", "lhr"] },
+  { name: "Rawalpindi", admin1: "Punjab", country: "Pakistan", lat: 33.5651, lon: 73.0169, tz: "Asia/Karachi", aliases: ["rawalpndi", "rwp", "pindi"] },
+  { name: "Islamabad", admin1: "Federal Capital", country: "Pakistan", lat: 33.6844, lon: 73.0479, tz: "Asia/Karachi", aliases: ["isb", "islam abad"] },
+  { name: "Gujranwala", admin1: "Punjab", country: "Pakistan", lat: 32.1877, lon: 74.1945, tz: "Asia/Karachi", aliases: ["gujrawala", "grw"] },
+  { name: "Multan", admin1: "Punjab", country: "Pakistan", lat: 30.1575, lon: 71.5249, tz: "Asia/Karachi", aliases: ["mul"] },
+  { name: "Bahawalpur", admin1: "Punjab", country: "Pakistan", lat: 29.3544, lon: 71.6911, tz: "Asia/Karachi", aliases: ["bwp", "bhawalpur"] },
+  { name: "Sargodha", admin1: "Punjab", country: "Pakistan", lat: 32.0836, lon: 72.6711, tz: "Asia/Karachi", aliases: ["sgd", "sargoda"] },
+  { name: "Sialkot", admin1: "Punjab", country: "Pakistan", lat: 32.4945, lon: 74.5229, tz: "Asia/Karachi", aliases: ["skt"] },
+  { name: "Sheikhupura", admin1: "Punjab", country: "Pakistan", lat: 31.7131, lon: 73.9783, tz: "Asia/Karachi", aliases: ["shekhupura", "sheikupura"] },
+  { name: "Jhang", admin1: "Punjab", country: "Pakistan", lat: 31.2681, lon: 72.3181, tz: "Asia/Karachi", aliases: ["jhang sadr"] },
+  { name: "Rahim Yar Khan", admin1: "Punjab", country: "Pakistan", lat: 28.4202, lon: 70.3013, tz: "Asia/Karachi", aliases: ["ryk", "rahimyarkhan"] },
+  { name: "Kasur", admin1: "Punjab", country: "Pakistan", lat: 31.1179, lon: 74.4461, tz: "Asia/Karachi", aliases: ["qasur", "kasoor"] },
+  { name: "Muzaffargarh", admin1: "Punjab", country: "Pakistan", lat: 30.0751, lon: 71.1921, tz: "Asia/Karachi", aliases: ["muzaffar garh", "mgarh"] },
+  { name: "Okara", admin1: "Punjab", country: "Pakistan", lat: 30.8081, lon: 73.4458, tz: "Asia/Karachi", aliases: ["okarah"] },
+  { name: "Dera Ghazi Khan", admin1: "Punjab", country: "Pakistan", lat: 30.0561, lon: 70.6348, tz: "Asia/Karachi", aliases: ["dg khan", "d.g. khan", "dgkhan"] },
+  { name: "Sahiwal", admin1: "Punjab", country: "Pakistan", lat: 30.6682, lon: 73.1114, tz: "Asia/Karachi", aliases: ["montgomery"] },
+  { name: "Pakpattan", admin1: "Punjab", country: "Pakistan", lat: 30.341, lon: 73.3866, tz: "Asia/Karachi", aliases: ["pak pattan"] },
+  { name: "Vehari", admin1: "Punjab", country: "Pakistan", lat: 30.0419, lon: 72.3489, tz: "Asia/Karachi", aliases: ["vihari"] },
+  { name: "Toba Tek Singh", admin1: "Punjab", country: "Pakistan", lat: 30.9743, lon: 72.4828, tz: "Asia/Karachi", aliases: ["tts", "toba"] },
+  { name: "Chiniot", admin1: "Punjab", country: "Pakistan", lat: 31.72, lon: 72.9789, tz: "Asia/Karachi", aliases: ["chiniyot", "cheniot"] },
+  { name: "Khanewal", admin1: "Punjab", country: "Pakistan", lat: 30.3017, lon: 71.9321, tz: "Asia/Karachi", aliases: [] },
+  { name: "Hafizabad", admin1: "Punjab", country: "Pakistan", lat: 32.0679, lon: 73.6854, tz: "Asia/Karachi", aliases: ["hafiz abad"] },
+  { name: "Mandi Bahauddin", admin1: "Punjab", country: "Pakistan", lat: 32.587, lon: 73.4912, tz: "Asia/Karachi", aliases: ["mbdin"] },
+  { name: "Lodhran", admin1: "Punjab", country: "Pakistan", lat: 29.5405, lon: 71.6336, tz: "Asia/Karachi", aliases: [] },
+  { name: "Khushab", admin1: "Punjab", country: "Pakistan", lat: 32.2955, lon: 72.3525, tz: "Asia/Karachi", aliases: ["jauharabad"] },
+  { name: "Bhakkar", admin1: "Punjab", country: "Pakistan", lat: 31.6253, lon: 71.0657, tz: "Asia/Karachi", aliases: ["bhakar"] },
+  { name: "Layyah", admin1: "Punjab", country: "Pakistan", lat: 30.9613, lon: 70.9424, tz: "Asia/Karachi", aliases: ["leiah"] },
+  { name: "Mianwali", admin1: "Punjab", country: "Pakistan", lat: 32.5853, lon: 71.5436, tz: "Asia/Karachi", aliases: ["mian wali"] },
+  { name: "Attock", admin1: "Punjab", country: "Pakistan", lat: 33.7667, lon: 72.3667, tz: "Asia/Karachi", aliases: ["campbellpur"] },
+  { name: "Chakwal", admin1: "Punjab", country: "Pakistan", lat: 32.9328, lon: 72.8553, tz: "Asia/Karachi", aliases: [] },
+  { name: "Jhelum", admin1: "Punjab", country: "Pakistan", lat: 32.9344, lon: 73.7264, tz: "Asia/Karachi", aliases: ["jehlum"] },
+  { name: "Nankana Sahib", admin1: "Punjab", country: "Pakistan", lat: 31.4492, lon: 73.7125, tz: "Asia/Karachi", aliases: ["nankana"] },
+  { name: "Narowal", admin1: "Punjab", country: "Pakistan", lat: 32.102, lon: 74.873, tz: "Asia/Karachi", aliases: [] },
+  { name: "Gujrat", admin1: "Punjab", country: "Pakistan", lat: 32.5742, lon: 74.0754, tz: "Asia/Karachi", aliases: [] },
+  { name: "Rajanpur", admin1: "Punjab", country: "Pakistan", lat: 29.1035, lon: 70.325, tz: "Asia/Karachi", aliases: ["rajan pur"] },
+  { name: "Bahawalnagar", admin1: "Punjab", country: "Pakistan", lat: 29.9987, lon: 73.2536, tz: "Asia/Karachi", aliases: ["bahawal nagar"] },
+
+  // Sindh
+  { name: "Karachi", admin1: "Sindh", country: "Pakistan", lat: 24.8607, lon: 67.0011, tz: "Asia/Karachi", aliases: ["khi"] },
+  { name: "Hyderabad", admin1: "Sindh", country: "Pakistan", lat: 25.396, lon: 68.3578, tz: "Asia/Karachi", aliases: ["hyd"] },
+  { name: "Sukkur", admin1: "Sindh", country: "Pakistan", lat: 27.7052, lon: 68.8574, tz: "Asia/Karachi", aliases: ["sakhar"] },
+  { name: "Larkana", admin1: "Sindh", country: "Pakistan", lat: 27.559, lon: 68.212, tz: "Asia/Karachi", aliases: ["larkano"] },
+  { name: "Nawabshah", admin1: "Sindh", country: "Pakistan", lat: 26.2483, lon: 68.4096, tz: "Asia/Karachi", aliases: ["shaheed benazirabad", "sba"] },
+  { name: "Mirpur Khas", admin1: "Sindh", country: "Pakistan", lat: 25.5276, lon: 69.0159, tz: "Asia/Karachi", aliases: ["mirpurkhas"] },
+  { name: "Jacobabad", admin1: "Sindh", country: "Pakistan", lat: 28.281, lon: 68.4375, tz: "Asia/Karachi", aliases: ["jacob abad"] },
+  { name: "Badin", admin1: "Sindh", country: "Pakistan", lat: 24.656, lon: 68.837, tz: "Asia/Karachi", aliases: [] },
+  { name: "Khairpur", admin1: "Sindh", country: "Pakistan", lat: 27.5295, lon: 68.7592, tz: "Asia/Karachi", aliases: ["khairpur mirs"] },
+
+  // KPK
+  { name: "Peshawar", admin1: "Khyber Pakhtunkhwa", country: "Pakistan", lat: 34.0151, lon: 71.5249, tz: "Asia/Karachi", aliases: ["pesh"] },
+  { name: "Mardan", admin1: "Khyber Pakhtunkhwa", country: "Pakistan", lat: 34.1989, lon: 72.045, tz: "Asia/Karachi", aliases: [] },
+  { name: "Abbottabad", admin1: "Khyber Pakhtunkhwa", country: "Pakistan", lat: 34.1688, lon: 73.2215, tz: "Asia/Karachi", aliases: ["abotabad"] },
+  { name: "Swat", admin1: "Khyber Pakhtunkhwa", country: "Pakistan", lat: 35.2227, lon: 72.4258, tz: "Asia/Karachi", aliases: ["mingora", "saidu sharif"] },
+  { name: "Dera Ismail Khan", admin1: "Khyber Pakhtunkhwa", country: "Pakistan", lat: 31.8314, lon: 70.9019, tz: "Asia/Karachi", aliases: ["di khan", "d.i. khan", "dikhan"] },
+
+  // Balochistan
+  { name: "Quetta", admin1: "Balochistan", country: "Pakistan", lat: 30.1798, lon: 66.975, tz: "Asia/Karachi", aliases: ["quet"] },
+  { name: "Turbat", admin1: "Balochistan", country: "Pakistan", lat: 26.0031, lon: 63.0544, tz: "Asia/Karachi", aliases: ["kech"] },
+  { name: "Gwadar", admin1: "Balochistan", country: "Pakistan", lat: 25.1216, lon: 62.3254, tz: "Asia/Karachi", aliases: [] },
+
+  // AJK & GB
+  { name: "Muzaffarabad", admin1: "Azad Kashmir", country: "Pakistan", lat: 34.3705, lon: 73.4711, tz: "Asia/Karachi", aliases: ["muzafarabad"] },
+  { name: "Mirpur", admin1: "Azad Kashmir", country: "Pakistan", lat: 33.1478, lon: 73.7519, tz: "Asia/Karachi", aliases: ["mirpur ajk"] },
+  { name: "Gilgit", admin1: "Gilgit-Baltistan", country: "Pakistan", lat: 35.9221, lon: 74.3087, tz: "Asia/Karachi", aliases: [] },
+  { name: "Skardu", admin1: "Gilgit-Baltistan", country: "Pakistan", lat: 35.2971, lon: 75.6333, tz: "Asia/Karachi", aliases: [] },
 ];
 
 /**
+ * Find pre-configured district entry by fuzzy matching against name or aliases.
+ */
+function matchKnownDistrict(query: string): DistrictCoord | null {
+  const clean = cleanStr(query);
+  if (!clean) return null;
+
+  // 1. Exact name or alias
+  for (const d of KNOWN_DISTRICTS) {
+    if (cleanStr(d.name) === clean) return d;
+    for (const a of d.aliases) {
+      if (cleanStr(a) === clean) return d;
+    }
+  }
+
+  // 2. Token match (e.g. "Chak 123, Fasialabad")
+  const tokens = clean.split(" ").filter((t) => t.length > 2);
+  for (const d of KNOWN_DISTRICTS) {
+    const dClean = cleanStr(d.name);
+    if (tokens.includes(dClean) || clean.includes(dClean)) return d;
+    for (const a of d.aliases) {
+      const aClean = cleanStr(a);
+      if (tokens.includes(aClean) || clean.includes(aClean)) return d;
+    }
+  }
+
+  // 3. Fuzzy matching on whole string
+  let best: DistrictCoord | null = null;
+  let highest = 0;
+
+  for (const d of KNOWN_DISTRICTS) {
+    const score = stringSimilarity(clean, cleanStr(d.name));
+    if (score > highest) {
+      highest = score;
+      best = d;
+    }
+    for (const a of d.aliases) {
+      const aScore = stringSimilarity(clean, cleanStr(a));
+      if (aScore > highest) {
+        highest = aScore;
+        best = d;
+      }
+    }
+  }
+
+  if (best && highest >= 0.72) return best;
+
+  // 4. Token-level fuzzy match for composite addresses
+  if (tokens.length > 1) {
+    let tBest: DistrictCoord | null = null;
+    let tHigh = 0;
+    for (const t of tokens) {
+      if (t.length < 4) continue;
+      for (const d of KNOWN_DISTRICTS) {
+        const score = stringSimilarity(t, cleanStr(d.name));
+        if (score > tHigh) {
+          tHigh = score;
+          tBest = d;
+        }
+      }
+    }
+    if (tBest && tHigh >= 0.75) return tBest;
+  }
+
+  return null;
+}
+
+/**
  * Build progressively-simplified search queries for a free-text location.
- *
- * Farm locations are typed by hand and often aren't an exact place name
- * (e.g. "Faisalabad Chiniot" — two neighbouring cities typed together).
- * We derive a list of fallback queries: the exact string, comma-separated
- * parts, token reductions, province-to-city mappings, and country hints.
  */
 function locationCandidates(raw: string): string[] {
   const clean = raw.trim().replace(/\s+/g, " ");
@@ -161,7 +333,15 @@ function locationCandidates(raw: string): string[] {
     }
   };
 
-  push(clean); // exact match first
+  // 0. Fuzzy-resolved known district first (e.g. "Fasialabad" -> "Faisalabad")
+  const districtMatch = matchKnownDistrict(clean);
+  if (districtMatch) {
+    push(districtMatch.name);
+    push(`${districtMatch.name}, ${districtMatch.admin1}`);
+    push(`${districtMatch.name}, Pakistan`);
+  }
+
+  push(clean); // exact match
 
   // Comma-separated parts, longest first (e.g. "Faisalabad, Punjab, Pakistan").
   const parts = clean
@@ -197,17 +377,6 @@ function locationCandidates(raw: string): string[] {
     }
   }
 
-  // Check if any token matches a known Pakistan city (partial match fallback).
-  const lowerTokens = tokens.map((t) => t.toLowerCase());
-  for (const city of PAKISTAN_CITIES) {
-    const lowerCity = city.toLowerCase();
-    if (lowerTokens.some((t) => t === lowerCity || lowerCity.includes(t) || t.includes(lowerCity))) {
-      push(city);
-      push(`${city}, Pakistan`);
-      break;
-    }
-  }
-
   // Country hints as a last resort, unless the query already mentions one.
   const hasCountry = /pakistan|india|bangladesh|\bPK\b|\bIN\b|\bBD\b|,\s*[A-Z]{2}$/i.test(clean);
   if (!hasCountry) {
@@ -221,11 +390,15 @@ function locationCandidates(raw: string): string[] {
 }
 
 /**
- * Geocode a free-text location using Open-Meteo Geocoding API.
- * Returns the best place found, or null if nothing matched.
+ * Geocode a free-text location using Open-Meteo Geocoding API with multi-tier fallback:
+ * 1. Open-Meteo API with candidate queries
+ * 2. Pre-configured district database coordinates
+ * 3. OpenStreetMap Nominatim geocoding
  */
 async function geocodeLocation(query: string): Promise<GeoPlace | null> {
   const candidates = locationCandidates(query);
+
+  // Tier 1: Open-Meteo Geocoding API
   for (const candidate of candidates) {
     try {
       const resp = await fetch(
@@ -236,7 +409,6 @@ async function geocodeLocation(query: string): Promise<GeoPlace | null> {
       const list = data.results;
       if (!Array.isArray(list) || list.length === 0) continue;
 
-      // Prefer an exact-ish name match; otherwise use the first result.
       const lowerQuery = candidate.toLowerCase();
       const match =
         list.find((p) => {
@@ -245,9 +417,51 @@ async function geocodeLocation(query: string): Promise<GeoPlace | null> {
         }) ?? list[0];
       return match;
     } catch {
-      // Try the next candidate.
+      // Try next candidate
     }
   }
+
+  // Tier 2: Check pre-configured coordinates if Open-Meteo returned no results
+  const district = matchKnownDistrict(query);
+  if (district) {
+    console.log(`get-weather: resolved "${query}" to pre-configured ${district.name} (${district.lat}, ${district.lon})`);
+    return {
+      name: district.name,
+      admin1: district.admin1,
+      country: district.country,
+      latitude: district.lat,
+      longitude: district.lon,
+      timezone: district.tz,
+    };
+  }
+
+  // Tier 3: OpenStreetMap Nominatim fallback
+  try {
+    const osmResp = await fetch(
+      `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1`,
+      { headers: { "User-Agent": "KissanAI/1.0" } }
+    );
+    if (osmResp.ok) {
+      const osmList = await osmResp.json();
+      if (Array.isArray(osmList) && osmList.length > 0) {
+        const item = osmList[0];
+        const lat = parseFloat(item.lat);
+        const lon = parseFloat(item.lon);
+        if (!Number.isNaN(lat) && !Number.isNaN(lon)) {
+          return {
+            name: item.display_name?.split(",")?.[0] ?? query,
+            country: "Pakistan",
+            latitude: lat,
+            longitude: lon,
+            timezone: "auto",
+          };
+        }
+      }
+    }
+  } catch {
+    // Fallback completed
+  }
+
   return null;
 }
 

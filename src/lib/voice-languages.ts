@@ -40,7 +40,7 @@ export const LANG_CONFIG: Record<
   auto: {
     label: "Auto",
     native: "خودکار",
-    stt: "auto",
+    stt: "unknown",
     chat: "auto",
     tts: "ur",
     sttSupported: true,
@@ -78,7 +78,7 @@ export const LANG_CONFIG: Record<
   saraiki: {
     label: "Saraiki",
     native: "سرائیکی",
-    stt: "auto",
+    stt: "unknown",
     chat: "auto",
     tts: "skr",
     sttSupported: false,
