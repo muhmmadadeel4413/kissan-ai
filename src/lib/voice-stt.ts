@@ -1,19 +1,53 @@
 
 import { supabase } from "./supabase";
 
+import {
+  LANG_CONFIG,
+  type VoiceLang,
+} from "./voice-languages";
+
 export type STTLanguageCode =
   | "unknown"
   | "auto"
   | "en-IN"
   | "ur-IN"
-  | "pa-IN";
+  | "pa-IN"
+  | `${string}-${string}`;
+
+export interface STTResult {
+  transcript: string;
+  languageCode?: string;
+}
+
+export interface STTCallbacks {
+  onPartial?: (text: string) => void;
+  onFinal?: (result: STTResult) => void;
+  onError?: (error: Error) => void;
+  onVolume?: (level: number) => void;
+}
+
+export interface StartSTTOptions {
+  language?: VoiceLang;
+  callbacks: STTCallbacks;
+}
+
+export interface STTController {
+  stop: () => void;
+  cancel: () => void;
+}
 
 export function normalizeSttLanguage(
-  language?: string,
+  language?: string | null,
 ): STTLanguageCode {
-  const value = language?.trim().toLowerCase();
+  const trimmed = language?.trim();
 
-  if (!value || value === "auto" || value === "unknown") {
+  if (!trimmed) {
+    return "unknown";
+  }
+
+  const value = trimmed.toLowerCase();
+
+  if (value === "auto" || value === "unknown") {
     return "unknown";
   }
 
@@ -45,281 +79,75 @@ export function normalizeSttLanguage(
     return "pa-IN";
   }
 
+  // Preserve unknown valid BCP-47 style language codes.
+  // Example: hi-IN, bn-IN
+  if (/^[a-z]{2,3}-[A-Za-z]{2,4}$/.test(trimmed)) {
+    return trimmed as STTLanguageCode;
+  }
+
   return "unknown";
 }
 
-export interface STTSession {
-  stop: () => void;
-  cancel: () => void;
-}
-
-export interface STTCallbacks {
-  onPartial?: (text: string) => void;
-  onFinal?: (text: string) => void;
-  onError?: (error: Error) => void;
-  onLevel?: (level: number) => void;
-}
-
-interface PCMMessage {
-  type: "pcm";
-  samples: Float32Array;
-}
-
-const TARGET_SAMPLE_RATE = 16000;
-const MIN_RECORDING_MS = 500;
-
-function encodeWav(
-  samples: Int16Array,
-  sampleRate = TARGET_SAMPLE_RATE,
-): Blob {
-  const buffer = new ArrayBuffer(44 + samples.length * 2);
-  const view = new DataView(buffer);
-
-  const writeString = (
-    offset: number,
-    value: string,
-  ) => {
-    for (let i = 0; i < value.length; i++) {
-      view.setUint8(
-        offset + i,
-        value.charCodeAt(i),
-      );
-    }
-  };
-
-  writeString(0, "RIFF");
-
-  view.setUint32(
-    4,
-    36 + samples.length * 2,
-    true,
-  );
-
-  writeString(8, "WAVE");
-  writeString(12, "fmt ");
-
-  view.setUint32(16, 16, true);
-  view.setUint16(20, 1, true);
-  view.setUint16(22, 1, true);
-
-  view.setUint32(
-    24,
-    sampleRate,
-    true,
-  );
-
-  view.setUint32(
-    28,
-    sampleRate * 2,
-    true,
-  );
-
-  view.setUint16(32, 2, true);
-  view.setUint16(34, 16, true);
-
-  writeString(36, "data");
-
-  view.setUint32(
-    40,
-    samples.length * 2,
-    true,
-  );
-
-  let offset = 44;
-
-  for (let i = 0; i < samples.length; i++) {
-    view.setInt16(
-      offset,
-      samples[i],
-      true,
-    );
-
-    offset += 2;
-  }
-
-  return new Blob(
-    [buffer],
-    { type: "audio/wav" },
-  );
-}
-
-function downsampleTo16k(
-  input: Float32Array,
-  inputSampleRate: number,
-): Float32Array {
-  if (inputSampleRate === TARGET_SAMPLE_RATE) {
-    return input;
-  }
-
-  const ratio =
-    inputSampleRate / TARGET_SAMPLE_RATE;
-
-  const outputLength = Math.round(
-    input.length / ratio,
-  );
-
-  const output =
-    new Float32Array(outputLength);
-
-  let outputOffset = 0;
-  let inputOffset = 0;
-
-  while (outputOffset < outputLength) {
-    const nextInputOffset = Math.round(
-      (outputOffset + 1) * ratio,
-    );
-
-    let accumulator = 0;
-    let count = 0;
-
-    for (
-      let i = inputOffset;
-      i < nextInputOffset &&
-      i < input.length;
-      i++
-    ) {
-      accumulator += input[i];
-      count++;
-    }
-
-    output[outputOffset] =
-      count > 0
-        ? accumulator / count
-        : 0;
-
-    outputOffset++;
-    inputOffset = nextInputOffset;
-  }
-
-  return output;
-}
-
-function floatToInt16(
-  samples: Float32Array,
-): Int16Array {
-  const output =
-    new Int16Array(samples.length);
-
-  for (let i = 0; i < samples.length; i++) {
-    const sample = Math.max(
-      -1,
-      Math.min(1, samples[i]),
-    );
-
-    output[i] =
-      sample < 0
-        ? sample * 0x8000
-        : sample * 0x7fff;
-  }
-
-  return output;
-}
-
-function calculateRms(
-  samples: Float32Array,
-): number {
-  if (!samples.length) {
-    return 0;
-  }
-
-  let sum = 0;
-
-  for (const sample of samples) {
-    sum += sample * sample;
-  }
-
-  return Math.sqrt(
-    sum / samples.length,
-  );
-}
-
-/**
- * PRIMARY STT
- *
- * Whisper large-v3-turbo
- *
- * The actual model runs server-side through
- * the Supabase "whisper-stt" Edge Function.
- *
- * API keys must NEVER be exposed in the browser.
- */
 async function uploadToWhisper(
-  wavBlob: Blob,
-  language?: string,
-): Promise<{
-  transcript: string;
-  languageCode: string;
-}> {
-  const normalizedLanguage =
-    normalizeSttLanguage(language);
-
+  audioBlob: Blob,
+  language?: STTLanguageCode,
+): Promise<STTResult> {
   const formData = new FormData();
 
-  formData.append(
-    "file",
-    new File(
-      [wavBlob],
-      "audio.wav",
-      {
-        type: "audio/wav",
-      },
-    ),
-  );
+  formData.append("file", audioBlob, "recording.wav");
 
-  formData.append(
-    "language_code",
-    normalizedLanguage,
-  );
+  if (
+    language &&
+    language !== "unknown" &&
+    language !== "auto"
+  ) {
+    let whisperLanguage: string | undefined;
 
-  const { data, error } =
-    await supabase.functions.invoke(
-      "whisper-stt",
-      {
-        body: formData,
-      },
-    );
+    switch (language) {
+      case "en-IN":
+        whisperLanguage = "en";
+        break;
 
-  if (error) {
-    let message =
-      error.message ||
-      "Whisper speech recognition failed.";
+      case "ur-IN":
+        whisperLanguage = "ur";
+        break;
 
-    try {
-      const context = (
-        error as {
-          context?: Response;
-        }
-      ).context;
+      case "pa-IN":
+        whisperLanguage = "pa";
+        break;
 
-      if (context) {
-        const responseData =
-          await context.json();
-
-        if (
-          typeof responseData?.error ===
-          "string"
-        ) {
-          message =
-            responseData.error;
-        }
-      }
-    } catch {
-      // Keep original error message.
+      default:
+        whisperLanguage = undefined;
     }
 
-    throw new Error(message);
+    if (whisperLanguage) {
+      formData.append("language_code", whisperLanguage);
+    }
+  }
+
+  const { data, error } = await supabase.functions.invoke(
+    "whisper-stt",
+    {
+      body: formData,
+    },
+  );
+
+  if (error) {
+    throw new Error(
+      error.message || "Whisper speech recognition failed.",
+    );
   }
 
   if (!data) {
-    throw new Error(
-      "Whisper returned no response.",
-    );
+    throw new Error("Whisper returned an empty response.");
   }
 
-  if (
-    typeof data.error === "string"
-  ) {
-    throw new Error(data.error);
+  if (data.error) {
+    throw new Error(
+      typeof data.error === "string"
+        ? data.error
+        : "Whisper speech recognition failed.",
+    );
   }
 
   const transcript =
@@ -329,7 +157,7 @@ async function uploadToWhisper(
 
   if (!transcript) {
     throw new Error(
-      "Whisper returned an empty transcript.",
+      "We couldn't hear a clear question. Please try again or type your question.",
     );
   }
 
@@ -338,22 +166,14 @@ async function uploadToWhisper(
     languageCode:
       typeof data.language_code === "string"
         ? data.language_code
-        : normalizedLanguage,
+        : undefined,
   };
 }
 
-/**
- * BACKUP STT
- *
- * Sarvam Saaras v4
- */
-async function uploadToSarvam(
-  wavBlob: Blob,
-  language?: string,
-): Promise<{
-  transcript: string;
-  languageCode: string;
-}> {
+export async function uploadToSarvam(
+  audioBlob: Blob,
+  language?: STTLanguageCode,
+): Promise<STTResult> {
   const normalizedLanguage =
     normalizeSttLanguage(language);
 
@@ -361,13 +181,8 @@ async function uploadToSarvam(
 
   formData.append(
     "file",
-    new File(
-      [wavBlob],
-      "audio.wav",
-      {
-        type: "audio/wav",
-      },
-    ),
+    audioBlob,
+    "recording.wav",
   );
 
   formData.append(
@@ -394,46 +209,34 @@ async function uploadToSarvam(
     );
 
   if (error) {
-    let message =
-      error.message ||
-      "Sarvam speech recognition failed.";
+    const responseError =
+      data?.error;
 
-    try {
-      const context = (
-        error as {
-          context?: Response;
-        }
-      ).context;
-
-      if (context) {
-        const responseData =
-          await context.json();
-
-        if (
-          typeof responseData?.error ===
-          "string"
-        ) {
-          message =
-            responseData.error;
-        }
-      }
-    } catch {
-      // Keep original error message.
+    if (
+      typeof responseError === "string" &&
+      responseError.trim()
+    ) {
+      throw new Error(responseError);
     }
 
-    throw new Error(message);
+    throw new Error(
+      error.message ||
+        "Sarvam speech recognition failed.",
+    );
   }
 
   if (!data) {
     throw new Error(
-      "Sarvam returned no response.",
+      "Sarvam returned an empty response.",
     );
   }
 
-  if (
-    typeof data.error === "string"
-  ) {
-    throw new Error(data.error);
+  if (data.error) {
+    throw new Error(
+      typeof data.error === "string"
+        ? data.error
+        : "Sarvam speech recognition failed.",
+    );
   }
 
   const transcript =
@@ -450,130 +253,315 @@ async function uploadToSarvam(
   return {
     transcript,
     languageCode:
-      typeof data.language_code ===
-      "string"
+      typeof data.language_code === "string"
         ? data.language_code
-        : normalizedLanguage,
+        : undefined,
   };
 }
 
-/**
- * STT ROUTER
- *
- * Primary:
- *   Whisper large-v3-turbo
- *
- * Backup:
- *   Sarvam Saaras v4
- */
 async function uploadToSTT(
-  wavBlob: Blob,
-  language?: string,
-): Promise<{
-  transcript: string;
-  languageCode: string;
-}> {
-  // Saraiki is intentionally unsupported.
+  audioBlob: Blob,
+  language?: STTLanguageCode,
+): Promise<STTResult> {
   const normalizedLanguage =
     normalizeSttLanguage(language);
 
-  if (
-    language?.toLowerCase() === "saraiki"
-  ) {
-    throw new Error(
-      "Saraiki voice recognition is not available yet. Please type your question instead.",
-    );
-  }
+  // Saraiki is handled before upload in startSTT()
+  // because Saraiki is a VoiceLang, not an STTLanguageCode.
 
-  // --------------------------------------------
-  // PRIMARY: Whisper large-v3-turbo
-  // --------------------------------------------
+  // Primary provider: Whisper.
   try {
-    console.log(
-      "[STT] Trying Whisper large-v3-turbo...",
+    return await uploadToWhisper(
+      audioBlob,
+      normalizedLanguage,
     );
-
-    const result =
-      await uploadToWhisper(
-        wavBlob,
-        normalizedLanguage,
-      );
-
-    console.log(
-      "[STT] Whisper succeeded.",
-    );
-
-    return result;
   } catch (whisperError) {
     console.warn(
-      "[STT] Whisper failed. Trying Sarvam backup.",
+      "Whisper STT failed, trying Sarvam backup:",
       whisperError,
     );
   }
 
-  // --------------------------------------------
-  // BACKUP: Sarvam Saaras v4
-  // --------------------------------------------
+  // Backup provider: Sarvam Saaras v4.
   try {
-    console.log(
-      "[STT] Trying Sarvam Saaras v4 backup...",
+    return await uploadToSarvam(
+      audioBlob,
+      normalizedLanguage,
     );
-
-    const result =
-      await uploadToSarvam(
-        wavBlob,
-        normalizedLanguage,
-      );
-
-    console.log(
-      "[STT] Sarvam backup succeeded.",
-    );
-
-    return result;
   } catch (sarvamError) {
     console.error(
-      "[STT] Both Whisper and Sarvam failed.",
+      "Both Whisper and Sarvam STT failed:",
       sarvamError,
     );
 
     throw new Error(
-      "We couldn't understand your voice. Please try again or type your question.",
+      "We couldn't hear a clear question. Please try again or type your question.",
     );
   }
 }
 
+function mergeFloat32Arrays(
+  arrays: Float32Array[],
+): Float32Array {
+  const totalLength = arrays.reduce(
+    (total, array) => total + array.length,
+    0,
+  );
+
+  const result = new Float32Array(
+    totalLength,
+  );
+
+  let offset = 0;
+
+  for (const array of arrays) {
+    result.set(array, offset);
+    offset += array.length;
+  }
+
+  return result;
+}
+
+function downsampleBuffer(
+  buffer: Float32Array,
+  inputSampleRate: number,
+  outputSampleRate: number,
+): Float32Array {
+  if (outputSampleRate === inputSampleRate) {
+    return buffer;
+  }
+
+  if (outputSampleRate > inputSampleRate) {
+    throw new Error(
+      "Output sample rate must be lower than input sample rate.",
+    );
+  }
+
+  const sampleRateRatio =
+    inputSampleRate / outputSampleRate;
+
+  const newLength = Math.round(
+    buffer.length / sampleRateRatio,
+  );
+
+  const result = new Float32Array(newLength);
+
+  let offsetResult = 0;
+  let offsetBuffer = 0;
+
+  while (offsetResult < result.length) {
+    const nextOffsetBuffer = Math.round(
+      (offsetResult + 1) * sampleRateRatio,
+    );
+
+    let accum = 0;
+    let count = 0;
+
+    for (
+      let i = offsetBuffer;
+      i < nextOffsetBuffer &&
+      i < buffer.length;
+      i++
+    ) {
+      accum += buffer[i];
+      count++;
+    }
+
+    result[offsetResult] =
+      count > 0 ? accum / count : 0;
+
+    offsetResult++;
+    offsetBuffer = nextOffsetBuffer;
+  }
+
+  return result;
+}
+
+function encodeWav(
+  samples: Float32Array,
+  sampleRate: number,
+): Blob {
+  const buffer = new ArrayBuffer(
+    44 + samples.length * 2,
+  );
+
+  const view = new DataView(buffer);
+
+  const writeString = (
+    offset: number,
+    value: string,
+  ) => {
+    for (
+      let i = 0;
+      i < value.length;
+      i++
+    ) {
+      view.setUint8(
+        offset + i,
+        value.charCodeAt(i),
+      );
+    }
+  };
+
+  writeString(0, "RIFF");
+
+  view.setUint32(
+    4,
+    36 + samples.length * 2,
+    true,
+  );
+
+  writeString(8, "WAVE");
+  writeString(12, "fmt ");
+
+  view.setUint32(
+    16,
+    16,
+    true,
+  );
+
+  view.setUint16(
+    20,
+    1,
+    true,
+  );
+
+  view.setUint16(
+    22,
+    1,
+    true,
+  );
+
+  view.setUint32(
+    24,
+    sampleRate,
+    true,
+  );
+
+  view.setUint32(
+    28,
+    sampleRate * 2,
+    true,
+  );
+
+  view.setUint16(
+    32,
+    2,
+    true,
+  );
+
+  view.setUint16(
+    34,
+    16,
+    true,
+  );
+
+  writeString(36, "data");
+
+  view.setUint32(
+    40,
+    samples.length * 2,
+    true,
+  );
+
+  let offset = 44;
+
+  for (
+    let i = 0;
+    i < samples.length;
+    i++
+  ) {
+    const sample = Math.max(
+      -1,
+      Math.min(1, samples[i]),
+    );
+
+    const value =
+      sample < 0
+        ? sample * 0x8000
+        : sample * 0x7fff;
+
+    view.setInt16(
+      offset,
+      value,
+      true,
+    );
+
+    offset += 2;
+  }
+
+  return new Blob([buffer], {
+    type: "audio/wav",
+  });
+}
+
 export async function startSTT(
-  language: STTLanguageCode | string,
+  language: VoiceLang,
   callbacks: STTCallbacks,
-): Promise<STTSession> {
-  let stream:
-    | MediaStream
-    | null = null;
-
-  let audioContext:
-    | AudioContext
-    | null = null;
-
-  let source:
-    | MediaStreamAudioSourceNode
-    | null = null;
-
-  let worklet:
-    | AudioWorkletNode
-    | null = null;
+): Promise<STTController> {
+  let stream: MediaStream | null = null;
+  let audioContext: AudioContext | null = null;
+  let source: MediaStreamAudioSourceNode | null =
+    null;
+  let workletNode: AudioWorkletNode | null =
+    null;
 
   let stopped = false;
   let cancelled = false;
-
-  const pcmChunks: Float32Array[] = [];
+  let chunks: Float32Array[] = [];
 
   const startedAt = Date.now();
 
-  try {
-    // -----------------------------------------------------
-    // Microphone
-    // -----------------------------------------------------
+  const cleanup = () => {
+    if (workletNode) {
+      try {
+        workletNode.disconnect();
+      } catch {
+        // Ignore cleanup errors.
+      }
 
+      workletNode = null;
+    }
+
+    if (source) {
+      try {
+        source.disconnect();
+      } catch {
+        // Ignore cleanup errors.
+      }
+
+      source = null;
+    }
+
+    if (stream) {
+      for (const track of stream.getTracks()) {
+        track.stop();
+      }
+
+      stream = null;
+    }
+
+    if (audioContext) {
+      void audioContext.close().catch(() => {
+        // Ignore cleanup errors.
+      });
+
+      audioContext = null;
+    }
+  };
+
+  const cancelRecording = () => {
+    if (stopped) {
+      return;
+    }
+
+    cancelled = true;
+    stopped = true;
+    chunks = [];
+    cleanup();
+  };
+
+  try {
     stream =
       await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -584,8 +572,16 @@ export async function startSTT(
         },
       });
 
-    audioContext =
-      new AudioContext();
+    if (stopped) {
+      cleanup();
+
+      return {
+        stop: () => undefined,
+        cancel: () => undefined,
+      };
+    }
+
+    audioContext = new AudioContext();
 
     await audioContext.audioWorklet.addModule(
       "/audio-processor.js",
@@ -596,254 +592,175 @@ export async function startSTT(
         stream,
       );
 
-    worklet =
+    workletNode =
       new AudioWorkletNode(
         audioContext,
         "audio-processor",
       );
 
-    worklet.port.onmessage = (
-      event: MessageEvent<PCMMessage>,
+    workletNode.port.onmessage = (
+      event: MessageEvent,
     ) => {
-      if (
-        stopped ||
-        cancelled
-      ) {
+      if (stopped) {
         return;
       }
 
-      if (
-        !event.data ||
-        event.data.type !== "pcm"
-      ) {
-        return;
-      }
-
-      const samples =
-        event.data.samples;
+      const data = event.data;
 
       if (
-        !(samples instanceof Float32Array)
+        data &&
+        data.type === "audio" &&
+        data.samples instanceof Float32Array
       ) {
-        return;
-      }
+        chunks.push(data.samples);
 
-      const rms =
-        calculateRms(samples);
+        let sum = 0;
 
-      callbacks.onLevel?.(
-        Math.min(1, rms * 5),
-      );
+        for (
+          const sample of data.samples
+        ) {
+          sum += sample * sample;
+        }
 
-      const downsampled =
-        downsampleTo16k(
-          samples,
-          audioContext?.sampleRate ||
-            TARGET_SAMPLE_RATE,
+        const rms =
+          data.samples.length > 0
+            ? Math.sqrt(
+                sum / data.samples.length,
+              )
+            : 0;
+
+        callbacks.onVolume?.(
+          Math.min(1, rms * 8),
         );
-
-      pcmChunks.push(
-        downsampled,
-      );
+      }
     };
 
-    source.connect(worklet);
+    source.connect(workletNode);
 
-    // Do not connect to destination.
-    // This prevents microphone feedback.
-
-    await audioContext.resume();
-
-    return {
-      stop: () => {
-        if (
-          stopped ||
-          cancelled
-        ) {
-          return;
-        }
-
-        stopped = true;
-
-        void finishRecording();
-      },
-
-      cancel: () => {
-        if (
-          stopped ||
-          cancelled
-        ) {
-          return;
-        }
-
-        cancelled = true;
-
-        cleanup();
-      },
-    };
-  } catch (error) {
-    cleanup();
-
-    const finalError =
-      error instanceof Error
-        ? error
-        : new Error(
-            "Could not access microphone.",
-          );
-
-    callbacks.onError?.(
-      finalError,
+    workletNode.connect(
+      audioContext.destination,
     );
 
-    throw finalError;
-  }
-
-  async function finishRecording() {
-    const recordingDuration =
-      Date.now() - startedAt;
-
-    cleanup();
-
-    if (
-      recordingDuration <
-      MIN_RECORDING_MS
-    ) {
-      callbacks.onError?.(
-        new Error(
-          "Please speak for at least half a second.",
-        ),
-      );
-
-      return;
-    }
-
-    if (!pcmChunks.length) {
-      callbacks.onError?.(
-        new Error(
-          "No audio was captured. Please try again.",
-        ),
-      );
-
-      return;
-    }
-
-    try {
-      const totalLength =
-        pcmChunks.reduce(
-          (total, chunk) =>
-            total + chunk.length,
-          0,
-        );
-
-      const merged =
-        new Float32Array(
-          totalLength,
-        );
-
-      let offset = 0;
-
-      for (const chunk of pcmChunks) {
-        merged.set(
-          chunk,
-          offset,
-        );
-
-        offset += chunk.length;
+    const stopRecording = async () => {
+      if (stopped) {
+        return;
       }
 
-      const int16Samples =
-        floatToInt16(
-          merged,
-        );
+      stopped = true;
 
-      const wavBlob =
-        encodeWav(
-          int16Samples,
-          TARGET_SAMPLE_RATE,
-        );
+      const recordingSampleRate =
+        audioContext?.sampleRate ?? 48000;
 
-      if (wavBlob.size < 1000) {
+      cleanup();
+
+      const duration =
+        Date.now() - startedAt;
+
+      if (duration < 500) {
         callbacks.onError?.(
           new Error(
-            "The recording was too short. Please try again.",
+            "Recording was too short. Please speak for a moment and try again.",
           ),
         );
 
         return;
       }
 
-      if (cancelled) {
-        return;
-      }
+      const merged =
+        mergeFloat32Arrays(chunks);
 
-      // --------------------------------------------
-      // Whisper PRIMARY → Sarvam BACKUP
-      // --------------------------------------------
+      chunks = [];
 
-      const result =
-        await uploadToSTT(
-          wavBlob,
-          language,
+      if (merged.length === 0) {
+        callbacks.onError?.(
+          new Error(
+            "No audio was captured. Please try again.",
+          ),
         );
 
-      if (cancelled) {
         return;
       }
 
-      callbacks.onFinal?.(
-        result.transcript,
-      );
-    } catch (error) {
-      if (cancelled) {
-        return;
-      }
-
-      const finalError =
-        error instanceof Error
-          ? error
-          : new Error(
-              "Speech recognition failed.",
-            );
-
-      callbacks.onError?.(
-        finalError,
-      );
-    }
-  }
-
-  function cleanup() {
-    try {
-      source?.disconnect();
-    } catch {
-      // Ignore cleanup errors.
-    }
-
-    try {
-      worklet?.disconnect();
-    } catch {
-      // Ignore cleanup errors.
-    }
-
-    if (stream) {
-      for (
-        const track of stream.getTracks()
-      ) {
-        track.stop();
-      }
-    }
-
-    if (audioContext) {
-      void audioContext
-        .close()
-        .catch(
-          () => undefined,
+      const downsampled =
+        downsampleBuffer(
+          merged,
+          recordingSampleRate,
+          16000,
         );
-    }
 
-    source = null;
-    worklet = null;
-    stream = null;
-    audioContext = null;
+      const wavBlob =
+        encodeWav(
+          downsampled,
+          16000,
+        );
+
+      if (wavBlob.size < 1000) {
+        callbacks.onError?.(
+          new Error(
+            "The recording was too short or empty. Please try again.",
+          ),
+        );
+
+        return;
+      }
+
+      try {
+        const config =
+          LANG_CONFIG[language];
+
+        if (!config.sttSupported) {
+          throw new Error(
+            config.note ||
+              "Voice recognition for this language isn't available. You can type your question instead.",
+          );
+        }
+
+        const result =
+          await uploadToSTT(
+            wavBlob,
+            config.stt,
+          );
+
+        if (!cancelled) {
+          callbacks.onFinal?.(result);
+        }
+      } catch (error) {
+        const normalizedError =
+          error instanceof Error
+            ? error
+            : new Error(
+                String(error),
+              );
+
+        if (!cancelled) {
+          callbacks.onError?.(
+            normalizedError,
+          );
+        }
+      }
+    };
+
+    return {
+      stop: () => {
+        void stopRecording();
+      },
+      cancel: cancelRecording,
+    };
+  } catch (error) {
+    cleanup();
+
+    const normalizedError =
+      error instanceof Error
+        ? error
+        : new Error(String(error));
+
+    callbacks.onError?.(
+      normalizedError,
+    );
+
+    return {
+      stop: () => undefined,
+      cancel: () => undefined,
+    };
   }
 }
-

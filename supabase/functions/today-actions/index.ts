@@ -1,6 +1,4 @@
-
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
 /**
@@ -24,8 +22,11 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
  * AI output is validated and sanitized server-side before persistence.
  */
 
+/* ------------------------------------------------------------------ */
+/* CORS                                                              */
+/* ------------------------------------------------------------------ */
+
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
@@ -33,25 +34,48 @@ const corsHeaders = {
 
 const ALLOWED_ORIGINS = [
   "http://localhost:5173",
-  "https://kissan-ai-rho.vercel.app",
   "http://localhost:3000",
   "http://127.0.0.1:5173",
+  "https://kissan-ai-six.vercel.app",
   "https://vxldkzrmtygurdggtjro.supabase.co",
 ];
 
 function corsForOrigin(req: Request): Record<string, string> {
   const origin = req.headers.get("origin") ?? "";
 
-  return {
+  const headers: Record<string, string> = {
     ...corsHeaders,
-    "Access-Control-Allow-Origin": ALLOWED_ORIGINS.includes(origin)
-      ? origin
-      : ALLOWED_ORIGINS[0],
   };
+
+  if (origin && ALLOWED_ORIGINS.includes(origin)) {
+    headers["Access-Control-Allow-Origin"] = origin;
+    headers["Vary"] = "Origin";
+  }
+
+  return headers;
 }
 
-const MODEL = "gemini-3.5-flash";
+function json(
+  data: unknown,
+  status = 200,
+  req?: Request,
+): Response {
+  const headers = req ? corsForOrigin(req) : corsHeaders;
 
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: {
+      "Content-Type": "application/json",
+      ...headers,
+    },
+  });
+}
+
+/* ------------------------------------------------------------------ */
+/* Constants                                                          */
+/* ------------------------------------------------------------------ */
+
+const MODEL = "gemini-3.5-flash";
 const MAX_ACTIONS = 4;
 
 const VALID_PRIORITIES = new Set([
@@ -93,18 +117,8 @@ const VALID_SOURCES = new Set([
   "history",
 ]);
 
-function json(data: unknown, status = 200): Response {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: {
-      "Content-Type": "application/json",
-      ...corsHeaders,
-    },
-  });
-}
-
 /* ------------------------------------------------------------------ */
-/* AI Provider Configuration                                           */
+/* AI Provider Configuration                                          */
 /* ------------------------------------------------------------------ */
 
 const GEMINI_BASE =
@@ -114,7 +128,7 @@ const OPENROUTER_URL =
   "https://openrouter.ai/api/v1/chat/completions";
 
 /* ------------------------------------------------------------------ */
-/* Gemini                                                              */
+/* Gemini                                                             */
 /* ------------------------------------------------------------------ */
 
 /**
@@ -143,7 +157,11 @@ async function callGemini(
       body: JSON.stringify(body),
     });
   } catch (error) {
-    console.error("today-actions Gemini network error:", error);
+    console.error(
+      "today-actions Gemini network error:",
+      error,
+    );
+
     throw new Error("GEMINI_UNAVAILABLE");
   }
 
@@ -178,7 +196,7 @@ async function callGemini(
 }
 
 /* ------------------------------------------------------------------ */
-/* OpenRouter fallback                                                 */
+/* OpenRouter fallback                                                */
 /* ------------------------------------------------------------------ */
 
 /**
@@ -202,12 +220,11 @@ async function callOpenRouter(
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
-      "HTTP-Referer": "https://kissan-ai-rho.vercel.app",
+      "HTTP-Referer": "https://kissan-ai-six.vercel.app",
       "X-Title": "Kissan AI",
     },
     body: JSON.stringify({
       model: "openrouter/free",
-
       messages: [
         {
           role: "system",
@@ -219,7 +236,6 @@ async function callOpenRouter(
           content: prompt,
         },
       ],
-
       temperature: 0.3,
     }),
   });
@@ -283,7 +299,7 @@ async function callOpenRouter(
 }
 
 /* ------------------------------------------------------------------ */
-/* JSON parsing                                                        */
+/* JSON parsing                                                       */
 /* ------------------------------------------------------------------ */
 
 /**
@@ -333,7 +349,7 @@ function extractJson(text: string): unknown | null {
 }
 
 /* ------------------------------------------------------------------ */
-/* Deterministic growth stage                                          */
+/* Deterministic growth stage                                         */
 /* ------------------------------------------------------------------ */
 
 const STAGE_LABELS: Record<string, string> = {
@@ -361,19 +377,15 @@ const CROP_CONFIGS: Record<
   wheat: {
     endDays: [10, 70, 95, 120, 140, 150],
   },
-
   rice: {
     endDays: [7, 55, 75, 105, 125, 140],
   },
-
   cotton: {
     endDays: [14, 55, 90, 140, 165, 180],
   },
-
   maize: {
     endDays: [7, 50, 65, 95, 110, 120],
   },
-
   sugarcane: {
     endDays: [30, 180, 240, 300, 340, 365],
   },
@@ -501,7 +513,7 @@ function getGrowthStage(
 }
 
 /* ------------------------------------------------------------------ */
-/* Validation / sanitization                                           */
+/* Validation / sanitization                                          */
 /* ------------------------------------------------------------------ */
 
 interface ValidatedAction {
@@ -651,7 +663,7 @@ function sanitizeDecision(
 }
 
 /* ------------------------------------------------------------------ */
-/* Decision Engine prompt                                               */
+/* Decision Engine prompt                                             */
 /* ------------------------------------------------------------------ */
 
 interface DecisionInput {
@@ -953,18 +965,39 @@ function buildDecisionPrompt(
 }
 
 /* ------------------------------------------------------------------ */
-/* Main handler                                                        */
+/* Main handler                                                       */
 /* ------------------------------------------------------------------ */
 
 Deno.serve(async (req: Request) => {
-  /* CORS preflight */
+  /* ---------------------------------------------------------------- */
+  /* CORS preflight                                                   */
+  /* ---------------------------------------------------------------- */
+
   if (req.method === "OPTIONS") {
     return new Response("ok", {
       headers: corsForOrigin(req),
     });
   }
 
-  /* Lightweight JWT sanity check */
+  /* ---------------------------------------------------------------- */
+  /* Method validation                                                */
+  /* ---------------------------------------------------------------- */
+
+  if (req.method !== "POST") {
+    return json(
+      {
+        success: false,
+        error: "Only POST requests are supported.",
+      },
+      405,
+      req,
+    );
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Lightweight JWT sanity check                                     */
+  /* ---------------------------------------------------------------- */
+
   const auth =
     req.headers.get("Authorization") ?? "";
 
@@ -979,8 +1012,13 @@ Deno.serve(async (req: Request) => {
           "This request is not authorized. Please try again.",
       },
       401,
+      req,
     );
   }
+
+  /* ---------------------------------------------------------------- */
+  /* Gemini API key                                                   */
+  /* ---------------------------------------------------------------- */
 
   const geminiApiKey =
     Deno.env.get("GEMINI_API_KEY");
@@ -993,8 +1031,13 @@ Deno.serve(async (req: Request) => {
           "Kissan AI is temporarily unavailable. Please try again later.",
       },
       503,
+      req,
     );
   }
+
+  /* ---------------------------------------------------------------- */
+  /* Parse request                                                    */
+  /* ---------------------------------------------------------------- */
 
   let body: {
     farmId?: string;
@@ -1012,6 +1055,7 @@ Deno.serve(async (req: Request) => {
           "We couldn't read your request. Please try again.",
       },
       400,
+      req,
     );
   }
 
@@ -1026,6 +1070,7 @@ Deno.serve(async (req: Request) => {
           "No farm was found. Please set up your farm first.",
       },
       400,
+      req,
     );
   }
 
@@ -1033,10 +1078,14 @@ Deno.serve(async (req: Request) => {
     /^\d{4}-\d{2}-\d{2}$/.test(
       body?.actionDate ?? "",
     )
-      ? body!.actionDate!
+      ? body.actionDate!
       : new Date()
           .toISOString()
           .slice(0, 10);
+
+  /* ---------------------------------------------------------------- */
+  /* Supabase admin client                                            */
+  /* ---------------------------------------------------------------- */
 
   const supabaseAdmin =
     createClient(
@@ -1048,9 +1097,9 @@ Deno.serve(async (req: Request) => {
       ) ?? "",
     );
 
-  /* -------------------------------------------------------------- */
-  /* 1) Validate farm                                                */
-  /* -------------------------------------------------------------- */
+  /* ---------------------------------------------------------------- */
+  /* 1) Validate farm                                                 */
+  /* ---------------------------------------------------------------- */
 
   const {
     data: farmRow,
@@ -1072,6 +1121,7 @@ Deno.serve(async (req: Request) => {
           "We couldn't find your farm. Please try again.",
       },
       404,
+      req,
     );
   }
 
@@ -1085,29 +1135,33 @@ Deno.serve(async (req: Request) => {
       | string
       | null) ?? null;
 
-  /* -------------------------------------------------------------- */
-  /* 2) Missing crop information                                    */
-  /* -------------------------------------------------------------- */
+  /* ---------------------------------------------------------------- */
+  /* 2) Missing crop information                                     */
+  /* ---------------------------------------------------------------- */
 
   if (!crop.trim()) {
-    return json({
-      success: true,
-      insufficientData: true,
-      actionDate,
-      actions: [],
-      summary:
-        "More farm information is needed. Complete your farm profile and add crop information to receive personalized actions.",
-      message:
-        "More farm information is needed. Complete your farm profile and add crop information to receive personalized actions.",
-      limitations: [
-        "No crop is saved on this farm yet.",
-      ],
-    });
+    return json(
+      {
+        success: true,
+        insufficientData: true,
+        actionDate,
+        actions: [],
+        summary:
+          "More farm information is needed. Complete your farm profile and add crop information to receive personalized actions.",
+        message:
+          "More farm information is needed. Complete your farm profile and add crop information to receive personalized actions.",
+        limitations: [
+          "No crop is saved on this farm yet.",
+        ],
+      },
+      200,
+      req,
+    );
   }
 
-  /* -------------------------------------------------------------- */
-  /* 3) Load recent diagnoses                                       */
-  /* -------------------------------------------------------------- */
+  /* ---------------------------------------------------------------- */
+  /* 3) Load recent diagnoses                                        */
+  /* ---------------------------------------------------------------- */
 
   const {
     data: diagnosisRows,
@@ -1136,12 +1190,13 @@ Deno.serve(async (req: Request) => {
           "We couldn't update today's actions right now. Please try again.",
       },
       502,
+      req,
     );
   }
 
-  /* -------------------------------------------------------------- */
-  /* 4) Load active risks                                            */
-  /* -------------------------------------------------------------- */
+  /* ---------------------------------------------------------------- */
+  /* 4) Load active risks                                             */
+  /* ---------------------------------------------------------------- */
 
   const {
     data: riskRows,
@@ -1171,12 +1226,13 @@ Deno.serve(async (req: Request) => {
           "We couldn't update today's actions right now. Please try again.",
       },
       502,
+      req,
     );
   }
 
-  /* -------------------------------------------------------------- */
-  /* 5) Recompute growth stage                                      */
-  /* -------------------------------------------------------------- */
+  /* ---------------------------------------------------------------- */
+  /* 5) Recompute growth stage                                       */
+  /* ---------------------------------------------------------------- */
 
   const growth =
     getGrowthStage(
@@ -1184,9 +1240,9 @@ Deno.serve(async (req: Request) => {
       plantingDate,
     );
 
-  /* -------------------------------------------------------------- */
-  /* 6) Build decision input                                        */
-  /* -------------------------------------------------------------- */
+  /* ---------------------------------------------------------------- */
+  /* 6) Build decision input                                          */
+  /* ---------------------------------------------------------------- */
 
   const input: DecisionInput = {
     farm: {
@@ -1264,9 +1320,9 @@ Deno.serve(async (req: Request) => {
       })),
   };
 
-  /* -------------------------------------------------------------- */
-  /* 7) Gemini → OpenRouter fallback                                */
-  /* -------------------------------------------------------------- */
+  /* ---------------------------------------------------------------- */
+  /* 7) Gemini → OpenRouter fallback                                  */
+  /* ---------------------------------------------------------------- */
 
   const prompt =
     buildDecisionPrompt(input);
@@ -1365,6 +1421,7 @@ Deno.serve(async (req: Request) => {
 
                   items: {
                     type: "STRING",
+
                     enum: [
                       "farm_context",
                       "growth_stage",
@@ -1417,9 +1474,9 @@ Deno.serve(async (req: Request) => {
       errorMessage,
     );
 
-    /* ------------------------------------------------------------ */
-    /* Immediate OpenRouter fallback                                */
-    /* ------------------------------------------------------------ */
+    /* -------------------------------------------------------------- */
+    /* Immediate OpenRouter fallback                                  */
+    /* -------------------------------------------------------------- */
 
     if (
       errorMessage ===
@@ -1442,6 +1499,7 @@ Deno.serve(async (req: Request) => {
               "The AI request limit was reached and the backup AI service is not configured yet. Please try again shortly.",
           },
           502,
+          req,
         );
       }
 
@@ -1480,6 +1538,7 @@ Deno.serve(async (req: Request) => {
               "Kissan AI is temporarily unavailable. Please try again.",
           },
           502,
+          req,
         );
       }
     } else {
@@ -1490,13 +1549,14 @@ Deno.serve(async (req: Request) => {
             "Kissan AI is temporarily unavailable. Please try again.",
         },
         502,
+        req,
       );
     }
   }
 
-  /* -------------------------------------------------------------- */
-  /* Parse and sanitize decision                                    */
-  /* -------------------------------------------------------------- */
+  /* ---------------------------------------------------------------- */
+  /* Parse and sanitize decision                                      */
+  /* ---------------------------------------------------------------- */
 
   const parsedJson =
     extractJson(modelText);
@@ -1528,19 +1588,21 @@ Deno.serve(async (req: Request) => {
           "Kissan AI couldn't form today's actions. Please try again.",
       },
       502,
+      req,
     );
   }
 
-  /* -------------------------------------------------------------- */
-  /* 8) Persist today's actions                                     */
-  /* -------------------------------------------------------------- */
+  /* ---------------------------------------------------------------- */
+  /* 8) Persist today's actions                                      */
+  /* ---------------------------------------------------------------- */
 
   const now = new Date();
 
-  /*
+  /**
    * Replace today's incomplete rows for this farm.
    * Completed rows are preserved as history.
    */
+
   const {
     error: clearError,
   } = await supabaseAdmin
@@ -1597,6 +1659,7 @@ Deno.serve(async (req: Request) => {
             "We couldn't save today's actions right now. Please try again.",
         },
         502,
+        req,
       );
     }
 
@@ -1604,9 +1667,9 @@ Deno.serve(async (req: Request) => {
       inserted ?? [];
   }
 
-  /* -------------------------------------------------------------- */
-  /* 9) Honest limitations                                          */
-  /* -------------------------------------------------------------- */
+  /* ---------------------------------------------------------------- */
+  /* 9) Honest limitations                                            */
+  /* ---------------------------------------------------------------- */
 
   const limitations: string[] = [];
 
@@ -1633,17 +1696,21 @@ Deno.serve(async (req: Request) => {
     );
   }
 
-  /* -------------------------------------------------------------- */
-  /* Final response                                                  */
-  /* -------------------------------------------------------------- */
+  /* ---------------------------------------------------------------- */
+  /* Final response                                                    */
+  /* ---------------------------------------------------------------- */
 
-  return json({
-    success: true,
-    generatedAt:
-      now.toISOString(),
-    actionDate,
-    actions: persisted,
-    summary: decision.summary,
-    limitations,
-  });
+  return json(
+    {
+      success: true,
+      generatedAt:
+        now.toISOString(),
+      actionDate,
+      actions: persisted,
+      summary: decision.summary,
+      limitations,
+    },
+    200,
+    req,
+  );
 });

@@ -21,7 +21,6 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
  */
 
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
@@ -29,22 +28,25 @@ const corsHeaders = {
 
 const ALLOWED_ORIGINS = [
   "http://localhost:5173",
-  "https://kissan-ai-rho.vercel.app",
   "http://localhost:3000",
   "http://127.0.0.1:5173",
+  "https://kissan-ai-six.vercel.app",
   "https://vxldkzrmtygurdggtjro.supabase.co",
 ];
 
 function corsForOrigin(req: Request): Record<string, string> {
   const origin = req.headers.get("origin") ?? "";
 
-  return {
+  const headers: Record<string, string> = {
     ...corsHeaders,
-    "Access-Control-Allow-Origin":
-      ALLOWED_ORIGINS.includes(origin)
-        ? origin
-        : ALLOWED_ORIGINS[0],
   };
+
+  if (origin && ALLOWED_ORIGINS.includes(origin)) {
+    headers["Access-Control-Allow-Origin"] = origin;
+    headers["Vary"] = "Origin";
+  }
+
+  return headers;
 }
 
 const MODEL = "gemini-3.5-flash";
@@ -66,13 +68,18 @@ const MAX_RISKS = 5;
 
 function json(
   data: unknown,
-  status = 200
+  status = 200,
+  req?: Request,
 ): Response {
+  const headers = req
+    ? corsForOrigin(req)
+    : corsHeaders;
+
   return new Response(JSON.stringify(data), {
     status,
     headers: {
       "Content-Type": "application/json",
-      ...corsHeaders,
+      ...headers,
     },
   });
 }
@@ -124,26 +131,20 @@ const CROP_ALIASES: Record<string, string> = {
   wheat: "wheat",
   gehun: "wheat",
   gandum: "wheat",
-
   rice: "rice",
   chawal: "rice",
   paddy: "rice",
-
   cotton: "cotton",
   kapas: "cotton",
-
   maize: "maize",
   corn: "maize",
   makai: "maize",
-
   sugarcane: "sugarcane",
   ganna: "sugarcane",
   "sugar cane": "sugarcane",
 };
 
-function normalizeCrop(
-  crop: string
-): string {
+function normalizeCrop(crop: string): string {
   return crop
     .trim()
     .toLowerCase()
@@ -152,7 +153,7 @@ function normalizeCrop(
 
 function getGrowthStage(
   cropRaw: string | null | undefined,
-  plantingDate: string | null | undefined
+  plantingDate: string | null | undefined,
 ): {
   growthStage: string;
   stageLabel: string;
@@ -171,7 +172,7 @@ function getGrowthStage(
   }
 
   const planted = new Date(
-    plantingDate + "T00:00:00Z"
+    plantingDate + "T00:00:00Z",
   ).getTime();
 
   if (Number.isNaN(planted)) {
@@ -185,11 +186,11 @@ function getGrowthStage(
   const now = Date.UTC(
     new Date().getUTCFullYear(),
     new Date().getUTCMonth(),
-    new Date().getUTCDate()
+    new Date().getUTCDate(),
   );
 
   const days = Math.floor(
-    (now - planted) / 86_400_000
+    (now - planted) / 86_400_000,
   );
 
   if (days < 0) {
@@ -274,21 +275,15 @@ const THRESHOLDS = {
   heatHigh: 42,
   heatMedium: 38,
   heatWarm: 33,
-
   humidityHigh: 85,
   humidityMedium: 70,
-
   rainHigh: 70,
   rainMedium: 40,
-
   windHigh: 40,
   windMedium: 25,
-
   humidityDry: 30,
-
   recentDiagnosisDays: 14,
   oldDiagnosisDays: 30,
-
   sensitiveStages: [
     "flowering",
     "fruiting",
@@ -298,7 +293,7 @@ const THRESHOLDS = {
 } as const;
 
 function scoreToLevel(
-  score: number
+  score: number,
 ): RiskLevel {
   if (score >= 4) return "high";
   if (score >= 2) return "medium";
@@ -350,7 +345,7 @@ const DISEASE_KEYWORDS = [
 ];
 
 function daysSince(
-  iso: string
+  iso: string,
 ): number | null {
   const t = new Date(iso).getTime();
 
@@ -359,13 +354,13 @@ function daysSince(
   return Math.max(
     0,
     Math.floor(
-      (Date.now() - t) / 86_400_000
-    )
+      (Date.now() - t) / 86_400_000,
+    ),
   );
 }
 
 function recencyWeight(
-  days: number
+  days: number,
 ): number {
   if (
     days <=
@@ -385,7 +380,7 @@ function recencyWeight(
 }
 
 function confidenceWeight(
-  confidence: number
+  confidence: number,
 ): number {
   if (confidence >= 85) return 1;
   if (confidence >= 60) return 0.75;
@@ -421,7 +416,7 @@ interface EngineInput {
 }
 
 function evaluateRiskSignals(
-  input: EngineInput
+  input: EngineInput,
 ): RiskSignal[] {
   const signals: RiskSignal[] = [];
 
@@ -430,7 +425,7 @@ function evaluateRiskSignals(
 
   const sensitive = growth
     ? THRESHOLDS.sensitiveStages.includes(
-        growth.growthStage
+        growth.growthStage,
       )
     : false;
 
@@ -448,8 +443,8 @@ function evaluateRiskSignals(
       rainProbability,
       ...(w.forecast ?? []).map(
         (f) =>
-          f.rainProbability ?? 0
-      )
+          f.rainProbability ?? 0,
+      ),
     );
 
     if (
@@ -461,22 +456,17 @@ function evaluateRiskSignals(
         level: "high",
         score:
           4 + (sensitive ? 1 : 0),
-
         title: "Extreme heat risk",
-
         explanation:
           "Very high temperatures may cause heat stress — leaves can wilt, flowers may drop, and the crop loses water faster than it can take it up.",
-
         evidence: [
           `Current temperature is ${temperature}°C (≥ ${THRESHOLDS.heatHigh}°C).`,
         ],
-
         recommendedActions: [
           "Irrigate early morning or late evening to reduce water loss.",
           "Provide light shade to young plants if practical.",
           "Avoid spraying or transplanting during the hottest hours.",
         ],
-
         source: "weather",
       });
     } else if (
@@ -488,21 +478,16 @@ function evaluateRiskSignals(
         level: "medium",
         score:
           3 + (sensitive ? 1 : 0),
-
         title: "High heat risk",
-
         explanation:
           "High temperatures may increase heat stress and water demand for the crop.",
-
         evidence: [
           `Current temperature is ${temperature}°C.`,
         ],
-
         recommendedActions: [
           "Water early or late in the day; check young plants for wilting.",
           "Keep an eye on soil moisture and mulch to hold water.",
         ],
-
         source: "weather",
       });
     } else if (
@@ -513,20 +498,15 @@ function evaluateRiskSignals(
         category: "weather",
         level: "low",
         score: 1,
-
         title: "Warm conditions",
-
         explanation:
           "Warm conditions are manageable but slightly increase water demand.",
-
         evidence: [
           `Current temperature is ${temperature}°C.`,
         ],
-
         recommendedActions: [
           "Monitor soil moisture and irrigate young crops if the topsoil is dry.",
         ],
-
         source: "weather",
       });
     }
@@ -539,23 +519,18 @@ function evaluateRiskSignals(
         category: "weather",
         level: "high",
         score: 4,
-
         title:
           "Heavy rain / waterlogging risk",
-
         explanation:
           "High chance of heavy rain may cause waterlogging, especially in low-lying fields or heavy soils, which can suffocate roots.",
-
         evidence: [
           `Rain probability is up to ${forecastRain}%.`,
         ],
-
         recommendedActions: [
           "Ensure drainage channels are clear before heavy rain.",
           "Avoid irrigation while rain is expected.",
           "Check low-lying areas for standing water after rain.",
         ],
-
         source: "weather",
       });
     } else if (
@@ -566,21 +541,16 @@ function evaluateRiskSignals(
         category: "weather",
         level: "medium",
         score: 2,
-
         title:
           "Rain possible — waterlogging watch",
-
         explanation:
           "A moderate chance of rain means fields may get wet; low-lying areas are at some risk of waterlogging.",
-
         evidence: [
           `Rain probability is up to ${forecastRain}%.`,
         ],
-
         recommendedActions: [
           "Delay watering until rain passes; watch low-lying fields.",
         ],
-
         source: "weather",
       });
     }
@@ -598,23 +568,18 @@ function evaluateRiskSignals(
           THRESHOLDS.heatMedium
             ? 1
             : 0),
-
         title:
           "High humidity — disease conditions",
-
         explanation:
           "Warm, very humid air may increase the risk of fungal diseases like blight and mildew. This is a conditions warning, not a diagnosis.",
-
         evidence: [
           `Humidity is ${humidity}% (≥ ${THRESHOLDS.humidityHigh}%).`,
         ],
-
         recommendedActions: [
           "Check leaves for spots or powdery growth.",
           "Improve airflow between rows where possible.",
           "If spots appear, have a Crop Doctor photo check done before treating.",
         ],
-
         source: "weather",
       });
     } else if (
@@ -625,21 +590,16 @@ function evaluateRiskSignals(
         category: "disease",
         level: "medium",
         score: 2,
-
         title:
           "Humid conditions — disease watch",
-
         explanation:
           "Moderate humidity may slightly increase the risk of fungal problems if it stays damp for a couple of days.",
-
         evidence: [
           `Humidity is ${humidity}%.`,
         ],
-
         recommendedActions: [
           "Watch leaves for spots; avoid dense, wet foliage overnight.",
         ],
-
         source: "weather",
       });
     }
@@ -652,21 +612,16 @@ function evaluateRiskSignals(
         category: "weather",
         level: "high",
         score: 3,
-
         title: "Strong wind risk",
-
         explanation:
           "Strong winds may damage young or tall plants and cause spray drift if any treatment is applied.",
-
         evidence: [
           `Wind is ${windSpeed} km/h (≥ ${THRESHOLDS.windHigh} km/h).`,
         ],
-
         recommendedActions: [
           "Do not spray pesticides or fertiliser in strong wind.",
           "Support young or tall plants; shelter sensitive crops if possible.",
         ],
-
         source: "weather",
       });
     } else if (
@@ -677,20 +632,15 @@ function evaluateRiskSignals(
         category: "weather",
         level: "medium",
         score: 2,
-
         title: "Breezy conditions",
-
         explanation:
           "Moderate winds can cause spray drift and stress young plants.",
-
         evidence: [
           `Wind is ${windSpeed} km/h.`,
         ],
-
         recommendedActions: [
           "Skip spraying today; check young plants are supported.",
         ],
-
         source: "weather",
       });
     }
@@ -701,11 +651,11 @@ function evaluateRiskSignals(
   for (
     const d of input.recentDiagnoses.slice(
       0,
-      5
+      5,
     )
   ) {
     const days = daysSince(
-      d.createdAt
+      d.createdAt,
     );
 
     const recency =
@@ -715,7 +665,7 @@ function evaluateRiskSignals(
 
     const confidence =
       confidenceWeight(
-        d.confidence
+        d.confidence,
       );
 
     const lower =
@@ -723,12 +673,12 @@ function evaluateRiskSignals(
 
     const pest =
       PEST_KEYWORDS.some((k) =>
-        lower.includes(k)
+        lower.includes(k),
       );
 
     const disease =
       DISEASE_KEYWORDS.some((k) =>
-        lower.includes(k)
+        lower.includes(k),
       );
 
     if (pest) {
@@ -736,7 +686,7 @@ function evaluateRiskSignals(
         Math.round(
           3 *
             recency *
-            confidence
+            confidence,
         ) +
         (sensitive ? 1 : 0);
 
@@ -746,33 +696,26 @@ function evaluateRiskSignals(
           level:
             scoreToLevel(score),
           score,
-
           title:
             "Elevated pest pressure",
-
           explanation:
             "A recent crop check found a pest problem. Combined with the current growth stage, pest pressure may remain elevated and deserves monitoring.",
-
           evidence: [
             `Recent diagnosis: ${d.diagnosis} (confidence ${d.confidence}%).`,
-
             days !== null
               ? `Diagnosis was ${days} day(s) ago.`
               : "Diagnosis date unavailable.",
-
             ...(sensitive
               ? [
                   "Crop is in a sensitive growth stage.",
                 ]
               : []),
           ],
-
           recommendedActions: [
             "Inspect plants regularly for live pests and new damage.",
             "Follow the product label and local agricultural guidance if you treat — do not mix or dose on your own.",
             "Ask the Crop Doctor or a local agriculture officer if the problem is spreading.",
           ],
-
           source: "diagnosis",
         });
       }
@@ -790,7 +733,7 @@ function evaluateRiskSignals(
         Math.round(
           3 *
             recency *
-            confidence
+            confidence,
         ) +
         humidityBoost;
 
@@ -800,16 +743,12 @@ function evaluateRiskSignals(
           level:
             scoreToLevel(score),
           score,
-
           title:
             "Elevated disease risk",
-
           explanation:
             "A recent crop check found a disease. Current conditions (and humidity if elevated) may keep disease risk elevated — monitor closely rather than assume.",
-
           evidence: [
             `Recent diagnosis: ${d.diagnosis} (confidence ${d.confidence}%).`,
-
             ...(w &&
             w.humidity >=
               THRESHOLDS.humidityMedium
@@ -818,13 +757,11 @@ function evaluateRiskSignals(
                 ]
               : []),
           ],
-
           recommendedActions: [
             "Watch for new or spreading spots/lesions on leaves.",
             "Follow the product label and local agricultural guidance if you treat.",
             "Consult a local agriculture officer if symptoms are worsening.",
           ],
-
           source: "diagnosis",
         });
       }
@@ -839,7 +776,7 @@ function evaluateRiskSignals(
 
   const rainDependent =
     /rain|barani|rainfed|rain-fed/i.test(
-      method
+      method,
     );
 
   if (
@@ -857,23 +794,18 @@ function evaluateRiskSignals(
         category: "irrigation",
         level: "medium",
         score: 3,
-
         title:
           "Possible water stress",
-
         explanation:
           "Your irrigation depends on rainfall and conditions are hot with little rain expected — the crop may face water stress.",
-
         evidence: [
           `Irrigation method: ${input.farm.irrigationMethod}.`,
           `Temperature ${w.temperature}°C with only ${w.rainProbability}% chance of rain.`,
         ],
-
         recommendedActions: [
           "Check soil moisture at root depth before watering.",
           "If water is available, irrigate early or late in the day.",
         ],
-
         source: "farm",
       });
     }
@@ -886,21 +818,16 @@ function evaluateRiskSignals(
         category: "irrigation",
         level: "medium",
         score: 2,
-
         title:
           "Excess moisture watch",
-
         explanation:
           "Heavy rain is expected; fields may hold too much water, especially in heavy soil.",
-
         evidence: [
           `Rain probability is ${w.rainProbability}%.`,
         ],
-
         recommendedActions: [
           "Clear drainage channels; avoid further irrigation before rain.",
         ],
-
         source: "weather",
       });
     }
@@ -911,7 +838,7 @@ function evaluateRiskSignals(
   if (w && growth) {
     const sensitiveStage =
       THRESHOLDS.sensitiveStages.includes(
-        growth.growthStage
+        growth.growthStage,
       );
 
     const hot =
@@ -936,38 +863,31 @@ function evaluateRiskSignals(
         level: sensitiveStage
           ? "high"
           : "medium",
-
         score: sensitiveStage
           ? 4
           : 3,
-
         title:
           "Environmental crop stress",
-
         explanation:
           "Hot, dry conditions with little rain may stress the crop, especially in a sensitive growth stage.",
-
         evidence: [
           `Temperature ${w.temperature}°C, humidity ${w.humidity}%, rain ${w.rainProbability}%.`,
           `Current stage: ${growth.stageLabel}.`,
         ],
-
         recommendedActions: [
           "Water early or late to keep the root zone moist.",
           "Mulch around plants to reduce evaporation.",
           "Monitor young plants for wilting.",
         ],
-
         source: "weather",
       });
     }
   }
 
-  /*
+  /**
    * Keep strongest signal per category,
    * then prioritise by score.
    */
-
   const byCategory =
     new Map<
       RiskCategory,
@@ -977,7 +897,7 @@ function evaluateRiskSignals(
   for (const s of signals) {
     const existing =
       byCategory.get(
-        s.category
+        s.category,
       );
 
     if (
@@ -986,7 +906,7 @@ function evaluateRiskSignals(
     ) {
       byCategory.set(
         s.category,
-        s
+        s,
       );
     }
   }
@@ -996,7 +916,7 @@ function evaluateRiskSignals(
   ]
     .sort(
       (a, b) =>
-        b.score - a.score
+        b.score - a.score,
     )
     .slice(0, MAX_RISKS);
 }
@@ -1012,7 +932,7 @@ interface AiRiskRefinement {
 }
 
 function sanitizeAiRefinements(
-  raw: unknown
+  raw: unknown,
 ): AiRiskRefinement[] {
   if (
     !raw ||
@@ -1046,7 +966,7 @@ function sanitizeAiRefinements(
   for (
     const item of list.slice(
       0,
-      MAX_RISKS
+      MAX_RISKS,
     )
   ) {
     if (
@@ -1064,7 +984,7 @@ function sanitizeAiRefinements(
 
     const category =
       String(
-        it.category ?? ""
+        it.category ?? "",
       );
 
     if (
@@ -1075,20 +995,20 @@ function sanitizeAiRefinements(
 
     const explanation =
       String(
-        it.explanation ?? ""
+        it.explanation ?? "",
       )
         .trim()
         .slice(0, 800);
 
     const recommendedActions =
       Array.isArray(
-        it.recommendedActions
+        it.recommendedActions,
       )
         ? it.recommendedActions
-            .map((a) =>
+            .map((a: unknown) =>
               String(a)
                 .trim()
-                .slice(0, 300)
+                .slice(0, 300),
             )
             .filter(Boolean)
             .slice(0, 5)
@@ -1114,21 +1034,21 @@ function sanitizeAiRefinements(
 /* ------------------------------------------------------------------ */
 
 function extractJson(
-  text: string
+  text: string,
 ): unknown | null {
   const cleaned = text
     .trim()
     .replace(
       /^```json\s*/i,
-      ""
+      "",
     )
     .replace(
       /^```\s*/i,
-      ""
+      "",
     )
     .replace(
       /\s*```$/i,
-      ""
+      "",
     )
     .trim();
 
@@ -1151,12 +1071,12 @@ function extractJson(
     const possibleJson =
       cleaned.slice(
         firstBrace,
-        lastBrace + 1
+        lastBrace + 1,
       );
 
     try {
       return JSON.parse(
-        possibleJson
+        possibleJson,
       );
     } catch {
       return null;
@@ -1172,22 +1092,22 @@ function extractJson(
 
 async function callGeminiRiskEnrichment(
   apiKey: string,
-  prompt: string
+  prompt: string,
 ): Promise<{
   text: string;
 }> {
   const url =
     `${GEMINI_BASE}/models/${MODEL}:generateContent?key=${apiKey}`;
 
-  const response =
-    await fetch(url, {
-      method: "POST",
+  let response: Response;
 
+  try {
+    response = await fetch(url, {
+      method: "POST",
       headers: {
         "Content-Type":
           "application/json",
       },
-
       body: JSON.stringify({
         contents: [
           {
@@ -1199,27 +1119,20 @@ async function callGeminiRiskEnrichment(
             ],
           },
         ],
-
         generationConfig: {
           temperature: 0.3,
-
           responseMimeType:
             "application/json",
-
           responseSchema: {
             type: "OBJECT",
-
             properties: {
               risks: {
                 type: "ARRAY",
-
                 items: {
                   type: "OBJECT",
-
                   properties: {
                     category: {
                       type: "STRING",
-
                       enum: [
                         "disease",
                         "pest",
@@ -1228,20 +1141,16 @@ async function callGeminiRiskEnrichment(
                         "crop_stress",
                       ],
                     },
-
                     explanation: {
                       type: "STRING",
                     },
-
                     recommendedActions: {
                       type: "ARRAY",
-
                       items: {
                         type: "STRING",
                       },
                     },
                   },
-
                   required: [
                     "category",
                     "explanation",
@@ -1250,12 +1159,21 @@ async function callGeminiRiskEnrichment(
                 },
               },
             },
-
             required: ["risks"],
           },
         },
       }),
     });
+  } catch (error) {
+    console.error(
+      "assess-risks Gemini network error:",
+      error,
+    );
+
+    throw new Error(
+      "Gemini risk enrichment failed.",
+    );
+  }
 
   if (response.ok) {
     const data =
@@ -1268,7 +1186,7 @@ async function callGeminiRiskEnrichment(
 
     if (!text) {
       throw new Error(
-        "Gemini returned an empty response."
+        "Gemini returned an empty response.",
       );
     }
 
@@ -1281,10 +1199,10 @@ async function callGeminiRiskEnrichment(
   console.error(
     "assess-risks Gemini error:",
     response.status,
-    errorText.slice(0, 500)
+    errorText.slice(0, 500),
   );
 
-  /*
+  /**
    * IMPORTANT:
    * 429 means quota/rate limit.
    * We immediately fall back to OpenRouter.
@@ -1293,12 +1211,12 @@ async function callGeminiRiskEnrichment(
     response.status === 429
   ) {
     throw new Error(
-      GEMINI_RATE_LIMIT
+      GEMINI_RATE_LIMIT,
     );
   }
 
   throw new Error(
-    "Gemini risk enrichment failed."
+    "Gemini risk enrichment failed.",
   );
 }
 
@@ -1308,17 +1226,18 @@ async function callGeminiRiskEnrichment(
 
 async function callOpenRouterRiskEnrichment(
   apiKey: string,
-  prompt: string
+  prompt: string,
 ): Promise<{
   text: string;
   model: string;
 }> {
-  const response =
-    await fetch(
+  let response: Response;
+
+  try {
+    response = await fetch(
       OPENROUTER_URL,
       {
         method: "POST",
-
         headers: {
           "Content-Type":
             "application/json",
@@ -1327,7 +1246,7 @@ async function callOpenRouterRiskEnrichment(
             `Bearer ${apiKey}`,
 
           "HTTP-Referer":
-            "https://kissan-ai-rho.vercel.app",
+            "https://kissan-ai-six.vercel.app",
 
           "X-Title":
             "Kissan AI",
@@ -1339,11 +1258,9 @@ async function callOpenRouterRiskEnrichment(
           messages: [
             {
               role: "system",
-
               content:
                 "You are Kissan AI's agricultural risk explanation assistant. Return ONLY valid JSON. Never add markdown, preambles, safety notes, or text outside the JSON object.",
             },
-
             {
               role: "user",
               content: prompt,
@@ -1352,8 +1269,18 @@ async function callOpenRouterRiskEnrichment(
 
           temperature: 0.3,
         }),
-      }
+      },
     );
+  } catch (error) {
+    console.error(
+      "assess-risks OpenRouter network error:",
+      error,
+    );
+
+    throw new Error(
+      "OpenRouter risk enrichment failed.",
+    );
+  }
 
   if (!response.ok) {
     const errorText =
@@ -1362,30 +1289,30 @@ async function callOpenRouterRiskEnrichment(
     console.error(
       "assess-risks OpenRouter error:",
       response.status,
-      errorText.slice(0, 500)
+      errorText.slice(0, 500),
     );
 
     throw new Error(
-      "OpenRouter risk enrichment failed."
+      "OpenRouter risk enrichment failed.",
     );
   }
 
   const data =
     await response.json();
 
-  /*
-   * OpenRouter returns the actual routed
-   * model in the `model` field.
+  /**
+   * OpenRouter returns the actual
+   * routed model in the `model` field.
    */
   const actualModel =
     String(
       data?.model ??
-        "unknown"
+        "unknown",
     );
 
   console.log(
     "assess-risks OpenRouter model used:",
-    actualModel
+    actualModel,
   );
 
   const text =
@@ -1394,7 +1321,7 @@ async function callOpenRouterRiskEnrichment(
 
   if (!text) {
     throw new Error(
-      "OpenRouter returned an empty response."
+      "OpenRouter returned an empty response.",
     );
   }
 
@@ -1411,7 +1338,7 @@ async function callOpenRouterRiskEnrichment(
 async function enrichWithGemini(
   apiKey: string,
   signals: RiskSignal[],
-  context: Record<string, unknown>
+  context: Record<string, unknown>,
 ): Promise<AiRiskRefinement[]> {
   const prompt = `
 You are an agricultural risk explainer for smallholder farmers in South Asia (Pakistan).
@@ -1437,7 +1364,7 @@ Context (real data):
 ${JSON.stringify(
   context,
   null,
-  2
+  2,
 )}
 
 Deterministic risk signals:
@@ -1452,7 +1379,7 @@ ${JSON.stringify(
       s.recommendedActions,
   })),
   null,
-  2
+  2,
 )}
 
 Respond ONLY with valid JSON matching this exact shape:
@@ -1484,13 +1411,17 @@ Only return categories that exist in the deterministic risk signals above.
 Do not change their risk levels.
 
 Do not include markdown.
+
 Do not include code fences.
+
 Do not include a preamble.
+
 Do not include safety notes outside the JSON.
+
 Do not output anything before or after the JSON object.
 `;
 
-  /*
+  /**
    * PRIMARY:
    * One Gemini attempt only.
    */
@@ -1498,7 +1429,7 @@ Do not output anything before or after the JSON object.
     const result =
       await callGeminiRiskEnrichment(
         apiKey,
-        prompt
+        prompt,
       );
 
     const parsed =
@@ -1506,18 +1437,18 @@ Do not output anything before or after the JSON object.
 
     if (parsed) {
       return sanitizeAiRefinements(
-        parsed
+        parsed,
       );
     }
 
     console.error(
       "assess-risks Gemini parse failure. Raw:",
-      result.text.slice(0, 500)
+      result.text.slice(0, 500),
     );
 
     return [];
   } catch (error) {
-    /*
+    /**
      * IMMEDIATE FALLBACK:
      * Gemini 429 → OpenRouter.
      */
@@ -1527,19 +1458,32 @@ Do not output anything before or after the JSON object.
         GEMINI_RATE_LIMIT
     ) {
       console.warn(
-        "Gemini rate limit reached. Falling back immediately to OpenRouter."
+        "Gemini rate limit reached. Falling back immediately to OpenRouter.",
       );
+
+      const openRouterApiKey =
+        Deno.env.get(
+          "OPENROUTER_API_KEY",
+        );
+
+      if (!openRouterApiKey) {
+        console.error(
+          "OPENROUTER_API_KEY is not configured.",
+        );
+
+        return [];
+      }
 
       try {
         const fallback =
           await callOpenRouterRiskEnrichment(
-            apiKey,
-            prompt
+            openRouterApiKey,
+            prompt,
           );
 
         const parsed =
           extractJson(
-            fallback.text
+            fallback.text,
           );
 
         if (!parsed) {
@@ -1547,22 +1491,22 @@ Do not output anything before or after the JSON object.
             "assess-risks OpenRouter parse failure. Raw:",
             fallback.text.slice(
               0,
-              500
-            )
+              500,
+            ),
           );
 
           return [];
         }
 
         return sanitizeAiRefinements(
-          parsed
+          parsed,
         );
       } catch (fallbackError) {
         console.error(
           "assess-risks OpenRouter fallback failed:",
           fallbackError instanceof Error
             ? fallbackError.message
-            : fallbackError
+            : fallbackError,
         );
 
         return [];
@@ -1573,7 +1517,7 @@ Do not output anything before or after the JSON object.
       "assess-risks Gemini enrichment failed:",
       error instanceof Error
         ? error.message
-        : error
+        : error,
     );
 
     return [];
@@ -1586,6 +1530,8 @@ Do not output anything before or after the JSON object.
 
 Deno.serve(
   async (req: Request) => {
+    /* CORS preflight */
+
     if (
       req.method === "OPTIONS"
     ) {
@@ -1594,18 +1540,33 @@ Deno.serve(
         {
           headers:
             corsForOrigin(req),
-        }
+        },
       );
     }
 
+    /* Only POST is supported */
+
+    if (req.method !== "POST") {
+      return json(
+        {
+          success: false,
+          error: "Method not allowed.",
+        },
+        405,
+        req,
+      );
+    }
+
+    /* Lightweight JWT sanity check */
+
     const auth =
       req.headers.get(
-        "Authorization"
+        "Authorization",
       ) ?? "";
 
     if (
       !auth.startsWith(
-        "Bearer "
+        "Bearer ",
       ) ||
       auth.split(".").length !==
         3
@@ -1616,7 +1577,8 @@ Deno.serve(
           error:
             "This request is not authorized. Please try again.",
         },
-        401
+        401,
+        req,
       );
     }
 
@@ -1642,7 +1604,8 @@ Deno.serve(
           error:
             "We couldn't read your request. Please try again.",
         },
-        400
+        400,
+        req,
       );
     }
 
@@ -1656,26 +1619,27 @@ Deno.serve(
           error:
             "No farm was found. Please set up your farm first.",
         },
-        400
+        400,
+        req,
       );
     }
 
     const token =
       auth
         .slice(
-          "Bearer ".length
+          "Bearer ".length,
         )
         .trim();
 
     const supabaseAdmin =
       createClient(
         Deno.env.get(
-          "SUPABASE_URL"
+          "SUPABASE_URL",
         ) ?? "",
 
         Deno.env.get(
-          "SUPABASE_SERVICE_ROLE_KEY"
-        ) ?? ""
+          "SUPABASE_SERVICE_ROLE_KEY",
+        ) ?? "",
       );
 
     /* 1) Validate farm */
@@ -1687,7 +1651,7 @@ Deno.serve(
       await supabaseAdmin
         .from("farms")
         .select(
-          "id, user_id, current_crop, planting_date, irrigation_method"
+          "id, user_id, current_crop, planting_date, irrigation_method",
         )
         .eq("id", farmId)
         .maybeSingle();
@@ -1702,7 +1666,8 @@ Deno.serve(
           error:
             "We couldn't find your farm. Please try again.",
         },
-        404
+        404,
+        req,
       );
     }
 
@@ -1713,7 +1678,7 @@ Deno.serve(
       error: callerError,
     } =
       await supabaseAdmin.auth.getUser(
-        token
+        token,
       );
 
     const callerId =
@@ -1731,7 +1696,8 @@ Deno.serve(
           error:
             "You don't have access to that farm.",
         },
-        403
+        403,
+        req,
       );
     }
 
@@ -1744,24 +1710,24 @@ Deno.serve(
       await supabaseAdmin
         .from("diagnoses")
         .select(
-          "diagnosis, confidence, created_at"
+          "diagnosis, confidence, created_at",
         )
         .eq(
           "farm_id",
-          farmId
+          farmId,
         )
         .order(
           "created_at",
           {
             ascending: false,
-          }
+          },
         )
         .limit(5);
 
     if (diagError) {
       console.error(
         "assess-risks diagnoses error:",
-        diagError
+        diagError,
       );
 
       return json(
@@ -1770,7 +1736,8 @@ Deno.serve(
           error:
             "We couldn't update your farm risk assessment right now. Please try again.",
         },
-        502
+        502,
+        req,
       );
     }
 
@@ -1783,63 +1750,62 @@ Deno.serve(
         (farmRow.planting_date as
           | string
           | null) ??
-          undefined
+          undefined,
       );
 
     /* 4) Deterministic engine */
 
-    const input: EngineInput =
-      {
-        farm: {
-          currentCrop:
-            farmRow.current_crop ??
-            "",
+    const input: EngineInput = {
+      farm: {
+        currentCrop:
+          farmRow.current_crop ??
+          "",
 
-          irrigationMethod:
-            farmRow.irrigation_method ??
-            undefined,
-        },
+        irrigationMethod:
+          farmRow.irrigation_method ??
+          undefined,
+      },
 
-        growth: {
-          growthStage:
-            growth.growthStage,
+      growth: {
+        growthStage:
+          growth.growthStage,
 
-          stageLabel:
-            growth.stageLabel,
-        },
+        stageLabel:
+          growth.stageLabel,
+      },
 
-        weather:
-          body.weather ?? null,
+      weather:
+        body.weather ?? null,
 
-        recentDiagnoses:
-          (
-            (diagnosisRows as Array<{
-              diagnosis: string;
-              confidence: number;
-              created_at: string;
-            }>) ?? []
-          ).map((d) => ({
-            diagnosis:
-              d.diagnosis,
+      recentDiagnoses:
+        (
+          (diagnosisRows as Array<{
+            diagnosis: string;
+            confidence: number;
+            created_at: string;
+          }>) ?? []
+        ).map((d) => ({
+          diagnosis:
+            d.diagnosis,
 
-            confidence:
-              d.confidence ?? 0,
+          confidence:
+            d.confidence ?? 0,
 
-            createdAt:
-              d.created_at,
-          })),
-      };
+          createdAt:
+            d.created_at,
+        })),
+    };
 
     let signals =
       evaluateRiskSignals(
-        input
+        input,
       );
 
     /* 5) Optional AI enrichment */
 
     const apiKey =
       Deno.env.get(
-        "GEMINI_API_KEY"
+        "GEMINI_API_KEY",
       );
 
     let usedAi = false;
@@ -1848,7 +1814,7 @@ Deno.serve(
       signals.some(
         (s) =>
           s.level === "high" ||
-          s.level === "medium"
+          s.level === "medium",
       );
 
     if (
@@ -1892,9 +1858,9 @@ Deno.serve(
 
                   title:
                     s.title,
-                })
+                }),
               ),
-          }
+          },
         );
 
       if (
@@ -1908,24 +1874,26 @@ Deno.serve(
               (r) => [
                 r.category,
                 r,
-              ]
-            )
+              ],
+            ),
           );
 
-        /*
+        /**
          * IMPORTANT:
+         *
          * We ONLY replace explanation/actions.
          *
          * category, level, score,
          * evidence and source
          * remain deterministic.
          */
+
         signals =
           signals.map(
             (s) => {
               const refine =
                 byCat.get(
-                  s.category
+                  s.category,
                 );
 
               if (!refine) {
@@ -1947,7 +1915,7 @@ Deno.serve(
                     ? refine.recommendedActions
                     : s.recommendedActions,
               };
-            }
+            },
           );
       }
     }
@@ -1960,7 +1928,7 @@ Deno.serve(
     const expiresAt =
       new Date(
         now.getTime() +
-          ACTIVE_WINDOW_MS
+          ACTIVE_WINDOW_MS,
       ).toISOString();
 
     const {
@@ -1968,26 +1936,27 @@ Deno.serve(
     } =
       await supabaseAdmin
         .from(
-          "risk_alerts"
+          "risk_alerts",
         )
         .update({
           status: "expired",
+
           updated_at:
             now.toISOString(),
         })
         .eq(
           "farm_id",
-          farmId
+          farmId,
         )
         .eq(
           "status",
-          "active"
+          "active",
         );
 
     if (expireError) {
       console.error(
         "assess-risks expire error:",
-        expireError
+        expireError,
       );
     }
 
@@ -2025,7 +1994,7 @@ Deno.serve(
 
           expires_at:
             expiresAt,
-        })
+        }),
       );
 
     let persisted:
@@ -2040,7 +2009,7 @@ Deno.serve(
       } =
         await supabaseAdmin
           .from(
-            "risk_alerts"
+            "risk_alerts",
           )
           .insert(rows)
           .select();
@@ -2048,7 +2017,7 @@ Deno.serve(
       if (insertError) {
         console.error(
           "assess-risks insert error:",
-          insertError
+          insertError,
         );
 
         return json(
@@ -2057,7 +2026,8 @@ Deno.serve(
             error:
               "We couldn't save your farm risk assessment right now. Please try again.",
           },
-          502
+          502,
+          req,
         );
       }
 
@@ -2072,7 +2042,7 @@ Deno.serve(
 
     if (!body.weather) {
       limitations.push(
-        "Risk assessment is limited because current weather data is unavailable."
+        "Risk assessment is limited because current weather data is unavailable.",
       );
     }
 
@@ -2081,7 +2051,7 @@ Deno.serve(
       "unknown"
     ) {
       limitations.push(
-        "Growth stage is unavailable, so crop-stage-specific risks are limited."
+        "Growth stage is unavailable, so crop-stage-specific risks are limited.",
       );
     }
 
@@ -2090,20 +2060,24 @@ Deno.serve(
         .length === 0
     ) {
       limitations.push(
-        "No recent crop diagnoses were found, so disease/pest risks are based on conditions alone."
+        "No recent crop diagnoses were found, so disease/pest risks are based on conditions alone.",
       );
     }
 
-    return json({
-      success: true,
+    return json(
+      {
+        success: true,
 
-      assessedAt:
-        now.toISOString(),
+        assessedAt:
+          now.toISOString(),
 
-      risks:
-        persisted,
+        risks:
+          persisted,
 
-      limitations,
-    });
-  }
+        limitations,
+      },
+      200,
+      req,
+    );
+  },
 );

@@ -2,7 +2,6 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const BASE_CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
@@ -10,43 +9,51 @@ const BASE_CORS_HEADERS = {
 
 const ALLOWED_ORIGINS = [
   "http://localhost:5173",
-  "https://kissan-ai-rho.vercel.app",
   "http://localhost:3000",
   "http://127.0.0.1:5173",
+  "https://kissan-ai-six.vercel.app",
   "https://vxldkzrmtygurdggtjro.supabase.co",
 ];
-
-const MODEL = "gemini-3.5-flash";
-const HISTORY_LIMIT = 20;
 
 function corsForOrigin(req: Request): Record<string, string> {
   const origin = req.headers.get("origin") ?? "";
 
-  return {
+  const headers: Record<string, string> = {
     ...BASE_CORS_HEADERS,
-    "Access-Control-Allow-Origin": ALLOWED_ORIGINS.includes(origin)
-      ? origin
-      : ALLOWED_ORIGINS[0],
   };
+
+  if (origin && ALLOWED_ORIGINS.includes(origin)) {
+    headers["Access-Control-Allow-Origin"] = origin;
+    headers["Vary"] = "Origin";
+  }
+
+  return headers;
 }
+
+const MODEL = "gemini-3.5-flash";
+const HISTORY_LIMIT = 20;
 
 function json(
   data: unknown,
   status = 200,
   req?: Request,
 ): Response {
+  const headers = req
+    ? corsForOrigin(req)
+    : BASE_CORS_HEADERS;
+
   return new Response(JSON.stringify(data), {
     status,
     headers: {
       "Content-Type": "application/json",
-      ...(req ? corsForOrigin(req) : BASE_CORS_HEADERS),
+      ...headers,
     },
   });
 }
 
-/* ------------------------------------------------------------------ */
-/* Gemini                                                            */
-/* ------------------------------------------------------------------ */
+/* ------------------------------------------------------------------
+ * Gemini
+ * ------------------------------------------------------------------ */
 
 const GEMINI_BASE =
   "https://generativelanguage.googleapis.com/v1beta";
@@ -104,9 +111,9 @@ async function callGemini(
   );
 }
 
-/* ------------------------------------------------------------------ */
-/* OpenRouter fallback                                                */
-/* ------------------------------------------------------------------ */
+/* ------------------------------------------------------------------
+ * OpenRouter fallback
+ * ------------------------------------------------------------------ */
 
 async function callOpenRouter(
   apiKey: string,
@@ -123,7 +130,7 @@ async function callOpenRouter(
         "Content-Type": "application/json",
         Authorization: `Bearer ${apiKey}`,
         "HTTP-Referer":
-          "https://kissan-ai-rho.vercel.app",
+          "https://kissan-ai-six.vercel.app",
         "X-Title": "Kissan AI",
       },
       body: JSON.stringify({
@@ -134,7 +141,6 @@ async function callOpenRouter(
             content: `${body.systemPrompt}
 
 IMPORTANT OUTPUT RULES:
-
 - Return ONLY one valid JSON object.
 - Do NOT write explanations before or after the JSON.
 - Do NOT use markdown code fences.
@@ -196,9 +202,9 @@ URDU SCRIPT RULE:
   };
 }
 
-/* ------------------------------------------------------------------ */
-/* Context                                                           */
-/* ------------------------------------------------------------------ */
+/* ------------------------------------------------------------------
+ * Context
+ * ------------------------------------------------------------------ */
 
 interface ChatContextPayload {
   farm?: {
@@ -249,9 +255,9 @@ interface ChatContextPayload {
   }>;
 }
 
-/* ------------------------------------------------------------------ */
-/* Structured reply                                                   */
-/* ------------------------------------------------------------------ */
+/* ------------------------------------------------------------------
+ * Structured reply
+ * ------------------------------------------------------------------ */
 
 interface ChatReply {
   answer: string;
@@ -263,9 +269,9 @@ interface ChatReply {
   recommended_actions: string[];
 }
 
-/* ------------------------------------------------------------------ */
-/* Script helpers                                                     */
-/* ------------------------------------------------------------------ */
+/* ------------------------------------------------------------------
+ * Script helpers
+ * ------------------------------------------------------------------ */
 
 /**
  * Detect Devanagari/Hindi Unicode characters.
@@ -296,9 +302,9 @@ function isBadUrduScript(text: string): boolean {
   );
 }
 
-/* ------------------------------------------------------------------ */
-/* Urdu script correction                                             */
-/* ------------------------------------------------------------------ */
+/* ------------------------------------------------------------------
+ * Urdu script correction
+ * ------------------------------------------------------------------ */
 
 /**
  * If an Urdu response accidentally comes back in Devanagari,
@@ -326,6 +332,7 @@ You are an Urdu script correction assistant.
 Convert the following response from Devanagari/Hindi script into natural Urdu written in Urdu/Arabic script.
 
 STRICT RULES:
+
 1. Preserve the EXACT meaning.
 2. Do NOT add new information.
 3. Do NOT remove important information.
@@ -382,9 +389,9 @@ ${answer}
   }
 }
 
-/* ------------------------------------------------------------------ */
-/* Robust JSON extraction                                             */
-/* ------------------------------------------------------------------ */
+/* ------------------------------------------------------------------
+ * Robust JSON extraction
+ * ------------------------------------------------------------------ */
 
 function extractJson(raw: string): unknown | null {
   if (!raw) {
@@ -431,9 +438,9 @@ function extractJson(raw: string): unknown | null {
   return null;
 }
 
-/* ------------------------------------------------------------------ */
-/* Sanitize reply                                                     */
-/* ------------------------------------------------------------------ */
+/* ------------------------------------------------------------------
+ * Sanitize reply
+ * ------------------------------------------------------------------ */
 
 function sanitizeReply(
   raw: unknown,
@@ -503,9 +510,9 @@ function sanitizeReply(
   };
 }
 
-/* ------------------------------------------------------------------ */
-/* System prompt                                                      */
-/* ------------------------------------------------------------------ */
+/* ------------------------------------------------------------------
+ * System prompt
+ * ------------------------------------------------------------------ */
 
 function buildSystemPrompt(
   context: ChatContextPayload,
@@ -708,31 +715,19 @@ function buildSystemPrompt(
     "- If important information is missing, ask a clarifying question instead of guessing.",
   );
 
-  // ---------------------------------------------------------------
-  // Strong language rules
-  // ---------------------------------------------------------------
-
+  // Strong language rules.
   bits.push(
     `LANGUAGE RULES:
 
 1. Detect the farmer's message language automatically.
-
 2. If the farmer speaks/writes Urdu, answer in Pakistani Urdu.
-
 3. If the farmer prefers Urdu, answer in clear, simple Pakistani Urdu.
-
 4. Urdu MUST be written using Urdu/Arabic script.
-
 5. NEVER write Urdu using Devanagari/Hindi characters.
-
 6. NEVER convert Urdu into Hindi.
-
 7. NEVER answer an Urdu question in English unless the farmer explicitly asks for English.
-
 8. Preserve common Pakistani agricultural terms naturally.
-
 9. If the farmer uses Roman Urdu, you may understand Roman Urdu, but when the preferred language is Urdu, respond in proper Urdu script.
-
 10. If the farmer asks in English and prefers English, answer in simple English.`,
   );
 
@@ -751,9 +746,11 @@ Use Urdu/Arabic script only for Urdu content.
 DO NOT use Devanagari/Hindi script.
 
 Example of correct Urdu:
+
 "آپ کی فصل کو اس وقت زیادہ پانی کی ضرورت ہو سکتی ہے۔"
 
 Example of WRONG output:
+
 "आपकी फसल को इस समय ज्यादा पानी की जरूरत हो सकती है।"
 
 The second example is Hindi/Devanagari and MUST NOT be produced.`,
@@ -787,9 +784,9 @@ The second example is Hindi/Devanagari and MUST NOT be produced.`,
   return bits.join("\n\n");
 }
 
-/* ------------------------------------------------------------------ */
-/* Main handler                                                       */
-/* ------------------------------------------------------------------ */
+/* ------------------------------------------------------------------
+ * Main handler
+ * ------------------------------------------------------------------ */
 
 Deno.serve(async (req: Request) => {
   // CORS
@@ -1114,16 +1111,12 @@ Deno.serve(async (req: Request) => {
               ],
             },
           ],
-
           generationConfig: {
             temperature: 0.4,
-
             responseMimeType:
               "application/json",
-
             responseSchema: {
               type: "OBJECT",
-
               properties: {
                 answer: {
                   type: "STRING",
@@ -1373,13 +1366,10 @@ Deno.serve(async (req: Request) => {
       .insert({
         conversation_id:
           conversationId,
-
         farm_id:
           farmId,
-
         role:
           "assistant",
-
         content:
           parsed.answer,
       })

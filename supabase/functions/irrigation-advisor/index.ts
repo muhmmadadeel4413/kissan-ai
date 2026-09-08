@@ -41,7 +41,6 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
  */
 
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
@@ -49,21 +48,25 @@ const corsHeaders = {
 
 const ALLOWED_ORIGINS = [
   "http://localhost:5173",
-  "https://kissan-ai-rho.vercel.app",
   "http://localhost:3000",
   "http://127.0.0.1:5173",
+  "https://kissan-ai-six.vercel.app",
   "https://vxldkzrmtygurdggtjro.supabase.co",
 ];
 
 function corsForOrigin(req: Request): Record<string, string> {
   const origin = req.headers.get("origin") ?? "";
 
-  return {
+  const headers: Record<string, string> = {
     ...corsHeaders,
-    "Access-Control-Allow-Origin": ALLOWED_ORIGINS.includes(origin)
-      ? origin
-      : ALLOWED_ORIGINS[0],
   };
+
+  if (origin && ALLOWED_ORIGINS.includes(origin)) {
+    headers["Access-Control-Allow-Origin"] = origin;
+    headers["Vary"] = "Origin";
+  }
+
+  return headers;
 }
 
 const MODEL = "gemini-3.5-flash";
@@ -106,7 +109,10 @@ const STAGE_ORDER = [
   "harvest",
 ] as const;
 
-const CROP_CONFIGS: Record<string, { endDays: number[] }> = {
+const CROP_CONFIGS: Record<
+  string,
+  { endDays: number[] }
+> = {
   wheat: {
     endDays: [10, 70, 95, 120, 140, 150],
   },
@@ -145,8 +151,14 @@ const CROP_ALIASES: Record<string, string> = {
   "sugar cane": "sugarcane",
 };
 
-function json(data: unknown, status = 200, req?: Request): Response {
-  const headers = req ? corsForOrigin(req) : corsHeaders;
+function json(
+  data: unknown,
+  status = 200,
+  req?: Request,
+): Response {
+  const headers = req
+    ? corsForOrigin(req)
+    : corsHeaders;
 
   return new Response(JSON.stringify(data), {
     status,
@@ -158,7 +170,7 @@ function json(data: unknown, status = 200, req?: Request): Response {
 }
 
 /* ------------------------------------------------------------------ */
-/* JSON parsing                                                        */
+/* JSON parsing                                                       */
 /* ------------------------------------------------------------------ */
 
 /**
@@ -188,7 +200,9 @@ function parseJsonObject(text: string): unknown | null {
 
   if (first !== -1 && last > first) {
     try {
-      return JSON.parse(cleaned.slice(first, last + 1));
+      return JSON.parse(
+        cleaned.slice(first, last + 1),
+      );
     } catch {
       return null;
     }
@@ -198,7 +212,7 @@ function parseJsonObject(text: string): unknown | null {
 }
 
 /* ------------------------------------------------------------------ */
-/* Deterministic growth stage                                          */
+/* Deterministic growth stage                                         */
 /* ------------------------------------------------------------------ */
 
 function normalizeCrop(crop: string): string {
@@ -210,13 +224,14 @@ function normalizeCrop(crop: string): string {
 
 function getGrowthStage(
   cropRaw: string | null | undefined,
-  plantingDate: string | null | undefined
+  plantingDate: string | null | undefined,
 ): {
   growthStage: string;
   stageLabel: string;
   cropAgeDays: number | null;
 } {
-  const crop = normalizeCrop(cropRaw ?? "") || "Unknown crop";
+  const crop =
+    normalizeCrop(cropRaw ?? "") || "Unknown crop";
 
   if (!plantingDate) {
     return {
@@ -227,7 +242,7 @@ function getGrowthStage(
   }
 
   const planted = new Date(
-    plantingDate + "T00:00:00Z"
+    plantingDate + "T00:00:00Z",
   ).getTime();
 
   if (Number.isNaN(planted)) {
@@ -241,11 +256,11 @@ function getGrowthStage(
   const now = Date.UTC(
     new Date().getUTCFullYear(),
     new Date().getUTCMonth(),
-    new Date().getUTCDate()
+    new Date().getUTCDate(),
   );
 
   const days = Math.floor(
-    (now - planted) / 86_400_000
+    (now - planted) / 86_400_000,
   );
 
   if (days < 0) {
@@ -256,7 +271,9 @@ function getGrowthStage(
     };
   }
 
-  const canonical = CROP_ALIASES[crop] ?? crop;
+  const canonical =
+    CROP_ALIASES[crop] ?? crop;
+
   const config = CROP_CONFIGS[canonical];
 
   if (!config) {
@@ -270,13 +287,20 @@ function getGrowthStage(
   let stage = "harvest";
   let prevEnd = -1;
 
-  for (let i = 0; i < STAGE_ORDER.length; i++) {
+  for (
+    let i = 0;
+    i < STAGE_ORDER.length;
+    i++
+  ) {
     const startDay = prevEnd + 1;
     const endDay = config.endDays[i];
 
     prevEnd = endDay;
 
-    if (days >= startDay && days <= endDay) {
+    if (
+      days >= startDay &&
+      days <= endDay
+    ) {
       stage = STAGE_ORDER[i];
       break;
     }
@@ -290,7 +314,7 @@ function getGrowthStage(
 }
 
 /* ------------------------------------------------------------------ */
-/* Deterministic irrigation rules                                      */
+/* Deterministic irrigation rules                                     */
 /* ------------------------------------------------------------------ */
 
 const RAIN_DELAY = 40;
@@ -317,25 +341,32 @@ const STAGE_WEIGHT: Record<string, number> = {
 };
 
 function isRainDependent(
-  method: string | null | undefined
+  method: string | null | undefined,
 ): boolean {
-  const m = (method ?? "").trim().toLowerCase();
+  const m = (method ?? "")
+    .trim()
+    .toLowerCase();
 
-  return RAIN_DEPENDENT_METHODS.some((k) =>
-    m.includes(k)
+  return RAIN_DEPENDENT_METHODS.some(
+    (k) => m.includes(k),
   );
 }
 
 function effectiveRain(
   currentPct: number | null | undefined,
   forecast:
-    | Array<{ rainProbability?: number }>
-    | undefined
+    | Array<{
+        rainProbability?: number;
+      }>
+    | undefined,
 ): number {
-  const vals = [Number(currentPct) || 0];
+  const vals = [
+    Number(currentPct) || 0,
+  ];
 
   for (const f of forecast ?? []) {
-    const r = Number(f.rainProbability) || 0;
+    const r =
+      Number(f.rainProbability) || 0;
 
     if (r > 0) {
       vals.push(r);
@@ -362,7 +393,7 @@ function decideRules(
   soil: string,
   method: string,
   temp: number | null,
-  rain: number
+  rain: number,
 ): RuleResult {
   void crop;
   void soil;
@@ -378,8 +409,11 @@ function decideRules(
     ? STAGE_WEIGHT[stage] ?? 0.5
     : 0.5;
 
-  const heat = (temp ?? 0) >= HEAT_WARM;
-  const heatHigh = (temp ?? 0) >= HEAT_HIGH;
+  const heat =
+    (temp ?? 0) >= HEAT_WARM;
+
+  const heatHigh =
+    (temp ?? 0) >= HEAT_HIGH;
 
   if (rain >= RAIN_STRONG) {
     return {
@@ -390,7 +424,10 @@ function decideRules(
     };
   }
 
-  if (rain >= RAIN_DELAY && heatHigh) {
+  if (
+    rain >= RAIN_DELAY &&
+    heatHigh
+  ) {
     return {
       status: "irrigation_soon",
       urgency: "medium",
@@ -399,7 +436,10 @@ function decideRules(
     };
   }
 
-  if (isRainDependent(method) && heatHigh) {
+  if (
+    isRainDependent(method) &&
+    heatHigh
+  ) {
     return {
       status: "irrigate_now",
       urgency: "high",
@@ -408,7 +448,10 @@ function decideRules(
     };
   }
 
-  if (isRainDependent(method) && heat) {
+  if (
+    isRainDependent(method) &&
+    heat
+  ) {
     return {
       status: "irrigation_soon",
       urgency: "medium",
@@ -417,7 +460,11 @@ function decideRules(
     };
   }
 
-  if (stage && weight >= 0.9 && heat) {
+  if (
+    stage &&
+    weight >= 0.9 &&
+    heat
+  ) {
     return {
       status: "irrigation_soon",
       urgency: "medium",
@@ -444,12 +491,12 @@ function decideRules(
 }
 
 /* ------------------------------------------------------------------ */
-/* Validation / sanitization                                           */
+/* Validation / sanitization                                          */
 /* ------------------------------------------------------------------ */
 
 function cleanString(
   value: unknown,
-  maxLen: number
+  maxLen: number,
 ): string {
   const s = String(value ?? "")
     .trim()
@@ -461,7 +508,7 @@ function cleanString(
 function cleanStrings(
   value: unknown,
   maxItems: number,
-  maxLen: number
+  maxLen: number,
 ): string[] {
   if (!Array.isArray(value)) {
     return [];
@@ -472,7 +519,10 @@ function cleanStrings(
   for (const v of value) {
     const s = cleanString(v, maxLen);
 
-    if (s && out.length < maxItems) {
+    if (
+      s &&
+      out.length < maxItems
+    ) {
       out.push(s);
     }
   }
@@ -484,16 +534,19 @@ interface ValidatedRecommendation {
   status: string;
   urgency: string;
   recommendation: string;
+
   timing: {
     recommended_time: string;
     reason: string;
   } | null;
+
   waterGuidance: {
     amount: string;
     unit: string;
     confidence: number;
     relative: string;
   };
+
   weatherImpact: string;
   soilImpact: string;
   cropStageImpact: string;
@@ -508,7 +561,7 @@ interface ValidatedRecommendation {
  */
 function sanitizePayload(
   raw: unknown,
-  fallback: RuleResult
+  fallback: RuleResult,
 ): ValidatedRecommendation | null {
   if (
     !raw ||
@@ -519,46 +572,60 @@ function sanitizePayload(
       status: fallback.status,
       urgency: fallback.urgency,
       recommendation: fallback.reason,
+
       timing: null,
+
       waterGuidance: {
         amount: "",
         unit: "",
         confidence: 0,
         relative: "",
       },
+
       weatherImpact: "",
       soilImpact: "",
       cropStageImpact: "",
       rainAdjustment: "",
+
       nextCheck:
         "Check soil moisture again later today or tomorrow.",
+
       importantNotes: [],
       limitations: [],
     };
   }
 
-  const r = raw as Record<string, unknown>;
+  const r =
+    raw as Record<string, unknown>;
 
   const statusRaw = String(
-    r.irrigation_status ?? r.status ?? ""
+    r.irrigation_status ??
+      r.status ??
+      "",
   );
 
-  const status = VALID_STATUSES.has(statusRaw)
-    ? statusRaw
-    : fallback.status;
+  const status =
+    VALID_STATUSES.has(statusRaw)
+      ? statusRaw
+      : fallback.status;
 
   const urgencyRaw = String(
-    r.urgency ?? ""
+    r.urgency ?? "",
   );
 
-  const urgency = VALID_URGENCIES.has(urgencyRaw)
-    ? urgencyRaw
-    : fallback.urgency;
+  const urgency =
+    VALID_URGENCIES.has(urgencyRaw)
+      ? urgencyRaw
+      : fallback.urgency;
 
   const wg =
-    typeof r["water_guidance"] === "object" &&
+    typeof r["water_guidance"] ===
+      "object" &&
     r["water_guidance"]
-      ? (r["water_guidance"] as Record<string, unknown>)
+      ? (r["water_guidance"] as Record<
+          string,
+          unknown
+        >)
       : {};
 
   return {
@@ -566,25 +633,36 @@ function sanitizePayload(
     urgency,
 
     recommendation:
-      cleanString(r["recommendation"], 600) ||
-      fallback.reason,
+      cleanString(
+        r["recommendation"],
+        600,
+      ) || fallback.reason,
 
     timing:
       typeof r["timing"] === "object" &&
       r["timing"]
         ? {
-            recommended_time: cleanString(
-              (
-                r["timing"] as Record<string, unknown>
-              )["recommended_time"],
-              200
-            ),
-            reason: cleanString(
-              (
-                r["timing"] as Record<string, unknown>
-              )["reason"],
-              300
-            ),
+            recommended_time:
+              cleanString(
+                (
+                  r["timing"] as Record<
+                    string,
+                    unknown
+                  >
+                )["recommended_time"],
+                200,
+              ),
+
+            reason:
+              cleanString(
+                (
+                  r["timing"] as Record<
+                    string,
+                    unknown
+                  >
+                )["reason"],
+                300,
+              ),
           }
         : null,
 
@@ -593,58 +671,62 @@ function sanitizePayload(
       amount: "",
       unit: "",
       confidence: 0,
+
       relative: cleanString(
         wg["relative"] ??
           r["water_guidance_relative"],
-        400
+        400,
       ),
     },
 
     weatherImpact: cleanString(
       r["weather_impact"],
-      400
+      400,
     ),
 
     soilImpact: cleanString(
       r["soil_impact"],
-      400
+      400,
     ),
 
     cropStageImpact: cleanString(
       r["crop_stage_impact"],
-      400
+      400,
     ),
 
     rainAdjustment: cleanString(
       r["rain_adjustment"],
-      400
+      400,
     ),
 
     nextCheck:
-      cleanString(r["next_check"], 160) ||
+      cleanString(
+        r["next_check"],
+        160,
+      ) ||
       "Check soil moisture again later today or tomorrow.",
 
     importantNotes: cleanStrings(
       r["important_notes"],
       10,
-      400
+      400,
     ),
 
     limitations: cleanStrings(
       r["limitations"],
       10,
-      400
+      400,
     ),
   };
 }
 
 /* ------------------------------------------------------------------ */
-/* Gemini                                                               */
+/* Gemini                                                             */
 /* ------------------------------------------------------------------ */
 
 async function callGemini(
   apiKey: string,
-  prompt: string
+  prompt: string,
 ): Promise<{ text: string }> {
   const url =
     `${GEMINI_BASE}/models/${MODEL}:generateContent?key=${apiKey}`;
@@ -657,13 +739,19 @@ async function callGemini(
       headers: {
         "Content-Type": "application/json",
       },
+
       body: JSON.stringify({
         contents: [
           {
             role: "user",
-            parts: [{ text: prompt }],
+            parts: [
+              {
+                text: prompt,
+              },
+            ],
           },
         ],
+
         generationConfig: {
           temperature: 0.3,
           responseMimeType: "application/json",
@@ -675,11 +763,11 @@ async function callGemini(
       "irrigation-advisor Gemini network error:",
       error instanceof Error
         ? error.message
-        : error
+        : error,
     );
 
     throw new Error(
-      "Kissan AI is temporarily unavailable. Please try again."
+      "Kissan AI is temporarily unavailable. Please try again.",
     );
   }
 
@@ -687,24 +775,25 @@ async function callGemini(
     const data = await resp.json();
 
     const text =
-      data?.candidates?.[0]?.content?.parts?.[0]?.text ??
-      "";
+      data?.candidates?.[0]?.content
+        ?.parts?.[0]?.text ?? "";
 
     if (!text) {
       throw new Error(
-        "Kissan AI couldn't form irrigation advice. Please try again."
+        "Kissan AI couldn't form irrigation advice. Please try again.",
       );
     }
 
     return { text };
   }
 
-  const errorText = await resp.text();
+  const errorText =
+    await resp.text();
 
   console.error(
     `${MODEL} irrigation-advisor error:`,
     resp.status,
-    errorText.slice(0, 500)
+    errorText.slice(0, 500),
   );
 
   /**
@@ -712,21 +801,23 @@ async function callGemini(
    * Only 429 triggers OpenRouter fallback.
    */
   if (resp.status === 429) {
-    throw new Error("GEMINI_RATE_LIMIT");
+    throw new Error(
+      "GEMINI_RATE_LIMIT",
+    );
   }
 
   throw new Error(
-    "Kissan AI is temporarily unavailable. Please try again."
+    "Kissan AI is temporarily unavailable. Please try again.",
   );
 }
 
 /* ------------------------------------------------------------------ */
-/* OpenRouter fallback                                                  */
+/* OpenRouter fallback                                                */
 /* ------------------------------------------------------------------ */
 
 async function callOpenRouter(
   apiKey: string,
-  prompt: string
+  prompt: string,
 ): Promise<{
   text: string;
   model: string | null;
@@ -734,54 +825,70 @@ async function callOpenRouter(
   let resp: Response;
 
   try {
-    resp = await fetch(OPENROUTER_URL, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer":
-          "https://kissan-ai-rho.vercel.app",
-        "X-Title": "Kissan AI",
+    resp = await fetch(
+      OPENROUTER_URL,
+      {
+        method: "POST",
+
+        headers: {
+          Authorization:
+            `Bearer ${apiKey}`,
+
+          "Content-Type":
+            "application/json",
+
+          "HTTP-Referer":
+            "https://kissan-ai-six.vercel.app",
+
+          "X-Title": "Kissan AI",
+        },
+
+        body: JSON.stringify({
+          model: "openrouter/free",
+
+          messages: [
+            {
+              role: "system",
+              content:
+                "You are Kissan AI's agricultural irrigation decision-support engine. Return ONLY valid JSON. Do not use markdown fences. Do not include a preamble. Do not include safety labels. Do not include commentary outside the JSON object.",
+            },
+
+            {
+              role: "user",
+              content: prompt,
+            },
+          ],
+
+          temperature: 0.3,
+        }),
       },
-      body: JSON.stringify({
-        model: "openrouter/free",
-
-        messages: [
-          {
-            role: "system",
-            content:
-              "You are Kissan AI's agricultural irrigation decision-support engine. Return ONLY valid JSON. Do not use markdown fences. Do not include a preamble. Do not include safety labels. Do not include commentary outside the JSON object.",
-          },
-          {
-            role: "user",
-            content: prompt,
-          },
-        ],
-
-        temperature: 0.3,
-      }),
-    });
+    );
   } catch (error) {
     console.error(
       "irrigation-advisor OpenRouter network error:",
       error instanceof Error
         ? error.message
-        : error
+        : error,
     );
 
-    throw new Error("OPENROUTER_ERROR");
+    throw new Error(
+      "OPENROUTER_ERROR",
+    );
   }
 
   if (!resp.ok) {
-    const errorText = await resp.text();
+    const errorText =
+      await resp.text();
 
     console.error(
       "irrigation-advisor OpenRouter error:",
       resp.status,
-      errorText.slice(0, 500)
+      errorText.slice(0, 500),
     );
 
-    throw new Error("OPENROUTER_ERROR");
+    throw new Error(
+      "OPENROUTER_ERROR",
+    );
   }
 
   const data = await resp.json();
@@ -793,16 +900,16 @@ async function callOpenRouter(
 
   console.log(
     "irrigation-advisor OpenRouter model used:",
-    model ?? "unknown"
+    model ?? "unknown",
   );
 
   const text =
-    data?.choices?.[0]?.message?.content ??
-    "";
+    data?.choices?.[0]?.message
+      ?.content ?? "";
 
   if (!text) {
     throw new Error(
-      "OPENROUTER_EMPTY_RESPONSE"
+      "OPENROUTER_EMPTY_RESPONSE",
     );
   }
 
@@ -813,7 +920,7 @@ async function callOpenRouter(
 }
 
 /* ------------------------------------------------------------------ */
-/* Prompt                                                               */
+/* Prompt                                                             */
 /* ------------------------------------------------------------------ */
 
 interface BuildPromptInput {
@@ -836,6 +943,7 @@ interface BuildPromptInput {
     humidity?: number;
     rainProbability?: number;
     condition?: string;
+
     forecast?: Array<{
       rainProbability?: number;
       condition?: string;
@@ -850,7 +958,7 @@ interface BuildPromptInput {
 }
 
 function buildPrompt(
-  input: BuildPromptInput
+  input: BuildPromptInput,
 ): string {
   const lines: string[] = [];
 
@@ -865,147 +973,151 @@ function buildPrompt(
 
     "Your ONLY task is to write a brief, safe, advisory irrigation explanation using ONLY the supplied context and the deterministic decision already made.",
 
-    "You are advisory decision-support, NOT a replacement for a qualified agricultural professional."
+    "You are advisory decision-support, NOT a replacement for a qualified agricultural professional.",
   );
 
   const safeAmount =
     "An exact water quantity (litres/mm per acre) cannot be reliably estimated from the available information. Follow your local irrigation practice and adjust based on soil moisture and crop conditions.";
 
   lines.push(
-    "DECIDED OUTCOME (deterministic rules — you MUST NOT change this):"
+    "DECIDED OUTCOME (deterministic rules — you MUST NOT change this):",
   );
 
   lines.push(
-    `- status: ${input.baseStatus}`
+    `- status: ${input.baseStatus}`,
   );
 
   lines.push(
-    `- urgency: ${input.baseUrgency}`
+    `- urgency: ${input.baseUrgency}`,
   );
 
   lines.push(
-    `- reason: ${input.baseReason}`
+    `- reason: ${input.baseReason}`,
   );
 
   lines.push(
-    "FARM CONTEXT (real saved data):"
+    "FARM CONTEXT (real saved data):",
   );
 
   lines.push(
-    `- Crop: ${input.crop || "unavailable"}`
+    `- Crop: ${input.crop || "unavailable"}`,
   );
 
   lines.push(
-    `- Growth stage: ${
-      input.growth.stageLabel
-    }${
+    `- Growth stage: ${input.growth.stageLabel}${
       input.growth.cropAgeDays != null
         ? ` (crop age ${input.growth.cropAgeDays} days)`
         : ""
-    }`
+    }`,
   );
 
   lines.push(
     `- Soil type: ${
-      input.farm.soilType || "unavailable"
-    }`
+      input.farm.soilType ||
+      "unavailable"
+    }`,
   );
 
   lines.push(
     `- Irrigation method: ${
       input.farm.irrigationMethod ||
       "unavailable"
-    }`
+    }`,
   );
 
   lines.push(
     `- Location: ${
-      input.farm.location || "unavailable"
-    }`
+      input.farm.location ||
+      "unavailable"
+    }`,
   );
 
   if (input.weather) {
     lines.push(
-      "CURRENT WEATHER (real data):"
+      "CURRENT WEATHER (real data):",
     );
 
     lines.push(
       `- Temperature: ${
-        input.weather.temperature ?? "n/a"
+        input.weather.temperature ??
+        "n/a"
       }°C, Humidity: ${
-        input.weather.humidity ?? "n/a"
+        input.weather.humidity ??
+        "n/a"
       }%, Effective rain probability: ${
         input.rain
-      }%`
+      }%`,
     );
 
     if (input.weather.condition) {
       lines.push(
-        `- Condition: ${input.weather.condition}`
+        `- Condition: ${input.weather.condition}`,
       );
     }
 
     if (
-      Array.isArray(input.weather.forecast) &&
+      Array.isArray(
+        input.weather.forecast,
+      ) &&
       input.weather.forecast.length > 0
     ) {
       lines.push(
-        `- Forecast entries available: ${input.weather.forecast.length}`
+        `- Forecast entries available: ${input.weather.forecast.length}`,
       );
     }
   } else {
     lines.push(
-      "CURRENT WEATHER: unavailable. Do not invent temperatures, rainfall, or humidity; and do not pretend soil moisture is measured."
+      "CURRENT WEATHER: unavailable. Do not invent temperatures, rainfall, or humidity; and do not pretend soil moisture is measured.",
     );
   }
 
   lines.push(
-    "HARD RULES (do not violate):"
+    "HARD RULES (do not violate):",
   );
 
   lines.push(
-    "- Keep the deterministic status and urgency exactly as given. Do not escalate or de-escalate."
+    "- Keep the deterministic status and urgency exactly as given. Do not escalate or de-escalate.",
   );
 
   lines.push(
     "- Do NOT invent an exact water quantity (litres/mm/hectare). Use this exact guidance for the amount: " +
-      safeAmount
+      safeAmount,
   );
 
   lines.push(
-    "- Do not claim soil moisture is measured, dry, or wet unless a soil-moisture reading is supplied. Say 'check soil moisture before deciding'."
+    "- Do not claim soil moisture is measured, dry, or wet unless a soil-moisture reading is supplied. Say 'check soil moisture before deciding'.",
   );
 
   lines.push(
-    "- If status is 'delay', explain that rain is expected and watering should wait."
+    "- If status is 'delay', explain that rain is expected and watering should wait.",
   );
 
   lines.push(
-    "- Respect the growth stage: flowering/fruiting stages have higher water need than maturity/harvest. Do not generalise across stages."
+    "- Respect the growth stage: flowering/fruiting stages have higher water need than maturity/harvest. Do not generalise across stages.",
   );
 
   lines.push(
-    "- Keep the explanation concise, cautious, and grounded in the supplied context only."
+    "- Keep the explanation concise, cautious, and grounded in the supplied context only.",
   );
 
   lines.push(
-    "- NEVER give pesticide/fertilizer doses. If relevant, only say 'follow local agricultural guidance and the product label'."
+    "- NEVER give pesticide/fertilizer doses. If relevant, only say 'follow local agricultural guidance and the product label'.",
   );
 
   lines.push(
-    "- Do not invent soil-moisture measurements."
+    "- Do not invent soil-moisture measurements.",
   );
 
   lines.push(
-    "- Do not invent rainfall amounts, temperatures, humidity, crop measurements, or irrigation system specifications."
+    "- Do not invent rainfall amounts, temperatures, humidity, crop measurements, or irrigation system specifications.",
   );
 
   lines.push(
-    "- If information is unavailable, clearly say that it is unavailable."
+    "- If information is unavailable, clearly say that it is unavailable.",
   );
 
   lines.push(
-    "RESPOND ONLY with JSON matching this exact shape:"
+    "RESPOND ONLY with JSON matching this exact shape:",
   );
 
   lines.push(`
@@ -1025,18 +1137,33 @@ function buildPrompt(
 }
 
 /* ------------------------------------------------------------------ */
-/* Main handler                                                         */
+/* Main handler                                                       */
 /* ------------------------------------------------------------------ */
 
 Deno.serve(async (req: Request) => {
   /* -------------------------------------------------------------- */
-  /* CORS                                                            */
+  /* CORS                                                           */
   /* -------------------------------------------------------------- */
 
   if (req.method === "OPTIONS") {
     return new Response("ok", {
       headers: corsForOrigin(req),
     });
+  }
+
+  /* -------------------------------------------------------------- */
+  /* Method validation                                               */
+  /* -------------------------------------------------------------- */
+
+  if (req.method !== "POST") {
+    return json(
+      {
+        success: false,
+        error: "Method not allowed.",
+      },
+      405,
+      req,
+    );
   }
 
   /* -------------------------------------------------------------- */
@@ -1057,7 +1184,7 @@ Deno.serve(async (req: Request) => {
           "This request is not authorized. Please try again.",
       },
       401,
-      req
+      req,
     );
   }
 
@@ -1076,7 +1203,7 @@ Deno.serve(async (req: Request) => {
           "Kissan AI is temporarily unavailable. Please try again later.",
       },
       503,
-      req
+      req,
     );
   }
 
@@ -1113,7 +1240,7 @@ Deno.serve(async (req: Request) => {
           "We couldn't read your request. Please try again.",
       },
       400,
-      req
+      req,
     );
   }
 
@@ -1132,39 +1259,47 @@ Deno.serve(async (req: Request) => {
           "No farm was found. Please set up your farm first.",
       },
       400,
-      req
+      req,
     );
   }
 
   const language = String(
-    body?.language ?? "en"
+    body?.language ?? "en",
   );
 
   /* -------------------------------------------------------------- */
   /* Supabase admin client                                           */
   /* -------------------------------------------------------------- */
 
-  const supabaseAdmin = createClient(
-    Deno.env.get("SUPABASE_URL") ?? "",
-    Deno.env.get(
-      "SUPABASE_SERVICE_ROLE_KEY"
-    ) ?? ""
-  );
+  const supabaseAdmin =
+    createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get(
+        "SUPABASE_SERVICE_ROLE_KEY",
+      ) ?? "",
+    );
 
   /* -------------------------------------------------------------- */
-  /* Validate caller + farm ownership                               */
+  /* Validate caller + farm ownership                                */
   /* -------------------------------------------------------------- */
 
   const token =
-    auth.slice("Bearer ".length).trim();
+    auth
+      .slice("Bearer ".length)
+      .trim();
 
   const { data: caller } =
-    await supabaseAdmin.auth.getUser(token);
+    await supabaseAdmin.auth.getUser(
+      token,
+    );
 
   const callerId =
     caller?.user?.id ?? null;
 
-  const { data: farmRow, error: farmError } =
+  const {
+    data: farmRow,
+    error: farmError,
+  } =
     await supabaseAdmin
       .from("farms")
       .select("*")
@@ -1179,7 +1314,7 @@ Deno.serve(async (req: Request) => {
           "We couldn't find your farm. Please try again.",
       },
       404,
-      req
+      req,
     );
   }
 
@@ -1194,7 +1329,7 @@ Deno.serve(async (req: Request) => {
           "You don't have access to this farm.",
       },
       403,
-      req
+      req,
     );
   }
 
@@ -1203,24 +1338,29 @@ Deno.serve(async (req: Request) => {
   /* -------------------------------------------------------------- */
 
   const crop =
-    (farmRow.current_crop as string | null) ??
-    "";
+    (farmRow.current_crop as
+      | string
+      | null) ?? "";
 
   const plantingDate =
-    (farmRow.planting_date as string | null) ??
-    null;
+    (farmRow.planting_date as
+      | string
+      | null) ?? null;
 
   const soilType =
-    (farmRow.soil_type as string | null) ??
-    "";
+    (farmRow.soil_type as
+      | string
+      | null) ?? "";
 
   const irrigationMethod =
-    (farmRow.irrigation_method as string | null) ??
-    "";
+    (farmRow.irrigation_method as
+      | string
+      | null) ?? "";
 
   const location =
-    (farmRow.location as string | null) ??
-    "";
+    (farmRow.location as
+      | string
+      | null) ?? "";
 
   /* -------------------------------------------------------------- */
   /* Honest missing-information state                               */
@@ -1248,14 +1388,16 @@ Deno.serve(async (req: Request) => {
         needsMoreInformation: true,
         missingInformation: missing,
         result: null,
+
         summary:
           "More information is needed about your farm before we can recommend irrigation.",
+
         limitations: [
           "Complete the indicated farm profile fields to get tailored irrigation advice.",
         ],
       },
       200,
-      req
+      req,
     );
   }
 
@@ -1263,113 +1405,135 @@ Deno.serve(async (req: Request) => {
   /* Growth stage                                                    */
   /* -------------------------------------------------------------- */
 
-  const growth = getGrowthStage(
-    crop,
-    plantingDate
-  );
+  const growth =
+    getGrowthStage(
+      crop,
+      plantingDate,
+    );
 
   /* -------------------------------------------------------------- */
-  /* Weather + effective rain                                       */
+  /* Weather + effective rain                                        */
   /* -------------------------------------------------------------- */
 
   const weather =
     body.weather ?? null;
 
-  const rain = effectiveRain(
-    weather?.rainProbability,
-    weather?.forecast
-  );
+  const rain =
+    effectiveRain(
+      weather?.rainProbability,
+      weather?.forecast,
+    );
 
   const temp =
-    typeof weather?.temperature === "number"
+    typeof weather?.temperature ===
+    "number"
       ? weather.temperature
       : null;
 
   /* -------------------------------------------------------------- */
-  /* Deterministic safe decision                                    */
+  /* Deterministic safe decision                                     */
   /* -------------------------------------------------------------- */
 
-  const rules = decideRules(
-    crop,
-    growth.growthStage,
-    soilType,
-    irrigationMethod,
-    temp,
-    rain
-  );
+  const rules =
+    decideRules(
+      crop,
+      growth.growthStage,
+      soilType,
+      irrigationMethod,
+      temp,
+      rain,
+    );
 
   /* -------------------------------------------------------------- */
   /* Build AI prompt                                                 */
   /* -------------------------------------------------------------- */
 
-  const prompt = buildPrompt({
-    crop,
-    growth,
-    farm: {
-      soilType,
-      irrigationMethod,
-      location,
-    },
-    weather,
-    baseStatus: rules.status,
-    baseUrgency: rules.urgency,
-    baseReason: rules.reason,
-    rain,
-    language,
-  });
+  const prompt =
+    buildPrompt({
+      crop,
+
+      growth,
+
+      farm: {
+        soilType,
+        irrigationMethod,
+        location,
+      },
+
+      weather,
+
+      baseStatus:
+        rules.status,
+
+      baseUrgency:
+        rules.urgency,
+
+      baseReason:
+        rules.reason,
+
+      rain,
+      language,
+    });
 
   /* -------------------------------------------------------------- */
   /* AI explanation                                                  */
-  /*                                                                */
-  /* Primary: Gemini                                                 */
-  /* Fallback: OpenRouter ONLY on Gemini 429                        */
-  /* -------------------------------------------------------------- */
+  /*
+   * Primary: Gemini
+   * Fallback: OpenRouter ONLY on Gemini 429
+   * -------------------------------------------------------------- */
 
-  let ai: Record<string, unknown> | null =
-    null;
+  let ai: Record<
+    string,
+    unknown
+  > | null = null;
 
   try {
-    const geminiResult = await callGemini(
-      apiKey,
-      prompt
-    );
+    const geminiResult =
+      await callGemini(
+        apiKey,
+        prompt,
+      );
 
-    const parsed = parseJsonObject(
-      geminiResult.text
-    );
+    const parsed =
+      parseJsonObject(
+        geminiResult.text,
+      );
 
     if (
       parsed &&
-      typeof parsed === "object" &&
+      typeof parsed ===
+        "object" &&
       !Array.isArray(parsed)
     ) {
-      ai = parsed as Record<
-        string,
-        unknown
-      >;
+      ai =
+        parsed as Record<
+          string,
+          unknown
+        >;
     } else {
       console.warn(
-        "irrigation-advisor Gemini returned invalid JSON. Using deterministic result."
+        "irrigation-advisor Gemini returned invalid JSON. Using deterministic result.",
       );
 
       ai = null;
     }
   } catch (error) {
     /* ------------------------------------------------------------ */
-    /* Immediate OpenRouter fallback on Gemini 429                 */
+    /* Immediate OpenRouter fallback on Gemini 429                  */
     /* ------------------------------------------------------------ */
 
     if (
       error instanceof Error &&
-      error.message === "GEMINI_RATE_LIMIT"
+      error.message ===
+        "GEMINI_RATE_LIMIT"
     ) {
       console.log(
-        "Gemini rate limit reached. Switching immediately to OpenRouter."
+        "Gemini rate limit reached. Switching immediately to OpenRouter.",
       );
 
       const openRouterKey =
         Deno.env.get(
-          "OPENROUTER_API_KEY"
+          "OPENROUTER_API_KEY",
         );
 
       if (openRouterKey) {
@@ -1377,53 +1541,56 @@ Deno.serve(async (req: Request) => {
           const fallback =
             await callOpenRouter(
               openRouterKey,
-              prompt
+              prompt,
             );
 
           const parsed =
             parseJsonObject(
-              fallback.text
+              fallback.text,
             );
 
           if (
             parsed &&
-            typeof parsed === "object" &&
+            typeof parsed ===
+              "object" &&
             !Array.isArray(parsed)
           ) {
-            ai = parsed as Record<
-              string,
-              unknown
-            >;
+            ai =
+              parsed as Record<
+                string,
+                unknown
+              >;
           } else {
             console.warn(
-              "irrigation-advisor OpenRouter returned invalid JSON. Using deterministic result."
+              "irrigation-advisor OpenRouter returned invalid JSON. Using deterministic result.",
             );
 
             ai = null;
           }
-        } catch (fallbackError) {
+        } catch (
+          fallbackError
+        ) {
           console.error(
             "irrigation-advisor OpenRouter fallback error:",
-            fallbackError instanceof Error
+            fallbackError instanceof
+              Error
               ? fallbackError.message
-              : fallbackError
+              : fallbackError,
           );
 
-          /*
-           * Deterministic rules are still safe,
-           * so do not fail the whole request.
-           */
+          // Deterministic rules are still safe,
+          // so do not fail the whole request.
           ai = null;
         }
       } else {
         console.error(
-          "OPENROUTER_API_KEY is not configured. Using deterministic irrigation result."
+          "OPENROUTER_API_KEY is not configured. Using deterministic irrigation result.",
         );
 
         ai = null;
       }
     } else {
-      /*
+      /**
        * Non-429 Gemini failure:
        * deterministic irrigation rules remain authoritative.
        */
@@ -1431,7 +1598,7 @@ Deno.serve(async (req: Request) => {
         "irrigation-advisor Gemini error:",
         error instanceof Error
           ? error.message
-          : error
+          : error,
       );
 
       ai = null;
@@ -1439,18 +1606,20 @@ Deno.serve(async (req: Request) => {
   }
 
   /* -------------------------------------------------------------- */
-  /* Merge deterministic + AI explanation                           */
+  /* Merge deterministic + AI explanation                            */
   /* -------------------------------------------------------------- */
 
-  const merged: Record<string, unknown> =
-    {
-      ...(ai ?? {}),
-    };
+  const merged: Record<
+    string,
+    unknown
+  > = {
+    ...(ai ?? {}),
+  };
 
   const validatedRec =
     sanitizePayload(
       merged,
-      rules
+      rules,
     );
 
   if (!validatedRec) {
@@ -1461,7 +1630,7 @@ Deno.serve(async (req: Request) => {
           "We couldn't generate irrigation advice right now. Please try again.",
       },
       502,
-      req
+      req,
     );
   }
 
@@ -1469,24 +1638,26 @@ Deno.serve(async (req: Request) => {
   /* Honest limitations                                              */
   /* -------------------------------------------------------------- */
 
-  const limitations: string[] = [];
+  const limitations: string[] =
+    [];
 
   if (!weather) {
     limitations.push(
-      "Live weather is currently unavailable. The recommendation is based on the other available farm information and may be less reliable."
+      "Live weather is currently unavailable. The recommendation is based on the other available farm information and may be less reliable.",
     );
   }
 
   if (
-    growth.growthStage === "unknown"
+    growth.growthStage ===
+    "unknown"
   ) {
     limitations.push(
-      "Crop growth stage is uncertain, which may limit stage-specific guidance."
+      "Crop growth stage is uncertain, which may limit stage-specific guidance.",
     );
   }
 
   limitations.push(
-    "An exact water quantity cannot be reliably estimated from the available information. Follow your local irrigation practice and adjust based on soil moisture and crop conditions."
+    "An exact water quantity cannot be reliably estimated from the available information. Follow your local irrigation practice and adjust based on soil moisture and crop conditions.",
   );
 
   /* -------------------------------------------------------------- */
@@ -1495,15 +1666,23 @@ Deno.serve(async (req: Request) => {
 
   const now = new Date();
 
-  const { data: row, error: insertError } =
+  const {
+    data: row,
+    error: insertError,
+  } =
     await supabaseAdmin
-      .from("irrigation_recommendations")
+      .from(
+        "irrigation_recommendations",
+      )
       .insert({
         farm_id: farmId,
 
         recommendation: {
-          status: validatedRec.status,
-          urgency: validatedRec.urgency,
+          status:
+            validatedRec.status,
+
+          urgency:
+            validatedRec.urgency,
 
           recommendation:
             validatedRec.recommendation,
@@ -1543,7 +1722,8 @@ Deno.serve(async (req: Request) => {
 
         limitations,
 
-        needs_more_information: false,
+        needs_more_information:
+          false,
 
         missing_information: [],
 
@@ -1556,7 +1736,7 @@ Deno.serve(async (req: Request) => {
   if (insertError) {
     console.error(
       "irrigation-advisor insert error:",
-      insertError
+      insertError,
     );
 
     return json(
@@ -1566,21 +1746,22 @@ Deno.serve(async (req: Request) => {
           "We couldn't save this irrigation advice. Please try again.",
       },
       502,
-      req
+      req,
     );
   }
 
   /* -------------------------------------------------------------- */
-  /* Final response                                                   */
+  /* Final response                                                  */
   /* -------------------------------------------------------------- */
 
   return json(
     {
       success: true,
       result: row,
-      generatedAt: now.toISOString(),
+      generatedAt:
+        now.toISOString(),
     },
     200,
-    req
+    req,
   );
 });

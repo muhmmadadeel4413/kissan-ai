@@ -1,6 +1,4 @@
-
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
 /**
@@ -22,7 +20,6 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
  */
 
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
@@ -30,21 +27,25 @@ const corsHeaders = {
 
 const ALLOWED_ORIGINS = [
   "http://localhost:5173",
-  "https://kissan-ai-rho.vercel.app",
   "http://localhost:3000",
   "http://127.0.0.1:5173",
+  "https://kissan-ai-six.vercel.app",
   "https://vxldkzrmtygurdggtjro.supabase.co",
 ];
 
 function corsForOrigin(req: Request): Record<string, string> {
   const origin = req.headers.get("origin") ?? "";
 
-  return {
+  const headers: Record<string, string> = {
     ...corsHeaders,
-    "Access-Control-Allow-Origin": ALLOWED_ORIGINS.includes(origin)
-      ? origin
-      : ALLOWED_ORIGINS[0],
   };
+
+  if (origin && ALLOWED_ORIGINS.includes(origin)) {
+    headers["Access-Control-Allow-Origin"] = origin;
+    headers["Vary"] = "Origin";
+  }
+
+  return headers;
 }
 
 const MODEL = "gemini-3.5-flash";
@@ -55,18 +56,26 @@ const GEMINI_BASE =
 const OPENROUTER_URL =
   "https://openrouter.ai/api/v1/chat/completions";
 
-function json(data: unknown, status = 200): Response {
+function json(
+  data: unknown,
+  status = 200,
+  req?: Request,
+): Response {
+  const headers = req
+    ? corsForOrigin(req)
+    : corsHeaders;
+
   return new Response(JSON.stringify(data), {
     status,
     headers: {
       "Content-Type": "application/json",
-      ...corsHeaders,
+      ...headers,
     },
   });
 }
 
 /* ------------------------------------------------------------------ */
-/* Gemini                                                              */
+/* Gemini                                                             */
 /* ------------------------------------------------------------------ */
 
 /**
@@ -80,7 +89,8 @@ async function callGemini(
   apiKey: string,
   body: Record<string, unknown>,
 ): Promise<{ text: string }> {
-  const url = `${GEMINI_BASE}/models/${MODEL}:generateContent?key=${apiKey}`;
+  const url =
+    `${GEMINI_BASE}/models/${MODEL}:generateContent?key=${apiKey}`;
 
   let resp: Response;
 
@@ -125,7 +135,7 @@ async function callGemini(
 }
 
 /* ------------------------------------------------------------------ */
-/* OpenRouter fallback                                                 */
+/* OpenRouter fallback                                                */
 /* ------------------------------------------------------------------ */
 
 async function callOpenRouter(
@@ -139,7 +149,7 @@ async function callOpenRouter(
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
-      "HTTP-Referer": "https://kissan-ai-rho.vercel.app",
+      "HTTP-Referer": "https://kissan-ai-six.vercel.app",
       "X-Title": "Kissan AI",
     },
     body: JSON.stringify({
@@ -229,7 +239,7 @@ async function callOpenRouter(
 }
 
 /* ------------------------------------------------------------------ */
-/* Helpers                                                             */
+/* Helpers                                                            */
 /* ------------------------------------------------------------------ */
 
 /**
@@ -369,7 +379,7 @@ function parseDiagnosis(text: string): {
 }
 
 /* ------------------------------------------------------------------ */
-/* Main handler                                                        */
+/* Main handler                                                       */
 /* ------------------------------------------------------------------ */
 
 Deno.serve(async (req: Request) => {
@@ -378,6 +388,18 @@ Deno.serve(async (req: Request) => {
     return new Response("ok", {
       headers: corsForOrigin(req),
     });
+  }
+
+  /* Only POST is supported */
+  if (req.method !== "POST") {
+    return json(
+      {
+        success: false,
+        error: "Method not allowed.",
+      },
+      405,
+      req,
+    );
   }
 
   /* Lightweight JWT sanity check */
@@ -395,6 +417,7 @@ Deno.serve(async (req: Request) => {
           "This request is not authorized. Please try again.",
       },
       401,
+      req,
     );
   }
 
@@ -409,6 +432,7 @@ Deno.serve(async (req: Request) => {
           "AI diagnosis is not configured yet. Add the Gemini API key in the project settings to enable the Crop Doctor.",
       },
       503,
+      req,
     );
   }
 
@@ -431,6 +455,7 @@ Deno.serve(async (req: Request) => {
           "We couldn't read your request. Please try again.",
       },
       400,
+      req,
     );
   }
 
@@ -455,11 +480,12 @@ Deno.serve(async (req: Request) => {
           "No photo was provided. Please upload one first.",
       },
       400,
+      req,
     );
   }
 
   /* -------------------------------------------------------------- */
-  /* Download stored image                                           */
+  /* Download stored image                                          */
   /* -------------------------------------------------------------- */
 
   let imageResp: Response;
@@ -474,6 +500,7 @@ Deno.serve(async (req: Request) => {
           "We couldn't retrieve your photo. Please try again.",
       },
       502,
+      req,
     );
   }
 
@@ -485,6 +512,7 @@ Deno.serve(async (req: Request) => {
           "We couldn't retrieve your photo. Please try again.",
       },
       502,
+      req,
     );
   }
 
@@ -499,7 +527,7 @@ Deno.serve(async (req: Request) => {
   const base64 = bytesToBase64(imageBytes);
 
   /* -------------------------------------------------------------- */
-  /* Build context                                                   */
+  /* Build context                                                  */
   /* -------------------------------------------------------------- */
 
   const contextBits = [
@@ -523,21 +551,25 @@ Deno.serve(async (req: Request) => {
   const systemContext =
     contextBits.length > 0
       ? `The photo is of ${cropName} on a farm in South Asia (e.g. Pakistan).
+
 Context provided by the farmer:
+
 ${contextBits.join("\n")}`
       : `The photo is of a crop on a farm in South Asia (e.g. Pakistan). No additional context was provided.`;
 
   /* -------------------------------------------------------------- */
-  /* Diagnosis prompt                                                */
+  /* Diagnosis prompt                                               */
   /* -------------------------------------------------------------- */
 
-  const prompt = `You are a trusted crop-health expert for smallholder farmers in South Asia (Pakistan). You diagnose plant problems from photos.
+  const prompt = `
+You are a trusted crop-health expert for smallholder farmers in South Asia (Pakistan). You diagnose plant problems from photos.
 
 ${systemContext}
 
 Look carefully at the photo of the crop/leaf. Identify the most likely problem.
 
 Be honest and careful:
+
 - If the image is unclear, say so.
 - If you cannot confidently identify a specific problem, use a diagnosis such as "Unclear — could not confidently identify".
 - Set confidence low when visual evidence is weak.
@@ -546,7 +578,9 @@ Be honest and careful:
 - Do not recommend dangerous pesticide mixing or unsafe chemical practices.
 
 Respond ONLY with valid JSON matching this schema.
+
 Do not use markdown.
+
 Do not add text before or after the JSON.
 
 Schema:
@@ -559,13 +593,15 @@ Schema:
   "causes": ["likely cause 1", "likely cause 2"],
   "recommendedActions": ["simple, affordable, safe action 1", "action 2", "action 3"],
   "notes": "Any important caveat, e.g. when to consult a local agricultural officer. Always remind that this is AI guidance, not a substitute for a professional."
-}`.trim();
+}
+`.trim();
 
   /* -------------------------------------------------------------- */
-  /* Gemini first → OpenRouter fallback                              */
+  /* Gemini first → OpenRouter fallback                             */
   /* -------------------------------------------------------------- */
 
   let modelText = "";
+
   let provider: "gemini" | "openrouter" = "gemini";
 
   const geminiBody = {
@@ -587,6 +623,7 @@ Schema:
 
     generationConfig: {
       temperature: 0.3,
+
       responseMimeType: "application/json",
 
       responseSchema: {
@@ -680,6 +717,7 @@ Schema:
               "The AI request limit was reached and the backup AI service is not configured yet. Please try again shortly.",
           },
           502,
+          req,
         );
       }
 
@@ -717,6 +755,7 @@ Schema:
               "The AI couldn't analyze this photo right now. Please try again.",
           },
           502,
+          req,
         );
       }
     } else {
@@ -727,12 +766,13 @@ Schema:
             "The AI couldn't analyze this photo right now. Please try again.",
         },
         502,
+        req,
       );
     }
   }
 
   /* -------------------------------------------------------------- */
-  /* Parse diagnosis                                                 */
+  /* Parse diagnosis                                                */
   /* -------------------------------------------------------------- */
 
   const parsed =
@@ -751,11 +791,12 @@ Schema:
           "The AI returned an unexpected result. Please try another photo.",
       },
       502,
+      req,
     );
   }
 
   /* -------------------------------------------------------------- */
-  /* Supabase admin client                                           */
+  /* Supabase admin client                                          */
   /* -------------------------------------------------------------- */
 
   const supabaseUrl =
@@ -772,7 +813,7 @@ Schema:
   );
 
   /* -------------------------------------------------------------- */
-  /* Farm ownership                                                  */
+  /* Farm ownership                                                 */
   /* -------------------------------------------------------------- */
 
   if (farmId) {
@@ -807,12 +848,13 @@ Schema:
             "You don't have access to that farm.",
         },
         403,
+        req,
       );
     }
   }
 
   /* -------------------------------------------------------------- */
-  /* Persist diagnosis                                               */
+  /* Persist diagnosis                                              */
   /* -------------------------------------------------------------- */
 
   const insertPayload: Record<
@@ -855,6 +897,7 @@ Schema:
           "We analyzed the photo but couldn't save the result. Please try again.",
       },
       502,
+      req,
     );
   }
 
@@ -862,8 +905,12 @@ Schema:
   /* Success                                                         */
   /* -------------------------------------------------------------- */
 
-  return json({
-    success: true,
-    diagnosis: row,
-  });
+  return json(
+    {
+      success: true,
+      diagnosis: row,
+    },
+    200,
+    req,
+  );
 });

@@ -1,4 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
 /**
@@ -19,7 +20,6 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
  */
 
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
@@ -27,22 +27,43 @@ const corsHeaders = {
 
 const ALLOWED_ORIGINS = [
   "http://localhost:5173",
-  "https://kissan-ai-rho.vercel.app",
   "http://localhost:3000",
   "http://127.0.0.1:5173",
+  "https://kissan-ai-six.vercel.app",
   "https://vxldkzrmtygurdggtjro.supabase.co",
 ];
 
 function corsForOrigin(req: Request): Record<string, string> {
   const origin = req.headers.get("origin") ?? "";
 
-  return {
+  const headers: Record<string, string> = {
     ...corsHeaders,
-    "Access-Control-Allow-Origin":
-      ALLOWED_ORIGINS.includes(origin)
-        ? origin
-        : ALLOWED_ORIGINS[0],
   };
+
+  if (origin && ALLOWED_ORIGINS.includes(origin)) {
+    headers["Access-Control-Allow-Origin"] = origin;
+    headers["Vary"] = "Origin";
+  }
+
+  return headers;
+}
+
+function json(
+  data: unknown,
+  status = 200,
+  req?: Request,
+): Response {
+  const headers = req
+    ? corsForOrigin(req)
+    : corsHeaders;
+
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: {
+      "Content-Type": "application/json",
+      ...headers,
+    },
+  });
 }
 
 const MODEL = "gemini-3.5-flash";
@@ -56,23 +77,9 @@ const VALID_SUITABILITY = new Set([
   "low",
 ]);
 
-function json(
-  data: unknown,
-  status = 200,
-  req?: Request
-): Response {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: {
-      "Content-Type": "application/json",
-      ...(req ? corsForOrigin(req) : corsHeaders),
-    },
-  });
-}
-
-/* ------------------------------------------------------------------ */
-/* Gemini */
-/* ------------------------------------------------------------------ */
+/* ------------------------------------------------------------------
+ * Gemini
+ * ------------------------------------------------------------------ */
 
 const GEMINI_BASE =
   "https://generativelanguage.googleapis.com/v1beta";
@@ -86,28 +93,44 @@ const GEMINI_BASE =
  */
 async function callGemini(
   apiKey: string,
-  body: Record<string, unknown>
+  body: Record<string, unknown>,
 ): Promise<{ text: string }> {
   const url =
     `${GEMINI_BASE}/models/${MODEL}:generateContent?key=${apiKey}`;
 
-  const resp = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-  });
+  let resp: Response;
+
+  try {
+    resp = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+  } catch (error) {
+    console.error(
+      "Gemini network error:",
+      error instanceof Error
+        ? error.message
+        : error,
+    );
+
+    throw new Error(
+      "Kissan AI is temporarily unavailable. Please try again.",
+    );
+  }
 
   if (resp.ok) {
     const data = await resp.json();
 
     const text =
-      data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+      data?.candidates?.[0]?.content?.parts?.[0]?.text ??
+      "";
 
     if (!text) {
       throw new Error(
-        "Kissan AI couldn't form a reply."
+        "Kissan AI couldn't form a reply.",
       );
     }
 
@@ -121,17 +144,17 @@ async function callGemini(
   console.error(
     "Gemini error:",
     resp.status,
-    errText.slice(0, 1000)
+    errText.slice(0, 1000),
   );
 
-  /*
+  /**
    * IMPORTANT:
    * No retry on 429.
    * Immediately switch to OpenRouter.
    */
   if (resp.status === 429) {
     const error = new Error(
-      "Gemini rate limit exceeded"
+      "Gemini rate limit exceeded",
     );
 
     error.name = "GEMINI_RATE_LIMIT";
@@ -140,43 +163,44 @@ async function callGemini(
   }
 
   throw new Error(
-    "Kissan AI is temporarily unavailable. Please try again."
+    "Kissan AI is temporarily unavailable. Please try again.",
   );
 }
 
-/* ------------------------------------------------------------------ */
-/* OpenRouter fallback */
-/* ------------------------------------------------------------------ */
+/* ------------------------------------------------------------------
+ * OpenRouter fallback
+ * ------------------------------------------------------------------ */
 
 async function callOpenRouter(
   apiKey: string,
   body: {
     systemPrompt: string;
     userMessage: string;
-  }
+  },
 ): Promise<{ text: string }> {
-  const response = await fetch(
-    "https://openrouter.ai/api/v1/chat/completions",
-    {
-      method: "POST",
+  let response: Response;
 
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-        "HTTP-Referer":
-          "https://kissan-ai-rho.vercel.app",
-        "X-Title": "Kissan AI",
-      },
-
-      body: JSON.stringify({
-        model: "openrouter/free",
-
-        messages: [
-          {
-            role: "system",
-            content: `${body.systemPrompt}
+  try {
+    response = await fetch(
+      "https://openrouter.ai/api/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+          "HTTP-Referer":
+            "https://kissan-ai-six.vercel.app",
+          "X-Title": "Kissan AI",
+        },
+        body: JSON.stringify({
+          model: "openrouter/free",
+          messages: [
+            {
+              role: "system",
+              content: `${body.systemPrompt}
 
 IMPORTANT OUTPUT RULES:
+
 - Return ONLY one valid JSON object.
 - Do NOT use markdown code fences.
 - Do NOT write any text before or after the JSON.
@@ -196,17 +220,28 @@ IMPORTANT OUTPUT RULES:
   limitations,
   needs_more_information,
   missing_information.`,
-          },
-          {
-            role: "user",
-            content: body.userMessage,
-          },
-        ],
+            },
+            {
+              role: "user",
+              content: body.userMessage,
+            },
+          ],
+          temperature: 0.2,
+        }),
+      },
+    );
+  } catch (error) {
+    console.error(
+      "OpenRouter network error:",
+      error instanceof Error
+        ? error.message
+        : error,
+    );
 
-        temperature: 0.2,
-      }),
-    }
-  );
+    throw new Error(
+      "OpenRouter fallback failed.",
+    );
+  }
 
   if (!response.ok) {
     const errorText = await response.text();
@@ -214,36 +249,33 @@ IMPORTANT OUTPUT RULES:
     console.error(
       "OpenRouter error:",
       response.status,
-      errorText.slice(0, 1000)
+      errorText.slice(0, 1000),
     );
 
     throw new Error(
-      "OpenRouter fallback failed."
+      "OpenRouter fallback failed.",
     );
   }
 
   const data = await response.json();
 
-  /*
-   * OpenRouter returns the actual selected model
-   * in data.model.
-   */
   console.log(
     "OpenRouter selected model:",
-    data?.model ?? "unknown"
+    data?.model ?? "unknown",
   );
 
   const text =
-    data?.choices?.[0]?.message?.content ?? "";
+    data?.choices?.[0]?.message?.content ??
+    "";
 
   console.log(
     "OpenRouter raw response:",
-    String(text).slice(0, 2000)
+    String(text).slice(0, 2000),
   );
 
   if (!text) {
     throw new Error(
-      "OpenRouter returned an empty response."
+      "OpenRouter returned an empty response.",
     );
   }
 
@@ -252,13 +284,13 @@ IMPORTANT OUTPUT RULES:
   };
 }
 
-/* ------------------------------------------------------------------ */
-/* Validation / sanitization */
-/* ------------------------------------------------------------------ */
+/* ------------------------------------------------------------------
+ * Validation / sanitization
+ * ------------------------------------------------------------------ */
 
 function cleanString(
   value: unknown,
-  maxLen: number
+  maxLen: number,
 ): string {
   const s = String(value ?? "")
     .trim()
@@ -270,7 +302,7 @@ function cleanString(
 function cleanStrings(
   value: unknown,
   maxItems: number,
-  maxLen: number
+  maxLen: number,
 ): string[] {
   if (!Array.isArray(value)) {
     return [];
@@ -309,9 +341,13 @@ interface ValidatedPayload {
 }
 
 function sanitizePayload(
-  raw: unknown
+  raw: unknown,
 ): ValidatedPayload | null {
-  if (!raw || typeof raw !== "object") {
+  if (
+    !raw ||
+    typeof raw !== "object" ||
+    Array.isArray(raw)
+  ) {
     return null;
   }
 
@@ -335,7 +371,8 @@ function sanitizePayload(
 
     if (
       !item ||
-      typeof item !== "object"
+      typeof item !== "object" ||
+      Array.isArray(item)
     ) {
       continue;
     }
@@ -354,7 +391,7 @@ function sanitizePayload(
       cleanString(
         it.why_suitable ??
           it.reason,
-        600
+        600,
       );
 
     if (!whySuitable) {
@@ -363,64 +400,63 @@ function sanitizePayload(
 
     const suitabilityRaw =
       String(
-        it.suitability ?? ""
-      ).toLowerCase();
+        it.suitability ?? "",
+      )
+        .trim()
+        .toLowerCase();
 
     const suitability =
       VALID_SUITABILITY.has(
-        suitabilityRaw
+        suitabilityRaw,
       )
-        ? (suitabilityRaw as ValidatedRecommendation["suitability"])
+        ? (
+            suitabilityRaw as
+              ValidatedRecommendation["suitability"]
+          )
         : "moderate";
 
     const confidenceNumber =
       Number(it.confidence);
 
-    const confidence = Math.max(
-      0,
-      Math.min(
-        100,
-        Math.round(
-          Number.isFinite(
-            confidenceNumber
-          )
-            ? confidenceNumber
-            : 0
-        )
-      )
-    );
+    const confidence =
+      Math.max(
+        0,
+        Math.min(
+          100,
+          Math.round(
+            Number.isFinite(
+              confidenceNumber,
+            )
+              ? confidenceNumber
+              : 0,
+          ),
+        ),
+      );
 
     recommendations.push({
       crop,
-
       suitability,
-
       confidence,
-
       whySuitable,
-
       soilFit: cleanString(
         it.soil_fit,
-        400
+        400,
       ),
-
       waterRequirement:
         cleanString(
           it.water_requirement,
-          400
+          400,
         ),
-
       weatherFit:
         cleanString(
           it.weather_fit,
-          400
+          400,
         ),
-
       keyConsiderations:
         cleanStrings(
           it.key_considerations,
           8,
-          300
+          300,
         ),
     });
   }
@@ -434,65 +470,59 @@ function sanitizePayload(
 
   return {
     recommendations,
-
     summary: cleanString(
       r.summary,
-      600
+      600,
     ),
-
     limitations:
       cleanStrings(
         r.limitations,
         10,
-        400
+        400,
       ),
-
     needsMoreInformation:
-      r.needs_more_information ===
-      true,
-
+      r.needs_more_information === true,
     missingInformation:
       cleanStrings(
         r.missing_information,
         12,
-        200
+        200,
       ),
   };
 }
 
-/* ------------------------------------------------------------------ */
-/* Robust JSON extraction */
-/* ------------------------------------------------------------------ */
+/* ------------------------------------------------------------------
+ * Robust JSON extraction
+ * ------------------------------------------------------------------ */
 
 function extractJson(
-  raw: string
+  raw: string,
 ): unknown | null {
   if (!raw) {
     return null;
   }
 
-  let text =
-    raw.trim();
+  let text = raw.trim();
 
-  /*
+  /**
    * Remove markdown JSON fences.
    */
   text = text
     .replace(
       /^```json\s*/i,
-      ""
+      "",
     )
     .replace(
       /^```\s*/i,
-      ""
+      "",
     )
     .replace(
       /\s*```$/i,
-      ""
+      "",
     )
     .trim();
 
-  /*
+  /**
    * First try the complete response.
    */
   try {
@@ -501,8 +531,8 @@ function extractJson(
     // Continue.
   }
 
-  /*
-   * Some free models may add text around JSON.
+  /**
+   * Some models may add text around JSON.
    * Extract the first complete-looking JSON object.
    */
   const firstBrace =
@@ -519,13 +549,11 @@ function extractJson(
     const candidate =
       text.slice(
         firstBrace,
-        lastBrace + 1
+        lastBrace + 1,
       );
 
     try {
-      return JSON.parse(
-        candidate
-      );
+      return JSON.parse(candidate);
     } catch {
       return null;
     }
@@ -534,9 +562,9 @@ function extractJson(
   return null;
 }
 
-/* ------------------------------------------------------------------ */
-/* Growth stage */
-/* ------------------------------------------------------------------ */
+/* ------------------------------------------------------------------
+ * Growth stage
+ * ------------------------------------------------------------------ */
 
 const STAGE_LABELS: Record<
   string,
@@ -544,19 +572,14 @@ const STAGE_LABELS: Record<
 > = {
   germination:
     "Germination / Emergence",
-
   vegetative:
     "Vegetative",
-
   flowering:
     "Flowering",
-
   fruiting:
     "Fruiting / Reproductive",
-
   maturity:
     "Maturity",
-
   harvest:
     "Harvest / Ready",
 };
@@ -584,7 +607,6 @@ const CROP_CONFIGS: Record<
       150,
     ],
   },
-
   rice: {
     endDays: [
       7,
@@ -595,7 +617,6 @@ const CROP_CONFIGS: Record<
       140,
     ],
   },
-
   cotton: {
     endDays: [
       14,
@@ -606,7 +627,6 @@ const CROP_CONFIGS: Record<
       180,
     ],
   },
-
   maize: {
     endDays: [
       7,
@@ -617,7 +637,6 @@ const CROP_CONFIGS: Record<
       120,
     ],
   },
-
   sugarcane: {
     endDays: [
       30,
@@ -651,12 +670,11 @@ const CROP_ALIASES: Record<
 
   sugarcane: "sugarcane",
   ganna: "sugarcane",
-  "sugar cane":
-    "sugarcane",
+  "sugar cane": "sugarcane",
 };
 
 function normalizeCrop(
-  crop: string
+  crop: string,
 ): string {
   return crop
     .trim()
@@ -669,11 +687,10 @@ function getGrowthStage(
     | string
     | null
     | undefined,
-
   plantingDate:
     | string
     | null
-    | undefined
+    | undefined,
 ): {
   growthStage: string;
   stageLabel: string;
@@ -681,7 +698,7 @@ function getGrowthStage(
 } {
   const crop =
     normalizeCrop(
-      cropRaw ?? ""
+      cropRaw ?? "",
     ) || "Unknown crop";
 
   if (!plantingDate) {
@@ -695,7 +712,7 @@ function getGrowthStage(
 
   const planted =
     new Date(
-      `${plantingDate}T00:00:00Z`
+      `${plantingDate}T00:00:00Z`,
     ).getTime();
 
   if (Number.isNaN(planted)) {
@@ -711,13 +728,13 @@ function getGrowthStage(
     Date.UTC(
       new Date().getUTCFullYear(),
       new Date().getUTCMonth(),
-      new Date().getUTCDate()
+      new Date().getUTCDate(),
     );
 
   const days =
     Math.floor(
       (now - planted) /
-        86_400_000
+        86_400_000,
     );
 
   if (days < 0) {
@@ -748,9 +765,7 @@ function getGrowthStage(
     };
   }
 
-  let stage =
-    "harvest";
-
+  let stage = "harvest";
   let prevEnd = -1;
 
   for (
@@ -772,7 +787,6 @@ function getGrowthStage(
     ) {
       stage =
         STAGE_ORDER[i];
-
       break;
     }
   }
@@ -780,18 +794,17 @@ function getGrowthStage(
   return {
     growthStage:
       stage,
-
     stageLabel:
-      STAGE_LABELS[stage],
-
+      STAGE_LABELS[stage] ??
+      "Growth stage unavailable",
     cropAgeDays:
       days,
   };
 }
 
-/* ------------------------------------------------------------------ */
-/* Recommendation input */
-/* ------------------------------------------------------------------ */
+/* ------------------------------------------------------------------
+ * Recommendation input
+ * ------------------------------------------------------------------ */
 
 interface RecommendationInput {
   farm: {
@@ -816,7 +829,6 @@ interface RecommendationInput {
     rainProbability?: number;
     windSpeed?: number;
     condition?: string;
-
     forecast?: Array<{
       date?: string;
       condition?: string;
@@ -835,12 +847,12 @@ interface RecommendationInput {
   language: string;
 }
 
-/* ------------------------------------------------------------------ */
-/* Recommendation prompt */
-/* ------------------------------------------------------------------ */
+/* ------------------------------------------------------------------
+ * Recommendation prompt
+ * ------------------------------------------------------------------ */
 
 function buildRecommendationPrompt(
-  input: RecommendationInput
+  input: RecommendationInput,
 ): string {
   const lines: string[] = [];
 
@@ -855,11 +867,11 @@ function buildRecommendationPrompt(
 
     "Your ONLY task is to recommend a small set of crops that MAY be suitable for THIS farm, using ONLY the supplied farm context.",
 
-    "You are advisory decision-support, NOT a replacement for a qualified agricultural professional, and never a guarantee of yield or profit."
+    "You are advisory decision-support, NOT a replacement for a qualified agricultural professional, and never a guarantee of yield or profit.",
   );
 
   lines.push(
-    "RULES:"
+    "RULES:",
   );
 
   lines.push(
@@ -883,39 +895,39 @@ function buildRecommendationPrompt(
 
     "- Use cautious advisory language such as 'may be suitable' and 'based on the available farm information'.",
 
-    "- RESPOND WITH JSON ONLY. Do not include markdown or extra text."
+    "- RESPOND WITH JSON ONLY. Do not include markdown or extra text.",
   );
 
   lines.push(
-    "FARM CONTEXT (real saved data):"
+    "FARM CONTEXT (real saved data):",
   );
 
   lines.push(
     `- Farm location: ${
       input.farm.location ??
       "unavailable"
-    }`
+    }`,
   );
 
   lines.push(
     `- Land area: ${
       input.farm.landArea ??
       "unavailable"
-    }`
+    }`,
   );
 
   lines.push(
     `- Soil type: ${
       input.farm.soilType ??
       "unavailable"
-    }`
+    }`,
   );
 
   lines.push(
     `- Irrigation method: ${
       input.farm.irrigationMethod ??
       "unavailable"
-    }`
+    }`,
   );
 
   lines.push(
@@ -926,14 +938,14 @@ function buildRecommendationPrompt(
       input.farm.variety
         ? ` (${input.farm.variety})`
         : ""
-    }`
+    }`,
   );
 
   lines.push(
     `- Planting date: ${
       input.farm.plantingDate ??
       "unavailable"
-    }`
+    }`,
   );
 
   lines.push(
@@ -944,7 +956,7 @@ function buildRecommendationPrompt(
       null
         ? ` (crop age ${input.growth.cropAgeDays} days)`
         : ""
-    }`
+    }`,
   );
 
   if (input.weather) {
@@ -952,7 +964,7 @@ function buildRecommendationPrompt(
       input.weather;
 
     lines.push(
-      "CURRENT WEATHER (real data, when live):"
+      "CURRENT WEATHER (real data, when live):",
     );
 
     lines.push(
@@ -971,12 +983,12 @@ function buildRecommendationPrompt(
       } km/h, Condition: ${
         w.condition ??
         "n/a"
-      }`
+      }`,
     );
 
     if (
       Array.isArray(
-        w.forecast
+        w.forecast,
       ) &&
       w.forecast.length > 0
     ) {
@@ -993,12 +1005,12 @@ function buildRecommendationPrompt(
         }°C, rain ${
           tomorrow.rainProbability ??
           "n/a"
-        }%`
+        }%`,
       );
     }
   } else {
     lines.push(
-      "CURRENT WEATHER: unavailable. Do not invent temperatures, rainfall, or humidity."
+      "CURRENT WEATHER: unavailable. Do not invent temperatures, rainfall, or humidity.",
     );
   }
 
@@ -1007,22 +1019,22 @@ function buildRecommendationPrompt(
       .length > 0
   ) {
     lines.push(
-      "RECENT CROP DIAGNOSES:"
+      "RECENT CROP DIAGNOSES:",
     );
 
     for (
       const d of input.recentDiagnoses.slice(
         0,
-        3
+        3,
       )
     ) {
       lines.push(
-        `- ${d.diagnosis} (severity ${d.severity}, confidence ${d.confidence}%, ${d.createdAt})`
+        `- ${d.diagnosis} (severity ${d.severity}, confidence ${d.confidence}%, ${d.createdAt})`,
       );
     }
   } else {
     lines.push(
-      "RECENT CROP DIAGNOSES: none available."
+      "RECENT CROP DIAGNOSES: none available.",
     );
   }
 
@@ -1045,32 +1057,36 @@ function buildRecommendationPrompt(
   "limitations": ["string"],
   "needs_more_information": false,
   "missing_information": []
-}`
+}`,
   );
 
-  return lines.join(
-    "\n"
-  );
+  return lines.join("\n");
 }
 
-/* ------------------------------------------------------------------ */
-/* Main handler */
-/* ------------------------------------------------------------------ */
+/* ------------------------------------------------------------------
+ * Main handler
+ * ------------------------------------------------------------------ */
 
 Deno.serve(
   async (req: Request) => {
     /* CORS */
 
-    if (
-      req.method ===
-      "OPTIONS"
-    ) {
-      return new Response(
-        "ok",
+    if (req.method === "OPTIONS") {
+      return new Response("ok", {
+        headers: corsForOrigin(req),
+      });
+    }
+
+    /* Method validation */
+
+    if (req.method !== "POST") {
+      return json(
         {
-          headers:
-            corsForOrigin(req),
-        }
+          success: false,
+          error: "Method not allowed.",
+        },
+        405,
+        req,
       );
     }
 
@@ -1078,15 +1094,21 @@ Deno.serve(
 
     const auth =
       req.headers.get(
-        "Authorization"
+        "Authorization",
       ) ?? "";
+
+    const token =
+      auth
+        .slice(
+          "Bearer ".length,
+        )
+        .trim();
 
     if (
       !auth.startsWith(
-        "Bearer "
+        "Bearer ",
       ) ||
-      auth.split(".").length !==
-        3
+      token.split(".").length !== 3
     ) {
       return json(
         {
@@ -1095,7 +1117,7 @@ Deno.serve(
             "This request is not authorized. Please try again.",
         },
         401,
-        req
+        req,
       );
     }
 
@@ -1103,7 +1125,7 @@ Deno.serve(
 
     const geminiApiKey =
       Deno.env.get(
-        "GEMINI_API_KEY"
+        "GEMINI_API_KEY",
       );
 
     if (!geminiApiKey) {
@@ -1114,7 +1136,7 @@ Deno.serve(
             "Kissan AI is temporarily unavailable. Please try again later.",
         },
         503,
-        req
+        req,
       );
     }
 
@@ -1139,14 +1161,13 @@ Deno.serve(
             "We couldn't read your request. Please try again.",
         },
         400,
-        req
+        req,
       );
     }
 
     const farmId =
-      (
-        body?.farmId ??
-        ""
+      String(
+        body?.farmId ?? "",
       ).trim();
 
     if (!farmId) {
@@ -1157,48 +1178,97 @@ Deno.serve(
             "No farm was found. Please set up your farm first.",
         },
         400,
-        req
+        req,
       );
     }
 
     const language =
       String(
-        body?.language ??
-          "en"
+        body?.language ?? "en",
+      ).trim() || "en";
+
+    const supabaseUrl =
+      Deno.env.get(
+        "SUPABASE_URL",
+      ) ?? "";
+
+    const serviceRoleKey =
+      Deno.env.get(
+        "SUPABASE_SERVICE_ROLE_KEY",
+      ) ?? "";
+
+    if (
+      !supabaseUrl ||
+      !serviceRoleKey
+    ) {
+      console.error(
+        "Supabase environment variables are not configured.",
       );
+
+      return json(
+        {
+          success: false,
+          error:
+            "Kissan AI is temporarily unavailable. Please try again later.",
+        },
+        503,
+        req,
+      );
+    }
 
     const supabaseAdmin =
       createClient(
-        Deno.env.get(
-          "SUPABASE_URL"
-        ) ?? "",
-
-        Deno.env.get(
-          "SUPABASE_SERVICE_ROLE_KEY"
-        ) ?? ""
+        supabaseUrl,
+        serviceRoleKey,
       );
 
-    /* -------------------------------------------------------------- */
-    /* 1. Validate farm + ownership                                  */
-    /* -------------------------------------------------------------- */
-
-    const token =
-      auth
-        .slice(
-          "Bearer ".length
-        )
-        .trim();
+    /* --------------------------------------------------------------
+     * 1. Validate caller
+     * -------------------------------------------------------------- */
 
     const {
       data: caller,
+      error: authError,
     } =
       await supabaseAdmin.auth.getUser(
-        token
+        token,
       );
 
+    if (authError) {
+      console.error(
+        "recommend-crops auth error:",
+        authError,
+      );
+
+      return json(
+        {
+          success: false,
+          error:
+            "This request is not authorized. Please try again.",
+        },
+        401,
+        req,
+      );
+    }
+
     const callerId =
-      caller?.user?.id ??
-      null;
+      caller?.user?.id ?? null;
+
+    if (!callerId) {
+      return json(
+        {
+          success: false,
+          error:
+            "This request is not authorized. Please try again.",
+        },
+        401,
+        req,
+      );
+    }
+
+    /* --------------------------------------------------------------
+     * 2. Validate farm + ownership
+     * -------------------------------------------------------------- */
 
     const {
       data: farmRow,
@@ -1209,14 +1279,28 @@ Deno.serve(
         .select("*")
         .eq(
           "id",
-          farmId
+          farmId,
         )
         .maybeSingle();
 
-    if (
-      farmError ||
-      !farmRow
-    ) {
+    if (farmError) {
+      console.error(
+        "recommend-crops farm lookup error:",
+        farmError,
+      );
+
+      return json(
+        {
+          success: false,
+          error:
+            "We couldn't load your farm. Please try again.",
+        },
+        502,
+        req,
+      );
+    }
+
+    if (!farmRow) {
       return json(
         {
           success: false,
@@ -1224,14 +1308,13 @@ Deno.serve(
             "We couldn't find your farm. Please try again.",
         },
         404,
-        req
+        req,
       );
     }
 
     if (
-      !callerId ||
       farmRow.user_id !==
-        callerId
+      callerId
     ) {
       return json(
         {
@@ -1240,13 +1323,13 @@ Deno.serve(
             "You don't have access to this farm.",
         },
         403,
-        req
+        req,
       );
     }
 
-    /* -------------------------------------------------------------- */
-    /* 2. Extract farm data                                          */
-    /* -------------------------------------------------------------- */
+    /* --------------------------------------------------------------
+     * 3. Extract farm data
+     * -------------------------------------------------------------- */
 
     const crop =
       (farmRow.current_crop as
@@ -1273,28 +1356,28 @@ Deno.serve(
         | string
         | null) ?? "";
 
-    /* -------------------------------------------------------------- */
-    /* 3. Missing required information                               */
-    /* -------------------------------------------------------------- */
+    /* --------------------------------------------------------------
+     * 4. Missing required information
+     * -------------------------------------------------------------- */
 
     const missingRequired: string[] =
       [];
 
     if (!location.trim()) {
       missingRequired.push(
-        "Farm location"
+        "Farm location",
       );
     }
 
     if (!soilType.trim()) {
       missingRequired.push(
-        "Soil type"
+        "Soil type",
       );
     }
 
     if (!irrigation.trim()) {
       missingRequired.push(
-        "Irrigation method"
+        "Irrigation method",
       );
     }
 
@@ -1305,35 +1388,28 @@ Deno.serve(
       return json(
         {
           success: true,
-
           insufficientData:
             true,
-
           needsMoreInformation:
             true,
-
           missingInformation:
             missingRequired,
-
           recommendations: [],
-
           summary:
             "We need a little more information about your farm to recommend crops that may suit it.",
-
           limitations: [
             "Complete the indicated farm profile fields to get tailored crop recommendations.",
           ],
-
           language,
         },
         200,
-        req
+        req,
       );
     }
 
-    /* -------------------------------------------------------------- */
-    /* 4. Recent diagnoses                                          */
-    /* -------------------------------------------------------------- */
+    /* --------------------------------------------------------------
+     * 5. Recent diagnoses
+     * -------------------------------------------------------------- */
 
     const {
       data: diagnosisRows,
@@ -1342,24 +1418,24 @@ Deno.serve(
       await supabaseAdmin
         .from("diagnoses")
         .select(
-          "diagnosis, severity, confidence, created_at"
+          "diagnosis, severity, confidence, created_at",
         )
         .eq(
           "farm_id",
-          farmId
+          farmId,
         )
         .order(
           "created_at",
           {
             ascending: false,
-          }
+          },
         )
         .limit(5);
 
     if (diagError) {
       console.error(
         "recommend-crops diagnoses error:",
-        diagError
+        diagError,
       );
 
       return json(
@@ -1369,48 +1445,42 @@ Deno.serve(
             "We couldn't generate crop recommendations right now. Please try again.",
         },
         502,
-        req
+        req,
       );
     }
 
-    /* -------------------------------------------------------------- */
-    /* 5. Growth stage                                              */
-    /* -------------------------------------------------------------- */
+    /* --------------------------------------------------------------
+     * 6. Growth stage
+     * -------------------------------------------------------------- */
 
     const growth =
       getGrowthStage(
         crop,
-        plantingDate
+        plantingDate,
       );
 
-    /* -------------------------------------------------------------- */
-    /* 6. Build recommendation input                                */
-    /* -------------------------------------------------------------- */
+    /* --------------------------------------------------------------
+     * 7. Build recommendation input
+     * -------------------------------------------------------------- */
 
     const input:
       RecommendationInput = {
       farm: {
         location,
-
         landArea:
           (farmRow.land_area as
             | string
             | null) ??
           undefined,
-
         soilType,
-
         irrigationMethod:
           irrigation,
-
         crop,
-
         variety:
           (farmRow.current_crop_variety as
             | string
             | null) ??
           null,
-
         plantingDate,
       },
 
@@ -1431,14 +1501,14 @@ Deno.serve(
         ).map((d) => ({
           diagnosis:
             d.diagnosis,
-
           severity:
             d.severity,
-
           confidence:
-            d.confidence ??
-            0,
-
+            Number.isFinite(
+              Number(d.confidence),
+            )
+              ? Number(d.confidence)
+              : 0,
           createdAt:
             d.created_at,
         })),
@@ -1446,21 +1516,21 @@ Deno.serve(
       language,
     };
 
-    /* -------------------------------------------------------------- */
-    /* 7. Build prompt                                               */
-    /* -------------------------------------------------------------- */
+    /* --------------------------------------------------------------
+     * 8. Build prompt
+     * -------------------------------------------------------------- */
 
     const prompt =
       buildRecommendationPrompt(
-        input
+        input,
       );
 
     const userMessage =
       "Generate the crop recommendations now.";
 
-    /* -------------------------------------------------------------- */
-    /* 8. Gemini → OpenRouter fallback                              */
-    /* -------------------------------------------------------------- */
+    /* --------------------------------------------------------------
+     * 9. Gemini → OpenRouter fallback
+     * -------------------------------------------------------------- */
 
     let aiText = "";
 
@@ -1472,7 +1542,6 @@ Deno.serve(
             contents: [
               {
                 role: "user",
-
                 parts: [
                   {
                     text: prompt,
@@ -1483,7 +1552,6 @@ Deno.serve(
 
             generationConfig: {
               temperature: 0.4,
-
               responseMimeType:
                 "application/json",
 
@@ -1508,7 +1576,6 @@ Deno.serve(
 
                         suitability: {
                           type: "STRING",
-
                           enum: [
                             "high",
                             "moderate",
@@ -1538,7 +1605,6 @@ Deno.serve(
 
                         key_considerations: {
                           type: "ARRAY",
-
                           items: {
                             type: "STRING",
                           },
@@ -1556,7 +1622,6 @@ Deno.serve(
 
                   limitations: {
                     type: "ARRAY",
-
                     items: {
                       type: "STRING",
                     },
@@ -1568,7 +1633,6 @@ Deno.serve(
 
                   missing_information: {
                     type: "ARRAY",
-
                     items: {
                       type: "STRING",
                     },
@@ -1580,20 +1644,24 @@ Deno.serve(
                 ],
               },
             },
-          }
+          },
         );
 
       aiText =
         result.text;
 
       console.log(
-        "AI provider: Gemini"
+        "AI provider: Gemini",
       );
     } catch (err) {
       const error =
-        err as Error;
+        err instanceof Error
+          ? err
+          : new Error(
+              String(err),
+            );
 
-      /*
+      /**
        * Gemini 429:
        * immediately use OpenRouter.
        */
@@ -1602,17 +1670,17 @@ Deno.serve(
         "GEMINI_RATE_LIMIT"
       ) {
         console.log(
-          "Gemini 429 detected. Switching immediately to OpenRouter."
+          "Gemini 429 detected. Switching immediately to OpenRouter.",
         );
 
         const openRouterKey =
           Deno.env.get(
-            "OPENROUTER_API_KEY"
+            "OPENROUTER_API_KEY",
           );
 
         if (!openRouterKey) {
           console.error(
-            "OPENROUTER_API_KEY is not configured."
+            "OPENROUTER_API_KEY is not configured.",
           );
 
           return json(
@@ -1622,7 +1690,7 @@ Deno.serve(
                 "AI fallback service is not configured.",
             },
             502,
-            req
+            req,
           );
         }
 
@@ -1633,24 +1701,23 @@ Deno.serve(
               {
                 systemPrompt:
                   prompt,
-
                 userMessage:
                   userMessage,
-              }
+              },
             );
 
           aiText =
             result.text;
 
           console.log(
-            "AI provider: OpenRouter fallback"
+            "AI provider: OpenRouter fallback",
           );
         } catch (
           openRouterError
         ) {
           console.error(
             "OpenRouter fallback failed:",
-            openRouterError
+            openRouterError,
           );
 
           return json(
@@ -1660,13 +1727,13 @@ Deno.serve(
                 "Kissan AI is temporarily unavailable. Please try again.",
             },
             502,
-            req
+            req,
           );
         }
       } else {
         console.error(
           "recommend-crops Gemini error:",
-          error
+          error,
         );
 
         return json(
@@ -1676,28 +1743,28 @@ Deno.serve(
               "Kissan AI is temporarily unavailable. Please try again.",
           },
           502,
-          req
+          req,
         );
       }
     }
 
-    /* -------------------------------------------------------------- */
-    /* 9. Parse + validate AI response                               */
-    /* -------------------------------------------------------------- */
+    /* --------------------------------------------------------------
+     * 10. Parse + validate AI response
+     * -------------------------------------------------------------- */
 
     console.log(
       "Final AI raw response:",
-      aiText.slice(0, 2000)
+      aiText.slice(0, 2000),
     );
 
     const rawParsed =
       extractJson(
-        aiText
+        aiText,
       );
 
     const payload =
       sanitizePayload(
-        rawParsed
+        rawParsed,
       );
 
     if (!payload) {
@@ -1705,8 +1772,8 @@ Deno.serve(
         "recommend-crops parse failure. Raw:",
         aiText.slice(
           0,
-          2000
-        )
+          2000,
+        ),
       );
 
       return json(
@@ -1716,13 +1783,13 @@ Deno.serve(
             "We couldn't generate crop recommendations right now. Please try again.",
         },
         502,
-        req
+        req,
       );
     }
 
-    /* -------------------------------------------------------------- */
-    /* 10. Honest limitations                                        */
-    /* -------------------------------------------------------------- */
+    /* --------------------------------------------------------------
+     * 11. Honest limitations
+     * -------------------------------------------------------------- */
 
     const limitations: string[] =
       [
@@ -1731,7 +1798,7 @@ Deno.serve(
 
     if (!body.weather) {
       limitations.push(
-        "Weather information is currently unavailable, so recommendations are based on the other available farm information."
+        "Weather information is currently unavailable, so recommendations are based on the other available farm information.",
       );
     }
 
@@ -1740,22 +1807,20 @@ Deno.serve(
       "unknown"
     ) {
       limitations.push(
-        "Crop growth stage is uncertain, which may limit season-specific guidance."
+        "Crop growth stage is uncertain, which may limit season-specific guidance.",
       );
     }
-
-    /* Remove duplicate limitations */
 
     const uniqueLimitations =
       [
         ...new Set(
-          limitations
+          limitations,
         ),
       ];
 
-    /* -------------------------------------------------------------- */
-    /* 11. Persist recommendation                                   */
-    /* -------------------------------------------------------------- */
+    /* --------------------------------------------------------------
+     * 12. Persist recommendation
+     * -------------------------------------------------------------- */
 
     const now =
       new Date();
@@ -1766,7 +1831,7 @@ Deno.serve(
     } =
       await supabaseAdmin
         .from(
-          "crop_recommendations"
+          "crop_recommendations",
         )
         .insert({
           farm_id:
@@ -1798,7 +1863,7 @@ Deno.serve(
 
                 key_considerations:
                   r.keyConsiderations,
-              })
+              }),
             ),
 
           summary:
@@ -1822,7 +1887,7 @@ Deno.serve(
     if (insertError) {
       console.error(
         "recommend-crops insert error:",
-        insertError
+        insertError,
       );
 
       return json(
@@ -1832,25 +1897,23 @@ Deno.serve(
             "We couldn't save your recommendations right now. Please try again.",
         },
         502,
-        req
+        req,
       );
     }
 
-    /* -------------------------------------------------------------- */
-    /* 12. Return                                                    */
-    /* -------------------------------------------------------------- */
+    /* --------------------------------------------------------------
+     * 13. Return
+     * -------------------------------------------------------------- */
 
     return json(
       {
         success: true,
-
         result: row,
-
         generatedAt:
           now.toISOString(),
       },
       200,
-      req
+      req,
     );
-  }
+  },
 );
