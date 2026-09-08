@@ -17,15 +17,22 @@ const ALLOWED_ORIGINS = [
   "https://vxldkzrmtygurdggtjro.supabase.co",
 ];
 
-function corsForOrigin(req: Request): Record<string, string> {
-  const origin = req.headers.get("origin") ?? "";
+function corsForOrigin(
+  req: Request,
+): Record<string, string> {
+  const origin =
+    req.headers.get("origin") ?? "";
 
   const headers: Record<string, string> = {
     ...BASE_CORS_HEADERS,
   };
 
-  if (origin && ALLOWED_ORIGINS.includes(origin)) {
-    headers["Access-Control-Allow-Origin"] = origin;
+  if (
+    origin &&
+    ALLOWED_ORIGINS.includes(origin)
+  ) {
+    headers["Access-Control-Allow-Origin"] =
+      origin;
     headers["Vary"] = "Origin";
   }
 
@@ -33,19 +40,27 @@ function corsForOrigin(req: Request): Record<string, string> {
 }
 
 const MODEL = "gemini-3.5-flash";
+
 const HISTORY_LIMIT = 20;
 
-/*
+/**
  * OpenRouter fallback chain.
  *
- * These are text models and are suitable for the Chat Assistant.
- * We intentionally avoid the Google/Gemma model here because the
- * current production logs showed Google AI Studio upstream 429s.
+ * These models are intended for text-only chat.
+ *
+ * Priority:
+ * 1. OpenAI GPT-OSS 20B free
+ * 2. MiniMax M3 free
+ * 3. OpenRouter free router
+ *
+ * OpenRouter can automatically move through the
+ * models array when a model is unavailable,
+ * rate-limited, or otherwise fails.
  */
 const OPENROUTER_MODELS = [
-  "qwen/qwen3-32b:free",
-  "qwen/qwen3-30b-a3b:free",
-  "qwen/qwen3-235b-a22b-2507:free",
+  "openai/gpt-oss-20b:free",
+  "minimax/minimax-m3:free",
+  "openrouter/free",
 ];
 
 function json(
@@ -57,13 +72,17 @@ function json(
     ? corsForOrigin(req)
     : BASE_CORS_HEADERS;
 
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: {
-      "Content-Type": "application/json",
-      ...headers,
+  return new Response(
+    JSON.stringify(data),
+    {
+      status,
+      headers: {
+        "Content-Type":
+          "application/json",
+        ...headers,
+      },
     },
-  });
+  );
 }
 
 /* ------------------------------------------------------------------
@@ -80,19 +99,26 @@ async function callGemini(
   const url =
     `${GEMINI_BASE}/models/${MODEL}:generateContent?key=${apiKey}`;
 
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
+  const response = await fetch(
+    url,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type":
+          "application/json",
+      },
+      body: JSON.stringify(body),
     },
-    body: JSON.stringify(body),
-  });
+  );
 
   if (response.ok) {
-    const data = await response.json();
+    const data =
+      await response.json();
 
     const text =
-      data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+      data?.candidates?.[0]
+        ?.content?.parts?.[0]?.text ??
+      "";
 
     if (!text) {
       throw new Error(
@@ -103,7 +129,8 @@ async function callGemini(
     return { text };
   }
 
-  const errorText = await response.text();
+  const errorText =
+    await response.text();
 
   console.error(
     "Gemini error:",
@@ -116,7 +143,8 @@ async function callGemini(
       "Gemini rate limit exceeded",
     );
 
-    error.name = "GEMINI_RATE_LIMIT";
+    error.name =
+      "GEMINI_RATE_LIMIT";
 
     throw error;
   }
@@ -136,35 +164,17 @@ async function callOpenRouter(
     systemPrompt: string;
     userMessage: string;
   },
-): Promise<{ text: string; model: string }> {
-  const response = await fetch(
-    "https://openrouter.ai/api/v1/chat/completions",
-    {
-      method: "POST",
+  outputMode: "json" | "text" = "json",
+): Promise<{
+  text: string;
+  model: string;
+}> {
+  const isJsonMode =
+    outputMode === "json";
 
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-
-        "HTTP-Referer":
-          "https://kissan-ai-six.vercel.app",
-
-        "X-Title": "Kissan AI",
-      },
-
-      body: JSON.stringify({
-        /*
-         * OpenRouter supports automatic model fallback through
-         * the models array. If the first model is rate-limited
-         * or unavailable, OpenRouter tries the next one.
-         */
-        models: OPENROUTER_MODELS,
-
-        messages: [
-          {
-            role: "system",
-
-            content: `${body.systemPrompt}
+  const systemContent =
+    isJsonMode
+      ? `${body.systemPrompt}
 
 IMPORTANT OUTPUT RULES:
 
@@ -192,23 +202,88 @@ URDU SCRIPT RULE:
 - Preserve Pakistani Urdu vocabulary and meaning.
 
 IMPORTANT:
+
 Even if your internal reasoning uses another language or script, the FINAL JSON values must follow the language requested by the farmer.
-`,
-          },
+`
+      : `${body.systemPrompt}
 
-          {
-            role: "user",
-            content: body.userMessage,
-          },
-        ],
+IMPORTANT OUTPUT RULES:
 
-        temperature: 0.2,
-      }),
+- Return ONLY the corrected Urdu text.
+- Do NOT return JSON.
+- Do NOT use markdown code fences.
+- Do NOT add explanations.
+- Do NOT add quotation marks.
+- Do NOT use Devanagari/Hindi characters.
+- Preserve the exact meaning.
+`;
+
+  const requestBody: Record<
+    string,
+    unknown
+  > = {
+    model:
+      OPENROUTER_MODELS[0],
+
+    models:
+      OPENROUTER_MODELS,
+
+    messages: [
+      {
+        role: "system",
+        content: systemContent,
+      },
+      {
+        role: "user",
+        content:
+          body.userMessage,
+      },
+    ],
+
+    temperature:
+      isJsonMode ? 0.2 : 0.1,
+  };
+
+  /*
+   * JSON mode is used only for the
+   * main Chat Assistant response.
+   *
+   * Urdu correction intentionally
+   * uses plain text mode.
+   */
+  if (isJsonMode) {
+    requestBody.response_format = {
+      type: "json_object",
+    };
+  }
+
+  const response = await fetch(
+    "https://openrouter.ai/api/v1/chat/completions",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type":
+          "application/json",
+
+        Authorization:
+          `Bearer ${apiKey}`,
+
+        "HTTP-Referer":
+          "https://kissan-ai-six.vercel.app",
+
+        "X-Title":
+          "Kissan AI",
+      },
+
+      body: JSON.stringify(
+        requestBody,
+      ),
     },
   );
 
   if (!response.ok) {
-    const errorText = await response.text();
+    const errorText =
+      await response.text();
 
     console.error(
       "OpenRouter error:",
@@ -221,13 +296,19 @@ Even if your internal reasoning uses another language or script, the FINAL JSON 
     );
   }
 
-  const data = await response.json();
+  const data =
+    await response.json();
 
   const text =
-    data?.choices?.[0]?.message?.content ?? "";
+    data?.choices?.[0]
+      ?.message?.content ??
+    "";
 
   const usedModel =
-    String(data?.model ?? "unknown");
+    String(
+      data?.model ??
+        "unknown",
+    );
 
   console.log(
     "OpenRouter model used:",
@@ -236,7 +317,10 @@ Even if your internal reasoning uses another language or script, the FINAL JSON 
 
   console.log(
     "OpenRouter raw response:",
-    String(text).slice(0, 2000),
+    String(text).slice(
+      0,
+      2000,
+    ),
   );
 
   if (!text) {
@@ -310,11 +394,24 @@ interface ChatContextPayload {
 
 interface ChatReply {
   answer: string;
-  language: "en" | "ur";
-  confidence: "low" | "moderate" | "high";
+
+  language:
+    | "en"
+    | "ur";
+
+  confidence:
+    | "low"
+    | "moderate"
+    | "high";
+
   needs_clarification: boolean;
-  clarifying_question: string | null;
+
+  clarifying_question:
+    | string
+    | null;
+
   key_points: string[];
+
   recommended_actions: string[];
 }
 
@@ -322,15 +419,25 @@ interface ChatReply {
  * Script helpers
  * ------------------------------------------------------------------ */
 
-function containsDevanagari(text: string): boolean {
-  return /[\u0900-\u097F]/.test(text);
+function containsDevanagari(
+  text: string,
+): boolean {
+  return /[\u0900-\u097F]/.test(
+    text,
+  );
 }
 
-function containsUrduScript(text: string): boolean {
-  return /[\u0600-\u06FF]/.test(text);
+function containsUrduScript(
+  text: string,
+): boolean {
+  return /[\u0600-\u06FF]/.test(
+    text,
+  );
 }
 
-function isBadUrduScript(text: string): boolean {
+function isBadUrduScript(
+  text: string,
+): boolean {
   if (!text.trim()) {
     return false;
   }
@@ -345,16 +452,21 @@ function isBadUrduScript(text: string): boolean {
  * Urdu script correction
  *
  * First try Gemini.
- * If Gemini is rate-limited, use OpenRouter fallback.
- * If both fail, preserve the original answer.
+ * If Gemini is rate-limited/fails,
+ * use OpenRouter text mode.
+ * If both fail, preserve original answer.
  * ------------------------------------------------------------------ */
 
 async function correctUrduScript(
   geminiApiKey: string,
-  openRouterApiKey: string | null,
+  openRouterApiKey:
+    | string
+    | null,
   answer: string,
 ): Promise<string> {
-  if (!isBadUrduScript(answer)) {
+  if (
+    !isBadUrduScript(answer)
+  ) {
     return answer;
   }
 
@@ -363,6 +475,7 @@ async function correctUrduScript(
   );
 
   const correctionPrompt = `
+
 You are an Urdu script correction assistant.
 
 Convert the following response from Devanagari/Hindi script into natural Pakistani Urdu written in Urdu/Arabic script.
@@ -382,39 +495,49 @@ STRICT RULES:
 Text to correct:
 
 ${answer}
+
 `;
 
   /*
    * First attempt: Gemini
    */
+
   try {
-    const result = await callGemini(
-      geminiApiKey,
-      {
-        contents: [
-          {
-            role: "user",
-            parts: [
-              {
-                text: correctionPrompt,
-              },
-            ],
+    const result =
+      await callGemini(
+        geminiApiKey,
+        {
+          contents: [
+            {
+              role: "user",
+              parts: [
+                {
+                  text:
+                    correctionPrompt,
+                },
+              ],
+            },
+          ],
+
+          generationConfig: {
+            temperature: 0.1,
           },
-        ],
-
-        generationConfig: {
-          temperature: 0.1,
         },
-      },
-    );
+      );
 
-    const corrected = result.text.trim();
+    const corrected =
+      result.text.trim();
 
     if (
       corrected &&
-      !containsDevanagari(corrected)
+      !containsDevanagari(
+        corrected,
+      )
     ) {
-      return corrected.slice(0, 6000);
+      return corrected.slice(
+        0,
+        6000,
+      );
     }
   } catch (error) {
     console.warn(
@@ -425,13 +548,20 @@ ${answer}
 
   /*
    * Second attempt: OpenRouter
+   *
+   * IMPORTANT:
+   * Use "text" mode here because this
+   * function expects plain Urdu text,
+   * not JSON.
    */
+
   if (openRouterApiKey) {
     try {
-      const result = await callOpenRouter(
-        openRouterApiKey,
-        {
-          systemPrompt: `
+      const result =
+        await callOpenRouter(
+          openRouterApiKey,
+          {
+            systemPrompt: `
 You are an Urdu script correction assistant.
 
 ${correctionPrompt}
@@ -440,26 +570,42 @@ Return ONLY the corrected Urdu text.
 Do NOT return JSON.
 Do NOT use Devanagari.
 `,
-          userMessage: correctionPrompt,
-        },
-      );
+            userMessage:
+              correctionPrompt,
+          },
+          "text",
+        );
 
-      let corrected = result.text.trim();
+      let corrected =
+        result.text.trim();
 
       /*
-       * Some models may still wrap the answer in quotes or
-       * markdown. Clean those harmless wrappers.
+       * Some models may still wrap
+       * the answer in markdown.
+       * Clean harmless wrappers.
        */
+
       corrected = corrected
-        .replace(/^```(?:text|urdu)?\s*/i, "")
-        .replace(/\s*```$/i, "")
+        .replace(
+          /^```(?:text|urdu)?\s*/i,
+          "",
+        )
+        .replace(
+          /\s*```$/i,
+          "",
+        )
         .trim();
 
       if (
         corrected &&
-        !containsDevanagari(corrected)
+        !containsDevanagari(
+          corrected,
+        )
       ) {
-        return corrected.slice(0, 6000);
+        return corrected.slice(
+          0,
+          6000,
+        );
       }
     } catch (error) {
       console.error(
@@ -480,49 +626,73 @@ Do NOT use Devanagari.
  * Robust JSON extraction
  * ------------------------------------------------------------------ */
 
-function extractJson(raw: string): unknown | null {
+function extractJson(
+  raw: string,
+): unknown | null {
   if (!raw) {
     return null;
   }
 
-  let text = raw.trim();
+  let text =
+    raw.trim();
 
   /*
    * Remove markdown code fences.
    */
+
   text = text
-    .replace(/^```json\s*/i, "")
-    .replace(/^```\s*/i, "")
-    .replace(/\s*```$/i, "")
+    .replace(
+      /^```json\s*/i,
+      "",
+    )
+    .replace(
+      /^```\s*/i,
+      "",
+    )
+    .replace(
+      /\s*```$/i,
+      "",
+    )
     .trim();
 
   /*
-   * First attempt: entire response is JSON.
+   * First attempt:
+   * entire response is JSON.
    */
+
   try {
     return JSON.parse(text);
   } catch {
-    // Continue with extraction.
+    /*
+     * Continue with extraction.
+     */
   }
 
   /*
    * Find first { and last }.
    */
-  const firstBrace = text.indexOf("{");
-  const lastBrace = text.lastIndexOf("}");
+
+  const firstBrace =
+    text.indexOf("{");
+
+  const lastBrace =
+    text.lastIndexOf("}");
 
   if (
     firstBrace !== -1 &&
     lastBrace !== -1 &&
     lastBrace > firstBrace
   ) {
-    const candidate = text.slice(
-      firstBrace,
-      lastBrace + 1,
-    );
+    const candidate =
+      text.slice(
+        firstBrace,
+        lastBrace + 1,
+      );
 
     try {
-      return JSON.parse(candidate);
+      return JSON.parse(
+        candidate,
+      );
     } catch {
       return null;
     }
@@ -538,15 +708,23 @@ function extractJson(raw: string): unknown | null {
 function sanitizeReply(
   raw: unknown,
 ): ChatReply | null {
-  if (!raw || typeof raw !== "object") {
+  if (
+    !raw ||
+    typeof raw !== "object"
+  ) {
     return null;
   }
 
-  const r = raw as Record<string, unknown>;
+  const r =
+    raw as Record<
+      string,
+      unknown
+    >;
 
-  const answer = String(
-    r.answer ?? "",
-  ).trim();
+  const answer =
+    String(
+      r.answer ?? "",
+    ).trim();
 
   if (!answer) {
     return null;
@@ -558,38 +736,58 @@ function sanitizeReply(
       : "en";
 
   const confidenceValue =
-    String(r.confidence ?? "");
+    String(
+      r.confidence ?? "",
+    );
 
-  const confidence = [
-    "low",
-    "moderate",
-    "high",
-  ].includes(confidenceValue)
-    ? (confidenceValue as ChatReply["confidence"])
-    : "moderate";
+  const confidence =
+    [
+      "low",
+      "moderate",
+      "high",
+    ].includes(
+      confidenceValue,
+    )
+      ? (confidenceValue as ChatReply["confidence"])
+      : "moderate";
 
   return {
-    answer: answer.slice(0, 6000),
+    answer:
+      answer.slice(
+        0,
+        6000,
+      ),
 
     language,
 
     confidence,
 
     needs_clarification:
-      r.needs_clarification === true,
+      r.needs_clarification ===
+      true,
 
     clarifying_question:
       r.clarifying_question
         ? String(
             r.clarifying_question,
-          ).slice(0, 500)
+          ).slice(
+            0,
+            500,
+          )
         : null,
 
     key_points:
-      Array.isArray(r.key_points)
+      Array.isArray(
+        r.key_points,
+      )
         ? r.key_points
-            .map((k) => String(k))
-            .slice(0, 6)
+            .map((k) =>
+              String(k),
+            )
+            .slice(
+              0,
+              6,
+            )
         : [],
 
     recommended_actions:
@@ -597,8 +795,13 @@ function sanitizeReply(
         r.recommended_actions,
       )
         ? r.recommended_actions
-            .map((a) => String(a))
-            .slice(0, 6)
+            .map((a) =>
+              String(a),
+            )
+            .slice(
+              0,
+              6,
+            )
         : [],
   };
 }
@@ -620,10 +823,17 @@ function buildSystemPrompt(
 ): string {
   const bits: string[] = [];
 
-  const farm = context.farm ?? {};
-  const crop = context.crop ?? {};
-  const growth = context.growth ?? {};
-  const weather = context.weather ?? {};
+  const farm =
+    context.farm ?? {};
+
+  const crop =
+    context.crop ?? {};
+
+  const growth =
+    context.growth ?? {};
+
+  const weather =
+    context.weather ?? {};
 
   const farmBits = [
     farm.location
@@ -696,41 +906,49 @@ function buildSystemPrompt(
     cropBits.length ||
     weatherBits.length
   ) {
-    const contextLines: string[] = [
-      "FARM CONTEXT (real data saved by the farmer):",
-    ];
+    const contextLines: string[] =
+      [
+        "FARM CONTEXT (real data saved by the farmer):",
+      ];
 
     if (farmBits.length) {
       contextLines.push(
-        `- Farm:\n  ${farmBits.join("\n  ")}`,
+        `- Farm:
+  ${farmBits.join("\n  ")}`,
       );
     }
 
     if (cropBits.length) {
       contextLines.push(
-        `- Crop:\n  ${cropBits.join("\n  ")}`,
+        `- Crop:
+  ${cropBits.join("\n  ")}`,
       );
     }
 
     if (weatherBits.length) {
       contextLines.push(
-        `- Current weather:\n  ${weatherBits.join("\n  ")}`,
+        `- Current weather:
+  ${weatherBits.join("\n  ")}`,
       );
     }
 
     if (
-      context.recentDiagnoses?.length
+      context.recentDiagnoses
+        ?.length
     ) {
       const diag =
         context.recentDiagnoses[0];
 
       contextLines.push(
         `- Most recent crop diagnosis: ${
-          diag.diagnosis ?? "unknown"
+          diag.diagnosis ??
+          "unknown"
         } (severity: ${
-          diag.severity ?? "unknown"
+          diag.severity ??
+          "unknown"
         }, confidence: ${
-          diag.confidence ?? "unknown"
+          diag.confidence ??
+          "unknown"
         }%).`,
       );
     }
@@ -741,31 +959,38 @@ function buildSystemPrompt(
           .map(
             (r) =>
               `    - [${
-                r.level ?? "unknown"
+                r.level ??
+                "unknown"
               }] ${
-                r.title ?? "risk"
+                r.title ??
+                "risk"
               } (${
-                r.type ?? "unknown"
+                r.type ??
+                "unknown"
               })`,
           )
           .join("\n");
 
       contextLines.push(
-        `- Current farm risk assessment:\n${riskLines}`,
+        `- Current farm risk assessment:
+${riskLines}`,
       );
     }
 
     if (
-      context.todayActions?.length
+      context.todayActions
+        ?.length
     ) {
       const actionLines =
         context.todayActions
           .map(
             (a) =>
               `    - [${
-                a.priority ?? "medium"
+                a.priority ??
+                "medium"
               }] ${
-                a.title ?? "action"
+                a.title ??
+                "action"
               }${
                 a.completed
                   ? " (completed)"
@@ -774,20 +999,24 @@ function buildSystemPrompt(
                 a.timing
                   ? ` — timing: ${a.timing}`
                   : ""
-              }\n      Why: ${
-                a.reason ??
-                "no reason given"
-              }`,
+              }
+  Why: ${
+    a.reason ??
+    "no reason given"
+  }`,
           )
           .join("\n");
 
       contextLines.push(
-        `- Current "What should I do today?" actions:\n${actionLines}`,
+        `- Current "What should I do today?" actions:
+${actionLines}`,
       );
     }
 
     bits.push(
-      contextLines.join("\n"),
+      contextLines.join(
+        "\n",
+      ),
     );
   } else {
     bits.push(
@@ -821,19 +1050,29 @@ function buildSystemPrompt(
     `LANGUAGE RULES:
 
 1. Detect the farmer's message language automatically.
+
 2. If the farmer speaks/writes Urdu, answer in Pakistani Urdu.
+
 3. If the farmer prefers Urdu, answer in clear, simple Pakistani Urdu.
+
 4. Urdu MUST be written using Urdu/Arabic script.
+
 5. NEVER write Urdu using Devanagari/Hindi characters.
+
 6. NEVER convert Urdu into Hindi.
+
 7. NEVER answer an Urdu question in English unless the farmer explicitly asks for English.
+
 8. Preserve common Pakistani agricultural terms naturally.
+
 9. If the farmer uses Roman Urdu, you may understand Roman Urdu, but when the preferred language is Urdu, respond in proper Urdu script.
+
 10. If the farmer asks in English and prefers English, answer in simple English.`,
   );
 
   if (
-    preferredLanguage === "urdu"
+    preferredLanguage ===
+    "urdu"
   ) {
     bits.push(
       `HARD URDU REQUIREMENT:
@@ -859,7 +1098,8 @@ The second example is Hindi/Devanagari and MUST NOT be produced.`,
   }
 
   if (
-    preferredLanguage === "english"
+    preferredLanguage ===
+    "english"
   ) {
     bits.push(
       "The farmer prefers English — answer in clear, simple English.",
@@ -871,503 +1111,751 @@ The second example is Hindi/Devanagari and MUST NOT be produced.`,
       history.map(
         (m) =>
           `${
-            m.role === "user"
+            m.role ===
+            "user"
               ? "Farmer"
               : "Kissan AI"
           }: ${m.content}`,
       );
 
     bits.push(
-      `RECENT CONVERSATION:\n${historyLines.join("\n")}`,
+      `RECENT CONVERSATION:
+${historyLines.join("\n")}`,
     );
   }
 
-  return bits.join("\n\n");
+  return bits.join(
+    "\n\n",
+  );
 }
 
 /* ------------------------------------------------------------------
  * Main handler
  * ------------------------------------------------------------------ */
 
-Deno.serve(async (req: Request) => {
-  /* CORS */
-
-  if (req.method === "OPTIONS") {
-    return new Response("ok", {
-      headers: corsForOrigin(req),
-    });
-  }
-
-  /* Method validation */
-
-  if (req.method !== "POST") {
-    return json(
-      {
-        success: false,
-        error: "Method not allowed.",
-      },
-      405,
-      req,
-    );
-  }
-
-  /* JWT sanity check */
-
-  const auth =
-    req.headers.get("Authorization") ?? "";
-
-  if (
-    !auth.startsWith("Bearer ") ||
-    auth.split(".").length !== 3
-  ) {
-    return json(
-      {
-        success: false,
-        error:
-          "This request is not authorized. Please try again.",
-      },
-      401,
-      req,
-    );
-  }
-
-  const geminiApiKey =
-    Deno.env.get("GEMINI_API_KEY");
-
-  if (!geminiApiKey) {
-    return json(
-      {
-        success: false,
-        error:
-          "Kissan AI is temporarily unavailable. Please try again later.",
-      },
-      503,
-      req,
-    );
-  }
-
-  let body: {
-    farmId?: string;
-    conversationId?: string;
-    message?: string;
-
-    preferredLanguage?:
-      | "auto"
-      | "urdu"
-      | "english";
-
-    context?: ChatContextPayload;
-  };
-
-  try {
-    body = await req.json();
-  } catch {
-    return json(
-      {
-        success: false,
-        error:
-          "We couldn't read your message. Please try again.",
-      },
-      400,
-      req,
-    );
-  }
-
-  const farmId =
-    (body?.farmId ?? "").trim();
-
-  const conversationId =
-    (body?.conversationId ?? "").trim();
-
-  const message =
-    (body?.message ?? "").trim();
-
-  const preferredLanguage =
-    body?.preferredLanguage === "urdu" ||
-    body?.preferredLanguage === "english"
-      ? body.preferredLanguage
-      : "auto";
-
-  if (!message) {
-    return json(
-      {
-        success: false,
-        error:
-          "Please type a message before sending.",
-      },
-      400,
-      req,
-    );
-  }
-
-  if (!farmId) {
-    return json(
-      {
-        success: false,
-        error:
-          "No farm was found. Please set up your farm first.",
-      },
-      400,
-      req,
-    );
-  }
-
-  if (!conversationId) {
-    return json(
-      {
-        success: false,
-        error:
-          "No conversation was found. Please start a new chat.",
-      },
-      400,
-      req,
-    );
-  }
-
-  const supabaseAdmin =
-    createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get(
-        "SUPABASE_SERVICE_ROLE_KEY",
-      ) ?? "",
-    );
-
-  /* ---------------------------------------------------------------
-   * 1. Validate farm
-   * --------------------------------------------------------------- */
-
-  const {
-    data: farmRow,
-    error: farmError,
-  } =
-    await supabaseAdmin
-      .from("farms")
-      .select("id, user_id")
-      .eq("id", farmId)
-      .maybeSingle();
-
-  if (
-    farmError ||
-    !farmRow
-  ) {
-    return json(
-      {
-        success: false,
-        error:
-          "We couldn't find your farm. Please try again.",
-      },
-      404,
-      req,
-    );
-  }
-
-  /* ---------------------------------------------------------------
-   * 2. Validate ownership
-   * --------------------------------------------------------------- */
-
-  const {
-    data: caller,
-    error: callerError,
-  } =
-    await supabaseAdmin.auth.getUser(
-      auth
-        .slice("Bearer ".length)
-        .trim(),
-    );
-
-  const callerId =
-    caller?.user?.id ?? null;
-
-  if (
-    callerError ||
-    !callerId ||
-    farmRow.user_id !== callerId
-  ) {
-    return json(
-      {
-        success: false,
-        error:
-          "You don't have access to that farm.",
-      },
-      403,
-      req,
-    );
-  }
-
-  /* ---------------------------------------------------------------
-   * 3. Validate conversation
-   * --------------------------------------------------------------- */
-
-  const {
-    data: conversationRow,
-    error: conversationError,
-  } =
-    await supabaseAdmin
-      .from("chat_conversations")
-      .select("id, farm_id")
-      .eq("id", conversationId)
-      .maybeSingle();
-
-  if (
-    conversationError ||
-    !conversationRow ||
-    conversationRow.farm_id !== farmId
-  ) {
-    return json(
-      {
-        success: false,
-        error:
-          "This conversation could not be opened.",
-      },
-      404,
-      req,
-    );
-  }
-
-  /* ---------------------------------------------------------------
-   * 4. Load history
-   * --------------------------------------------------------------- */
-
-  const {
-    data: recentRows,
-    error: historyError,
-  } =
-    await supabaseAdmin
-      .from("chat_messages")
-      .select(
-        "role, content, created_at",
-      )
-      .eq(
-        "conversation_id",
-        conversationId,
-      )
-      .order(
-        "created_at",
-        {
-          ascending: false,
-        },
-      )
-      .limit(HISTORY_LIMIT);
-
-  if (historyError) {
-    return json(
-      {
-        success: false,
-        error:
-          "Kissan AI is temporarily unavailable. Please try again.",
-      },
-      502,
-      req,
-    );
-  }
-
-  const history = (
-    (recentRows as Array<{
-      role: string;
-      content: string;
-    }>) ?? []
-  )
-    .slice()
-    .reverse()
-    .map((m) => ({
-      role: m.role,
-      content: String(
-        m.content ?? "",
-      ),
-    }));
-
-  /* ---------------------------------------------------------------
-   * 5. Build prompt
-   * --------------------------------------------------------------- */
-
-  const context =
-    body?.context ?? {};
-
-  const prompt =
-    buildSystemPrompt(
-      context,
-      preferredLanguage,
-      history,
-    );
-
-  const userTurn =
-    `Farmer: ${message}\n\nRespond now with the structured answer JSON.`;
-
-  /* ---------------------------------------------------------------
-   * Gemini → OpenRouter model fallback chain
-   * --------------------------------------------------------------- */
-
-  let aiText = "";
-
-  let openRouterApiKey:
-    | string
-    | null = null;
-
-  try {
-    const result =
-      await callGemini(
-        geminiApiKey,
-        {
-          contents: [
-            {
-              role: "user",
-
-              parts: [
-                {
-                  text: prompt,
-                },
-
-                {
-                  text: userTurn,
-                },
-              ],
-            },
-          ],
-
-          generationConfig: {
-            temperature: 0.4,
-
-            responseMimeType:
-              "application/json",
-
-            responseSchema: {
-              type: "OBJECT",
-
-              properties: {
-                answer: {
-                  type: "STRING",
-                },
-
-                language: {
-                  type: "STRING",
-                  enum: [
-                    "en",
-                    "ur",
-                  ],
-                },
-
-                confidence: {
-                  type: "STRING",
-                  enum: [
-                    "low",
-                    "moderate",
-                    "high",
-                  ],
-                },
-
-                needs_clarification: {
-                  type: "BOOLEAN",
-                },
-
-                clarifying_question: {
-                  type: "STRING",
-                },
-
-                key_points: {
-                  type: "ARRAY",
-                  items: {
-                    type: "STRING",
-                  },
-                },
-
-                recommended_actions: {
-                  type: "ARRAY",
-                  items: {
-                    type: "STRING",
-                  },
-                },
-              },
-
-              required: [
-                "answer",
-                "language",
-                "confidence",
-                "needs_clarification",
-                "clarifying_question",
-                "key_points",
-                "recommended_actions",
-              ],
-            },
-          },
-        },
-      );
-
-    aiText = result.text;
-
-    console.log(
-      "AI provider: Gemini",
-    );
-  } catch (err) {
-    const error = err as Error;
+Deno.serve(
+  async (
+    req: Request,
+  ) => {
+    /* CORS */
 
     if (
-      error.name ===
-      "GEMINI_RATE_LIMIT"
+      req.method ===
+      "OPTIONS"
     ) {
-      console.log(
-        "Gemini 429 detected. Switching to OpenRouter model fallback chain.",
+      return new Response(
+        "ok",
+        {
+          headers:
+            corsForOrigin(
+              req,
+            ),
+        },
+      );
+    }
+
+    /* Method validation */
+
+    if (
+      req.method !==
+      "POST"
+    ) {
+      return json(
+        {
+          success: false,
+          error:
+            "Method not allowed.",
+        },
+        405,
+        req,
+      );
+    }
+
+    /* JWT sanity check */
+
+    const auth =
+      req.headers.get(
+        "Authorization",
+      ) ?? "";
+
+    if (
+      !auth.startsWith(
+        "Bearer ",
+      ) ||
+      auth.split(".")
+        .length !== 3
+    ) {
+      return json(
+        {
+          success: false,
+          error:
+            "This request is not authorized. Please try again.",
+        },
+        401,
+        req,
+      );
+    }
+
+    const geminiApiKey =
+      Deno.env.get(
+        "GEMINI_API_KEY",
       );
 
-      openRouterApiKey =
-        Deno.env.get(
-          "OPENROUTER_API_KEY",
-        ) ?? null;
+    if (!geminiApiKey) {
+      return json(
+        {
+          success: false,
+          error:
+            "Kissan AI is temporarily unavailable. Please try again later.",
+        },
+        503,
+        req,
+      );
+    }
 
-      if (!openRouterApiKey) {
+    let body: {
+      farmId?: string;
+      conversationId?: string;
+      message?: string;
+
+      preferredLanguage?:
+        | "auto"
+        | "urdu"
+        | "english";
+
+      context?: ChatContextPayload;
+    };
+
+    try {
+      body =
+        await req.json();
+    } catch {
+      return json(
+        {
+          success: false,
+          error:
+            "We couldn't read your message. Please try again.",
+        },
+        400,
+        req,
+      );
+    }
+
+    const farmId =
+      (
+        body?.farmId ??
+        ""
+      ).trim();
+
+    const conversationId =
+      (
+        body?.conversationId ??
+        ""
+      ).trim();
+
+    const message =
+      (
+        body?.message ??
+        ""
+      ).trim();
+
+    const preferredLanguage =
+      body?.preferredLanguage ===
+        "urdu" ||
+      body?.preferredLanguage ===
+        "english"
+        ? body.preferredLanguage
+        : "auto";
+
+    if (!message) {
+      return json(
+        {
+          success: false,
+          error:
+            "Please type a message before sending.",
+        },
+        400,
+        req,
+      );
+    }
+
+    if (!farmId) {
+      return json(
+        {
+          success: false,
+          error:
+            "No farm was found. Please set up your farm first.",
+        },
+        400,
+        req,
+      );
+    }
+
+    if (!conversationId) {
+      return json(
+        {
+          success: false,
+          error:
+            "No conversation was found. Please start a new chat.",
+        },
+        400,
+        req,
+      );
+    }
+
+    const supabaseAdmin =
+      createClient(
+        Deno.env.get(
+          "SUPABASE_URL",
+        ) ?? "",
+
+        Deno.env.get(
+          "SUPABASE_SERVICE_ROLE_KEY",
+        ) ?? "",
+      );
+
+    /* ---------------------------------------------------------------
+     * 1. Validate farm
+     * --------------------------------------------------------------- */
+
+    const {
+      data: farmRow,
+      error: farmError,
+    } =
+      await supabaseAdmin
+        .from("farms")
+        .select(
+          "id, user_id",
+        )
+        .eq(
+          "id",
+          farmId,
+        )
+        .maybeSingle();
+
+    if (
+      farmError ||
+      !farmRow
+    ) {
+      return json(
+        {
+          success: false,
+          error:
+            "We couldn't find your farm. Please try again.",
+        },
+        404,
+        req,
+      );
+    }
+
+    /* ---------------------------------------------------------------
+     * 2. Validate ownership
+     * --------------------------------------------------------------- */
+
+    const {
+      data: caller,
+      error: callerError,
+    } =
+      await supabaseAdmin.auth.getUser(
+        auth
+          .slice(
+            "Bearer ".length,
+          )
+          .trim(),
+      );
+
+    const callerId =
+      caller?.user?.id ??
+      null;
+
+    if (
+      callerError ||
+      !callerId ||
+      farmRow.user_id !==
+        callerId
+    ) {
+      return json(
+        {
+          success: false,
+          error:
+            "You don't have access to that farm.",
+        },
+        403,
+        req,
+      );
+    }
+
+    /* ---------------------------------------------------------------
+     * 3. Validate conversation
+     * --------------------------------------------------------------- */
+
+    const {
+      data: conversationRow,
+      error: conversationError,
+    } =
+      await supabaseAdmin
+        .from(
+          "chat_conversations",
+        )
+        .select(
+          "id, farm_id",
+        )
+        .eq(
+          "id",
+          conversationId,
+        )
+        .maybeSingle();
+
+    if (
+      conversationError ||
+      !conversationRow ||
+      conversationRow.farm_id !==
+        farmId
+    ) {
+      return json(
+        {
+          success: false,
+          error:
+            "This conversation could not be opened.",
+        },
+        404,
+        req,
+      );
+    }
+
+    /* ---------------------------------------------------------------
+     * 4. Load history
+     * --------------------------------------------------------------- */
+
+    const {
+      data: recentRows,
+      error: historyError,
+    } =
+      await supabaseAdmin
+        .from(
+          "chat_messages",
+        )
+        .select(
+          "role, content, created_at",
+        )
+        .eq(
+          "conversation_id",
+          conversationId,
+        )
+        .order(
+          "created_at",
+          {
+            ascending: false,
+          },
+        )
+        .limit(
+          HISTORY_LIMIT,
+        );
+
+    if (historyError) {
+      return json(
+        {
+          success: false,
+          error:
+            "Kissan AI is temporarily unavailable. Please try again.",
+        },
+        502,
+        req,
+      );
+    }
+
+    const history = (
+      (recentRows as Array<{
+        role: string;
+        content: string;
+      }>) ?? []
+    )
+      .slice()
+      .reverse()
+      .map((m) => ({
+        role: m.role,
+        content: String(
+          m.content ?? "",
+        ),
+      }));
+
+    /* ---------------------------------------------------------------
+     * 5. Build prompt
+     * --------------------------------------------------------------- */
+
+    const context =
+      body?.context ?? {};
+
+    const prompt =
+      buildSystemPrompt(
+        context,
+        preferredLanguage,
+        history,
+      );
+
+    const userTurn =
+      `Farmer: ${message}
+
+Respond now with the structured answer JSON.`;
+
+    /* ---------------------------------------------------------------
+     * Gemini → OpenRouter model fallback chain
+     * --------------------------------------------------------------- */
+
+    let aiText = "";
+
+    let openRouterApiKey:
+      | string
+      | null = null;
+
+    try {
+      const result =
+        await callGemini(
+          geminiApiKey,
+          {
+            contents: [
+              {
+                role: "user",
+                parts: [
+                  {
+                    text: prompt,
+                  },
+                  {
+                    text: userTurn,
+                  },
+                ],
+              },
+            ],
+
+            generationConfig: {
+              temperature: 0.4,
+
+              responseMimeType:
+                "application/json",
+
+              responseSchema: {
+                type: "OBJECT",
+
+                properties: {
+                  answer: {
+                    type: "STRING",
+                  },
+
+                  language: {
+                    type: "STRING",
+
+                    enum: [
+                      "en",
+                      "ur",
+                    ],
+                  },
+
+                  confidence: {
+                    type: "STRING",
+
+                    enum: [
+                      "low",
+                      "moderate",
+                      "high",
+                    ],
+                  },
+
+                  needs_clarification: {
+                    type: "BOOLEAN",
+                  },
+
+                  clarifying_question: {
+                    type: "STRING",
+                  },
+
+                  key_points: {
+                    type: "ARRAY",
+
+                    items: {
+                      type: "STRING",
+                    },
+                  },
+
+                  recommended_actions: {
+                    type: "ARRAY",
+
+                    items: {
+                      type: "STRING",
+                    },
+                  },
+                },
+
+                required: [
+                  "answer",
+                  "language",
+                  "confidence",
+                  "needs_clarification",
+                  "clarifying_question",
+                  "key_points",
+                  "recommended_actions",
+                ],
+              },
+            },
+          },
+        );
+
+      aiText =
+        result.text;
+
+      console.log(
+        "AI provider: Gemini",
+      );
+    } catch (err) {
+      const error =
+        err as Error;
+
+      if (
+        error.name ===
+        "GEMINI_RATE_LIMIT"
+      ) {
+        console.log(
+          "Gemini 429 detected. Switching to OpenRouter model fallback chain.",
+        );
+
+        openRouterApiKey =
+          Deno.env.get(
+            "OPENROUTER_API_KEY",
+          ) ?? null;
+
+        if (
+          !openRouterApiKey
+        ) {
+          console.error(
+            "OPENROUTER_API_KEY is not configured.",
+          );
+
+          return json(
+            {
+              success: false,
+              error:
+                "AI fallback service is not configured.",
+            },
+            502,
+            req,
+          );
+        }
+
+        try {
+          const result =
+            await callOpenRouter(
+              openRouterApiKey,
+              {
+                systemPrompt:
+                  prompt,
+
+                userMessage:
+                  userTurn,
+              },
+              "json",
+            );
+
+          aiText =
+            result.text;
+
+          console.log(
+            "AI provider: OpenRouter fallback",
+            result.model,
+          );
+        } catch (
+          openRouterError
+        ) {
+          console.error(
+            "OpenRouter fallback failed:",
+            openRouterError,
+          );
+
+          return json(
+            {
+              success: false,
+              error:
+                "All AI providers are temporarily busy. Please try again shortly.",
+            },
+            503,
+            req,
+          );
+        }
+      } else {
         console.error(
-          "OPENROUTER_API_KEY is not configured.",
+          "chat-assistant Gemini error:",
+          error,
         );
 
         return json(
           {
             success: false,
             error:
-              "AI fallback service is not configured.",
+              "Kissan AI is temporarily unavailable. Please try again.",
           },
           502,
           req,
         );
       }
+    }
 
-      try {
-        const result =
-          await callOpenRouter(
-            openRouterApiKey,
-            {
-              systemPrompt:
-                prompt,
+    /* ---------------------------------------------------------------
+     * 6. Parse AI response
+     * --------------------------------------------------------------- */
 
-              userMessage:
-                userTurn,
-            },
-          );
+    console.log(
+      "Final AI raw response:",
+      aiText.slice(
+        0,
+        2000,
+      ),
+    );
 
-        aiText = result.text;
+    const rawParsed =
+      extractJson(
+        aiText,
+      );
 
-        console.log(
-          "AI provider: OpenRouter fallback",
-          result.model,
-        );
-      } catch (openRouterError) {
-        console.error(
-          "OpenRouter fallback failed:",
-          openRouterError,
-        );
+    const parsed =
+      sanitizeReply(
+        rawParsed,
+      );
 
-        return json(
-          {
-            success: false,
-            error:
-              "All AI providers are temporarily busy. Please try again shortly.",
-          },
-          503,
-          req,
-        );
-      }
-    } else {
+    if (!parsed) {
       console.error(
-        "chat-assistant Gemini error:",
-        error,
+        "chat-assistant parse failure. Raw:",
+        aiText.slice(
+          0,
+          2000,
+        ),
+      );
+
+      return json(
+        {
+          success: false,
+          error:
+            "Kissan AI couldn't form a clear answer. Please try asking again.",
+        },
+        502,
+        req,
+      );
+    }
+
+    /* ---------------------------------------------------------------
+     * 7. Final Urdu script safeguard
+     * --------------------------------------------------------------- */
+
+    if (
+      preferredLanguage ===
+        "urdu" ||
+      parsed.language ===
+        "ur"
+    ) {
+      /*
+       * Load OpenRouter key if it wasn't
+       * needed during the main response.
+       */
+
+      if (
+        !openRouterApiKey
+      ) {
+        openRouterApiKey =
+          Deno.env.get(
+            "OPENROUTER_API_KEY",
+          ) ?? null;
+      }
+
+      parsed.answer =
+        await correctUrduScript(
+          geminiApiKey,
+          openRouterApiKey,
+          parsed.answer,
+        );
+
+      if (
+        parsed.clarifying_question &&
+        isBadUrduScript(
+          parsed.clarifying_question,
+        )
+      ) {
+        parsed.clarifying_question =
+          await correctUrduScript(
+            geminiApiKey,
+            openRouterApiKey,
+            parsed.clarifying_question,
+          );
+      }
+
+      parsed.key_points =
+        await Promise.all(
+          parsed.key_points.map(
+            async (point) =>
+              isBadUrduScript(
+                point,
+              )
+                ? await correctUrduScript(
+                    geminiApiKey,
+                    openRouterApiKey,
+                    point,
+                  )
+                : point,
+          ),
+        );
+
+      parsed.recommended_actions =
+        await Promise.all(
+          parsed.recommended_actions.map(
+            async (action) =>
+              isBadUrduScript(
+                action,
+              )
+                ? await correctUrduScript(
+                    geminiApiKey,
+                    openRouterApiKey,
+                    action,
+                  )
+                : action,
+          ),
+        );
+
+      /*
+       * Force language metadata to Urdu.
+       */
+
+      parsed.language =
+        "ur";
+    }
+
+    /* ---------------------------------------------------------------
+     * 8. Save assistant message
+     * --------------------------------------------------------------- */
+
+    const {
+      data: savedMessage,
+      error: insertError,
+    } =
+      await supabaseAdmin
+        .from(
+          "chat_messages",
+        )
+        .insert({
+          conversation_id:
+            conversationId,
+
+          farm_id:
+            farmId,
+
+          role:
+            "assistant",
+
+          content:
+            parsed.answer,
+        })
+        .select()
+        .single();
+
+    if (insertError) {
+      console.error(
+        "chat-assistant insert error:",
+        insertError,
       );
 
       return json(
@@ -1380,184 +1868,37 @@ Deno.serve(async (req: Request) => {
         req,
       );
     }
-  }
 
-  /* ---------------------------------------------------------------
-   * 6. Parse AI response
-   * --------------------------------------------------------------- */
+    /* ---------------------------------------------------------------
+     * 9. Update conversation
+     * --------------------------------------------------------------- */
 
-  console.log(
-    "Final AI raw response:",
-    aiText.slice(0, 2000),
-  );
-
-  const rawParsed =
-    extractJson(aiText);
-
-  const parsed =
-    sanitizeReply(rawParsed);
-
-  if (!parsed) {
-    console.error(
-      "chat-assistant parse failure. Raw:",
-      aiText.slice(0, 2000),
-    );
-
-    return json(
-      {
-        success: false,
-        error:
-          "Kissan AI couldn't form a clear answer. Please try asking again.",
-      },
-      502,
-      req,
-    );
-  }
-
-  /* ---------------------------------------------------------------
-   * 7. Final Urdu script safeguard
-   * --------------------------------------------------------------- */
-
-  if (
-    preferredLanguage === "urdu" ||
-    parsed.language === "ur"
-  ) {
-    /*
-     * Load OpenRouter key if it wasn't needed during
-     * the main response.
-     */
-    if (!openRouterApiKey) {
-      openRouterApiKey =
-        Deno.env.get(
-          "OPENROUTER_API_KEY",
-        ) ?? null;
-    }
-
-    parsed.answer =
-      await correctUrduScript(
-        geminiApiKey,
-        openRouterApiKey,
-        parsed.answer,
-      );
-
-    if (
-      parsed.clarifying_question &&
-      isBadUrduScript(
-        parsed.clarifying_question,
-      )
-    ) {
-      parsed.clarifying_question =
-        await correctUrduScript(
-          geminiApiKey,
-          openRouterApiKey,
-          parsed.clarifying_question,
-        );
-    }
-
-    parsed.key_points =
-      await Promise.all(
-        parsed.key_points.map(
-          async (point) =>
-            isBadUrduScript(point)
-              ? await correctUrduScript(
-                  geminiApiKey,
-                  openRouterApiKey,
-                  point,
-                )
-              : point,
-        ),
-      );
-
-    parsed.recommended_actions =
-      await Promise.all(
-        parsed.recommended_actions.map(
-          async (action) =>
-            isBadUrduScript(action)
-              ? await correctUrduScript(
-                  geminiApiKey,
-                  openRouterApiKey,
-                  action,
-                )
-              : action,
-        ),
-      );
-
-    /*
-     * Force language metadata to Urdu.
-     */
-    parsed.language = "ur";
-  }
-
-  /* ---------------------------------------------------------------
-   * 8. Save assistant message
-   * --------------------------------------------------------------- */
-
-  const {
-    data: savedMessage,
-    error: insertError,
-  } =
     await supabaseAdmin
-      .from("chat_messages")
-      .insert({
-        conversation_id:
-          conversationId,
-
-        farm_id:
-          farmId,
-
-        role:
-          "assistant",
-
-        content:
-          parsed.answer,
+      .from(
+        "chat_conversations",
+      )
+      .update({
+        updated_at:
+          new Date().toISOString(),
       })
-      .select()
-      .single();
+      .eq(
+        "id",
+        conversationId,
+      );
 
-  if (insertError) {
-    console.error(
-      "chat-assistant insert error:",
-      insertError,
-    );
+    /* ---------------------------------------------------------------
+     * 10. Return
+     * --------------------------------------------------------------- */
 
     return json(
       {
-        success: false,
-        error:
-          "Kissan AI is temporarily unavailable. Please try again.",
+        success: true,
+        reply: parsed,
+        message:
+          savedMessage,
       },
-      502,
+      200,
       req,
     );
-  }
-
-  /* ---------------------------------------------------------------
-   * 9. Update conversation
-   * --------------------------------------------------------------- */
-
-  await supabaseAdmin
-    .from("chat_conversations")
-    .update({
-      updated_at:
-        new Date().toISOString(),
-    })
-    .eq(
-      "id",
-      conversationId,
-    );
-
-  /* ---------------------------------------------------------------
-   * 10. Return
-   * --------------------------------------------------------------- */
-
-  return json(
-    {
-      success: true,
-      reply: parsed,
-      message: savedMessage,
-    },
-    200,
-    req,
-  );
-});
-
+  },
+);
