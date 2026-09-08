@@ -1,4 +1,6 @@
+
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const BASE_CORS_HEADERS = {
@@ -32,6 +34,19 @@ function corsForOrigin(req: Request): Record<string, string> {
 
 const MODEL = "gemini-3.5-flash";
 const HISTORY_LIMIT = 20;
+
+/*
+ * OpenRouter fallback chain.
+ *
+ * These are text models and are suitable for the Chat Assistant.
+ * We intentionally avoid the Google/Gemma model here because the
+ * current production logs showed Google AI Studio upstream 429s.
+ */
+const OPENROUTER_MODELS = [
+  "qwen/qwen3-32b:free",
+  "qwen/qwen3-30b-a3b:free",
+  "qwen/qwen3-235b-a22b-2507:free",
+];
 
 function json(
   data: unknown,
@@ -121,47 +136,72 @@ async function callOpenRouter(
     systemPrompt: string;
     userMessage: string;
   },
-): Promise<{ text: string }> {
+): Promise<{ text: string; model: string }> {
   const response = await fetch(
     "https://openrouter.ai/api/v1/chat/completions",
     {
       method: "POST",
+
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${apiKey}`,
+
         "HTTP-Referer":
           "https://kissan-ai-six.vercel.app",
+
         "X-Title": "Kissan AI",
       },
+
       body: JSON.stringify({
-        model: "openrouter/free",
+        /*
+         * OpenRouter supports automatic model fallback through
+         * the models array. If the first model is rate-limited
+         * or unavailable, OpenRouter tries the next one.
+         */
+        models: OPENROUTER_MODELS,
+
         messages: [
           {
             role: "system",
+
             content: `${body.systemPrompt}
 
 IMPORTANT OUTPUT RULES:
+
 - Return ONLY one valid JSON object.
 - Do NOT write explanations before or after the JSON.
 - Do NOT use markdown code fences.
 - Do NOT write "User Safety", "Safety", "Analysis", or any other text outside the JSON.
 - The JSON must contain exactly these fields:
   answer, language, confidence, needs_clarification, clarifying_question, key_points, recommended_actions.
+
 - answer must contain the actual answer to the farmer.
+- language must be exactly "en" or "ur".
+- confidence must be exactly "low", "moderate", or "high".
+- needs_clarification must be a boolean.
+- clarifying_question must be a string or null.
+- key_points must be an array of strings.
+- recommended_actions must be an array of strings.
 
 URDU SCRIPT RULE:
+
 - If language is "ur", ALL Urdu text must be written in Urdu/Arabic script.
 - NEVER write Urdu in Devanagari/Hindi script.
 - Do NOT convert Urdu into Hindi.
 - Do NOT answer an Urdu farmer in Hindi.
-- Preserve Urdu vocabulary and meaning.
+- Preserve Pakistani Urdu vocabulary and meaning.
+
+IMPORTANT:
+Even if your internal reasoning uses another language or script, the FINAL JSON values must follow the language requested by the farmer.
 `,
           },
+
           {
             role: "user",
             content: body.userMessage,
           },
         ],
+
         temperature: 0.2,
       }),
     },
@@ -173,11 +213,11 @@ URDU SCRIPT RULE:
     console.error(
       "OpenRouter error:",
       response.status,
-      errorText.slice(0, 1000),
+      errorText.slice(0, 1500),
     );
 
     throw new Error(
-      "OpenRouter fallback failed.",
+      `OpenRouter request failed with status ${response.status}`,
     );
   }
 
@@ -185,6 +225,14 @@ URDU SCRIPT RULE:
 
   const text =
     data?.choices?.[0]?.message?.content ?? "";
+
+  const usedModel =
+    String(data?.model ?? "unknown");
+
+  console.log(
+    "OpenRouter model used:",
+    usedModel,
+  );
 
   console.log(
     "OpenRouter raw response:",
@@ -199,6 +247,7 @@ URDU SCRIPT RULE:
 
   return {
     text: String(text).trim(),
+    model: usedModel,
   };
 }
 
@@ -273,24 +322,14 @@ interface ChatReply {
  * Script helpers
  * ------------------------------------------------------------------ */
 
-/**
- * Detect Devanagari/Hindi Unicode characters.
- */
 function containsDevanagari(text: string): boolean {
   return /[\u0900-\u097F]/.test(text);
 }
 
-/**
- * Detect Urdu/Arabic-script characters.
- */
 function containsUrduScript(text: string): boolean {
   return /[\u0600-\u06FF]/.test(text);
 }
 
-/**
- * Returns true when text appears to be Urdu written in
- * Devanagari/Hindi script.
- */
 function isBadUrduScript(text: string): boolean {
   if (!text.trim()) {
     return false;
@@ -304,18 +343,15 @@ function isBadUrduScript(text: string): boolean {
 
 /* ------------------------------------------------------------------
  * Urdu script correction
+ *
+ * First try Gemini.
+ * If Gemini is rate-limited, use OpenRouter fallback.
+ * If both fail, preserve the original answer.
  * ------------------------------------------------------------------ */
 
-/**
- * If an Urdu response accidentally comes back in Devanagari,
- * ask Gemini to convert only the script while preserving
- * the original meaning.
- *
- * This is intentionally a small correction pass and is only
- * triggered when Devanagari is detected.
- */
 async function correctUrduScript(
-  apiKey: string,
+  geminiApiKey: string,
+  openRouterApiKey: string | null,
   answer: string,
 ): Promise<string> {
   if (!isBadUrduScript(answer)) {
@@ -329,7 +365,7 @@ async function correctUrduScript(
   const correctionPrompt = `
 You are an Urdu script correction assistant.
 
-Convert the following response from Devanagari/Hindi script into natural Urdu written in Urdu/Arabic script.
+Convert the following response from Devanagari/Hindi script into natural Pakistani Urdu written in Urdu/Arabic script.
 
 STRICT RULES:
 
@@ -348,22 +384,29 @@ Text to correct:
 ${answer}
 `;
 
+  /*
+   * First attempt: Gemini
+   */
   try {
-    const result = await callGemini(apiKey, {
-      contents: [
-        {
-          role: "user",
-          parts: [
-            {
-              text: correctionPrompt,
-            },
-          ],
+    const result = await callGemini(
+      geminiApiKey,
+      {
+        contents: [
+          {
+            role: "user",
+            parts: [
+              {
+                text: correctionPrompt,
+              },
+            ],
+          },
+        ],
+
+        generationConfig: {
+          temperature: 0.1,
         },
-      ],
-      generationConfig: {
-        temperature: 0.1,
       },
-    });
+    );
 
     const corrected = result.text.trim();
 
@@ -373,20 +416,64 @@ ${answer}
     ) {
       return corrected.slice(0, 6000);
     }
-
-    console.warn(
-      "chat-assistant: Urdu correction still contained Devanagari. Keeping original response.",
-    );
-
-    return answer;
   } catch (error) {
-    console.error(
-      "chat-assistant: Urdu script correction failed:",
+    console.warn(
+      "chat-assistant: Gemini Urdu correction failed. Trying OpenRouter.",
       error,
     );
-
-    return answer;
   }
+
+  /*
+   * Second attempt: OpenRouter
+   */
+  if (openRouterApiKey) {
+    try {
+      const result = await callOpenRouter(
+        openRouterApiKey,
+        {
+          systemPrompt: `
+You are an Urdu script correction assistant.
+
+${correctionPrompt}
+
+Return ONLY the corrected Urdu text.
+Do NOT return JSON.
+Do NOT use Devanagari.
+`,
+          userMessage: correctionPrompt,
+        },
+      );
+
+      let corrected = result.text.trim();
+
+      /*
+       * Some models may still wrap the answer in quotes or
+       * markdown. Clean those harmless wrappers.
+       */
+      corrected = corrected
+        .replace(/^```(?:text|urdu)?\s*/i, "")
+        .replace(/\s*```$/i, "")
+        .trim();
+
+      if (
+        corrected &&
+        !containsDevanagari(corrected)
+      ) {
+        return corrected.slice(0, 6000);
+      }
+    } catch (error) {
+      console.error(
+        "chat-assistant: OpenRouter Urdu correction failed:",
+        error,
+      );
+    }
+  }
+
+  console.warn(
+    "chat-assistant: Urdu correction failed on all providers. Keeping original response.",
+  );
+
+  return answer;
 }
 
 /* ------------------------------------------------------------------
@@ -400,21 +487,27 @@ function extractJson(raw: string): unknown | null {
 
   let text = raw.trim();
 
-  // Remove markdown code fences.
+  /*
+   * Remove markdown code fences.
+   */
   text = text
     .replace(/^```json\s*/i, "")
     .replace(/^```\s*/i, "")
     .replace(/\s*```$/i, "")
     .trim();
 
-  // First attempt: entire response is JSON.
+  /*
+   * First attempt: entire response is JSON.
+   */
   try {
     return JSON.parse(text);
   } catch {
     // Continue with extraction.
   }
 
-  // Find first { and last }.
+  /*
+   * Find first { and last }.
+   */
   const firstBrace = text.indexOf("{");
   const lastBrace = text.lastIndexOf("}");
 
@@ -704,18 +797,26 @@ function buildSystemPrompt(
 
   bits.push(
     "SAFETY RULES — follow these strictly:",
+
     "- NEVER claim a diagnosis with certainty.",
+
     "- NEVER invent a pesticide, chemical, or crop condition.",
+
     "- NEVER invent dosages or application rates.",
+
     "- NEVER recommend dangerous chemical combinations.",
+
     "- NEVER claim a treatment is guaranteed to work.",
+
     "- NEVER fabricate farm information, weather, laboratory results, or diagnosis history.",
+
     "- For serious crop disease or pest situations, recommend consulting a qualified local agricultural expert or agricultural officer.",
+
     "- Clearly distinguish facts from estimates.",
+
     "- If important information is missing, ask a clarifying question instead of guessing.",
   );
 
-  // Strong language rules.
   bits.push(
     `LANGUAGE RULES:
 
@@ -751,7 +852,7 @@ Example of correct Urdu:
 
 Example of WRONG output:
 
-"आपकी फसल को इस समय ज्यादा पानी की जरूरत हो सकती है।"
+"आपकी फसल को इस समय ज्यादा पानी की जरूरत हो सकती है۔"
 
 The second example is Hindi/Devanagari and MUST NOT be produced.`,
     );
@@ -789,14 +890,16 @@ The second example is Hindi/Devanagari and MUST NOT be produced.`,
  * ------------------------------------------------------------------ */
 
 Deno.serve(async (req: Request) => {
-  // CORS
+  /* CORS */
+
   if (req.method === "OPTIONS") {
     return new Response("ok", {
       headers: corsForOrigin(req),
     });
   }
 
-  // Method validation
+  /* Method validation */
+
   if (req.method !== "POST") {
     return json(
       {
@@ -808,7 +911,8 @@ Deno.serve(async (req: Request) => {
     );
   }
 
-  // JWT sanity check
+  /* JWT sanity check */
+
   const auth =
     req.headers.get("Authorization") ?? "";
 
@@ -846,10 +950,12 @@ Deno.serve(async (req: Request) => {
     farmId?: string;
     conversationId?: string;
     message?: string;
+
     preferredLanguage?:
       | "auto"
       | "urdu"
       | "english";
+
     context?: ChatContextPayload;
   };
 
@@ -926,9 +1032,9 @@ Deno.serve(async (req: Request) => {
       ) ?? "",
     );
 
-  // ---------------------------------------------------------------
-  // 1. Validate farm
-  // ---------------------------------------------------------------
+  /* ---------------------------------------------------------------
+   * 1. Validate farm
+   * --------------------------------------------------------------- */
 
   const {
     data: farmRow,
@@ -955,9 +1061,9 @@ Deno.serve(async (req: Request) => {
     );
   }
 
-  // ---------------------------------------------------------------
-  // 2. Validate ownership
-  // ---------------------------------------------------------------
+  /* ---------------------------------------------------------------
+   * 2. Validate ownership
+   * --------------------------------------------------------------- */
 
   const {
     data: caller,
@@ -988,9 +1094,9 @@ Deno.serve(async (req: Request) => {
     );
   }
 
-  // ---------------------------------------------------------------
-  // 3. Validate conversation
-  // ---------------------------------------------------------------
+  /* ---------------------------------------------------------------
+   * 3. Validate conversation
+   * --------------------------------------------------------------- */
 
   const {
     data: conversationRow,
@@ -1018,9 +1124,9 @@ Deno.serve(async (req: Request) => {
     );
   }
 
-  // ---------------------------------------------------------------
-  // 4. Load history
-  // ---------------------------------------------------------------
+  /* ---------------------------------------------------------------
+   * 4. Load history
+   * --------------------------------------------------------------- */
 
   const {
     data: recentRows,
@@ -1070,9 +1176,9 @@ Deno.serve(async (req: Request) => {
       ),
     }));
 
-  // ---------------------------------------------------------------
-  // 5. Build prompt
-  // ---------------------------------------------------------------
+  /* ---------------------------------------------------------------
+   * 5. Build prompt
+   * --------------------------------------------------------------- */
 
   const context =
     body?.context ?? {};
@@ -1087,11 +1193,15 @@ Deno.serve(async (req: Request) => {
   const userTurn =
     `Farmer: ${message}\n\nRespond now with the structured answer JSON.`;
 
-  // ---------------------------------------------------------------
-  // Gemini → OpenRouter fallback
-  // ---------------------------------------------------------------
+  /* ---------------------------------------------------------------
+   * Gemini → OpenRouter model fallback chain
+   * --------------------------------------------------------------- */
 
   let aiText = "";
+
+  let openRouterApiKey:
+    | string
+    | null = null;
 
   try {
     const result =
@@ -1101,22 +1211,28 @@ Deno.serve(async (req: Request) => {
           contents: [
             {
               role: "user",
+
               parts: [
                 {
                   text: prompt,
                 },
+
                 {
                   text: userTurn,
                 },
               ],
             },
           ],
+
           generationConfig: {
             temperature: 0.4,
+
             responseMimeType:
               "application/json",
+
             responseSchema: {
               type: "OBJECT",
+
               properties: {
                 answer: {
                   type: "STRING",
@@ -1189,15 +1305,15 @@ Deno.serve(async (req: Request) => {
       "GEMINI_RATE_LIMIT"
     ) {
       console.log(
-        "Gemini 429 detected. Switching immediately to OpenRouter.",
+        "Gemini 429 detected. Switching to OpenRouter model fallback chain.",
       );
 
-      const openRouterKey =
+      openRouterApiKey =
         Deno.env.get(
           "OPENROUTER_API_KEY",
-        );
+        ) ?? null;
 
-      if (!openRouterKey) {
+      if (!openRouterApiKey) {
         console.error(
           "OPENROUTER_API_KEY is not configured.",
         );
@@ -1216,10 +1332,11 @@ Deno.serve(async (req: Request) => {
       try {
         const result =
           await callOpenRouter(
-            openRouterKey,
+            openRouterApiKey,
             {
               systemPrompt:
                 prompt,
+
               userMessage:
                 userTurn,
             },
@@ -1229,6 +1346,7 @@ Deno.serve(async (req: Request) => {
 
         console.log(
           "AI provider: OpenRouter fallback",
+          result.model,
         );
       } catch (openRouterError) {
         console.error(
@@ -1240,9 +1358,9 @@ Deno.serve(async (req: Request) => {
           {
             success: false,
             error:
-              "Kissan AI is temporarily unavailable. Please try again.",
+              "All AI providers are temporarily busy. Please try again shortly.",
           },
-          502,
+          503,
           req,
         );
       }
@@ -1264,9 +1382,9 @@ Deno.serve(async (req: Request) => {
     }
   }
 
-  // ---------------------------------------------------------------
-  // 6. Parse AI response
-  // ---------------------------------------------------------------
+  /* ---------------------------------------------------------------
+   * 6. Parse AI response
+   * --------------------------------------------------------------- */
 
   console.log(
     "Final AI raw response:",
@@ -1296,17 +1414,29 @@ Deno.serve(async (req: Request) => {
     );
   }
 
-  // ---------------------------------------------------------------
-  // 7. Final Urdu script safeguard
-  // ---------------------------------------------------------------
+  /* ---------------------------------------------------------------
+   * 7. Final Urdu script safeguard
+   * --------------------------------------------------------------- */
 
   if (
     preferredLanguage === "urdu" ||
     parsed.language === "ur"
   ) {
+    /*
+     * Load OpenRouter key if it wasn't needed during
+     * the main response.
+     */
+    if (!openRouterApiKey) {
+      openRouterApiKey =
+        Deno.env.get(
+          "OPENROUTER_API_KEY",
+        ) ?? null;
+    }
+
     parsed.answer =
       await correctUrduScript(
         geminiApiKey,
+        openRouterApiKey,
         parsed.answer,
       );
 
@@ -1319,6 +1449,7 @@ Deno.serve(async (req: Request) => {
       parsed.clarifying_question =
         await correctUrduScript(
           geminiApiKey,
+          openRouterApiKey,
           parsed.clarifying_question,
         );
     }
@@ -1330,6 +1461,7 @@ Deno.serve(async (req: Request) => {
             isBadUrduScript(point)
               ? await correctUrduScript(
                   geminiApiKey,
+                  openRouterApiKey,
                   point,
                 )
               : point,
@@ -1343,19 +1475,22 @@ Deno.serve(async (req: Request) => {
             isBadUrduScript(action)
               ? await correctUrduScript(
                   geminiApiKey,
+                  openRouterApiKey,
                   action,
                 )
               : action,
         ),
       );
 
-    // Force language metadata to Urdu.
+    /*
+     * Force language metadata to Urdu.
+     */
     parsed.language = "ur";
   }
 
-  // ---------------------------------------------------------------
-  // 8. Save assistant message
-  // ---------------------------------------------------------------
+  /* ---------------------------------------------------------------
+   * 8. Save assistant message
+   * --------------------------------------------------------------- */
 
   const {
     data: savedMessage,
@@ -1366,10 +1501,13 @@ Deno.serve(async (req: Request) => {
       .insert({
         conversation_id:
           conversationId,
+
         farm_id:
           farmId,
+
         role:
           "assistant",
+
         content:
           parsed.answer,
       })
@@ -1393,9 +1531,9 @@ Deno.serve(async (req: Request) => {
     );
   }
 
-  // ---------------------------------------------------------------
-  // 9. Update conversation
-  // ---------------------------------------------------------------
+  /* ---------------------------------------------------------------
+   * 9. Update conversation
+   * --------------------------------------------------------------- */
 
   await supabaseAdmin
     .from("chat_conversations")
@@ -1408,9 +1546,9 @@ Deno.serve(async (req: Request) => {
       conversationId,
     );
 
-  // ---------------------------------------------------------------
-  // 10. Return
-  // ---------------------------------------------------------------
+  /* ---------------------------------------------------------------
+   * 10. Return
+   * --------------------------------------------------------------- */
 
   return json(
     {
@@ -1422,3 +1560,4 @@ Deno.serve(async (req: Request) => {
     req,
   );
 });
+

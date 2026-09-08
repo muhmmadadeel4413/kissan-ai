@@ -1,3 +1,4 @@
+
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
@@ -9,7 +10,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
  * Provider flow:
  * 1. Gemini is tried first.
  * 2. If Gemini returns HTTP 429, immediately switch to OpenRouter.
- * 3. OpenRouter uses the `openrouter/free` routing model.
+ * 3. OpenRouter uses explicit vision-capable fallback models.
  * 4. No repeated Gemini retries before fallback.
  *
  * Security model:
@@ -55,6 +56,19 @@ const GEMINI_BASE =
 
 const OPENROUTER_URL =
   "https://openrouter.ai/api/v1/chat/completions";
+
+/**
+ * Explicit vision-capable OpenRouter fallback models.
+ *
+ * IMPORTANT:
+ * Do NOT use openrouter/free here.
+ * The free router may select a model that is unsuitable for
+ * crop diagnosis even when the request contains an image.
+ */
+const OPENROUTER_MODELS = [
+  "google/gemma-4-26b-a4b-it:free",
+  "google/gemma-4-26b-a4b-it",
+];
 
 function json(
   data: unknown,
@@ -138,6 +152,15 @@ async function callGemini(
 /* OpenRouter fallback                                                */
 /* ------------------------------------------------------------------ */
 
+/**
+ * OpenRouter fallback using explicit vision-capable models.
+ *
+ * We use OpenRouter's `models` fallback mechanism instead of
+ * `openrouter/free`.
+ *
+ * This prevents OpenRouter from selecting an unsuitable free
+ * model such as a content-safety-only model.
+ */
 async function callOpenRouter(
   apiKey: string,
   prompt: string,
@@ -153,7 +176,12 @@ async function callOpenRouter(
       "X-Title": "Kissan AI",
     },
     body: JSON.stringify({
-      model: "openrouter/free",
+      model: OPENROUTER_MODELS[0],
+
+      // OpenRouter will try these models in order if the first
+      // model/provider is unavailable or rate-limited.
+      models: OPENROUTER_MODELS,
+
       messages: [
         {
           role: "system",
@@ -176,7 +204,19 @@ async function callOpenRouter(
           ],
         },
       ],
+
       temperature: 0.3,
+
+      /**
+       * Ask OpenRouter for JSON output.
+       *
+       * We intentionally use json_object instead of a strict
+       * JSON schema because the fallback chain can contain
+       * different model/provider implementations.
+       */
+      response_format: {
+        type: "json_object",
+      },
     }),
   });
 
@@ -186,7 +226,7 @@ async function callOpenRouter(
     console.error(
       "OpenRouter error:",
       response.status,
-      errorText.slice(0, 500),
+      errorText.slice(0, 1000),
     );
 
     throw new Error("OPENROUTER_ERROR");
@@ -485,7 +525,7 @@ Deno.serve(async (req: Request) => {
   }
 
   /* -------------------------------------------------------------- */
-  /* Download stored image                                          */
+  /* Download stored image                                           */
   /* -------------------------------------------------------------- */
 
   let imageResp: Response;
@@ -527,7 +567,7 @@ Deno.serve(async (req: Request) => {
   const base64 = bytesToBase64(imageBytes);
 
   /* -------------------------------------------------------------- */
-  /* Build context                                                  */
+  /* Build context                                                   */
   /* -------------------------------------------------------------- */
 
   const contextBits = [
@@ -558,7 +598,7 @@ ${contextBits.join("\n")}`
       : `The photo is of a crop on a farm in South Asia (e.g. Pakistan). No additional context was provided.`;
 
   /* -------------------------------------------------------------- */
-  /* Diagnosis prompt                                               */
+  /* Diagnosis prompt                                                */
   /* -------------------------------------------------------------- */
 
   const prompt = `
@@ -576,14 +616,15 @@ Be honest and careful:
 - Do not invent symptoms that are not visible.
 - Recommended actions must be simple, affordable, safe, and suitable for a smallholder farmer.
 - Do not recommend dangerous pesticide mixing or unsafe chemical practices.
+- Do not claim certainty when the photo does not provide enough evidence.
 
-Respond ONLY with valid JSON matching this schema.
+Respond ONLY with valid JSON.
 
 Do not use markdown.
 
 Do not add text before or after the JSON.
 
-Schema:
+Use exactly these fields:
 
 {
   "diagnosis": "short human-readable name of the likely problem",
@@ -597,12 +638,14 @@ Schema:
 `.trim();
 
   /* -------------------------------------------------------------- */
-  /* Gemini first → OpenRouter fallback                             */
+  /* Gemini first → OpenRouter fallback                              */
   /* -------------------------------------------------------------- */
 
   let modelText = "";
 
-  let provider: "gemini" | "openrouter" = "gemini";
+  let provider:
+    | "gemini"
+    | "openrouter" = "gemini";
 
   const geminiBody = {
     contents: [
@@ -698,7 +741,7 @@ Schema:
     );
 
     /* ------------------------------------------------------------ */
-    /* Immediate OpenRouter fallback on Gemini 429                  */
+    /* Immediate OpenRouter fallback on Gemini 429                   */
     /* ------------------------------------------------------------ */
 
     if (errorMessage === "GEMINI_RATE_LIMIT") {
@@ -735,6 +778,7 @@ Schema:
           );
 
         modelText = fallback.text;
+
         provider = "openrouter";
 
         console.log(
@@ -772,7 +816,7 @@ Schema:
   }
 
   /* -------------------------------------------------------------- */
-  /* Parse diagnosis                                                */
+  /* Parse diagnosis                                                 */
   /* -------------------------------------------------------------- */
 
   const parsed =
@@ -796,7 +840,7 @@ Schema:
   }
 
   /* -------------------------------------------------------------- */
-  /* Supabase admin client                                          */
+  /* Supabase admin client                                           */
   /* -------------------------------------------------------------- */
 
   const supabaseUrl =
@@ -813,7 +857,7 @@ Schema:
   );
 
   /* -------------------------------------------------------------- */
-  /* Farm ownership                                                 */
+  /* Farm ownership                                                  */
   /* -------------------------------------------------------------- */
 
   if (farmId) {
@@ -854,7 +898,7 @@ Schema:
   }
 
   /* -------------------------------------------------------------- */
-  /* Persist diagnosis                                              */
+  /* Persist diagnosis                                               */
   /* -------------------------------------------------------------- */
 
   const insertPayload: Record<
@@ -902,7 +946,7 @@ Schema:
   }
 
   /* -------------------------------------------------------------- */
-  /* Success                                                         */
+  /* Success                                                          */
   /* -------------------------------------------------------------- */
 
   return json(
@@ -914,3 +958,4 @@ Schema:
     req,
   );
 });
+
