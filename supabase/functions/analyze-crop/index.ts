@@ -419,6 +419,151 @@ function parseDiagnosis(text: string): {
 }
 
 /* ------------------------------------------------------------------ */
+/* Language enforcement                                               */
+/* ------------------------------------------------------------------ */
+
+/** Arabic-script letters (Urdu / Persian / Arabic). */
+const ARABIC_SCRIPT_RE =
+  /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/;
+
+const LATIN_LETTER_RE = /[A-Za-z]/;
+
+/**
+ * True when `text` is written in the wrong script for `language`.
+ *
+ * Urdu mode: a value with Latin letters but NO Arabic-script letters is
+ * wrong (e.g. "Possible Brown Spot disease").
+ * English mode: any Arabic-script letter is wrong.
+ *
+ * Mixed values such as "آلو (Potato)" are accepted — they legitimately
+ * contain a crop name or unit written in the other script.
+ */
+function wrongScript(text: string, language: "en" | "ur"): boolean {
+  const value = (text ?? "").trim();
+  if (!value) return false;
+  const hasArabic = ARABIC_SCRIPT_RE.test(value);
+  if (language === "ur") return !hasArabic && LATIN_LETTER_RE.test(value);
+  return hasArabic;
+}
+
+type DiagnosisText = {
+  diagnosis: string;
+  description: string;
+  causes: string[];
+  recommendedActions: string[];
+  notes: string;
+};
+
+/** The fields whose text does not match the requested language. */
+function offendingFields(
+  parsed: DiagnosisText,
+  language: "en" | "ur",
+): Record<string, string | string[]> {
+  const bad: Record<string, string | string[]> = {};
+
+  for (
+    const key of ["diagnosis", "description", "notes"] as const
+  ) {
+    if (wrongScript(parsed[key], language)) bad[key] = parsed[key];
+  }
+
+  for (
+    const key of ["causes", "recommendedActions"] as const
+  ) {
+    if (parsed[key].some((item) => wrongScript(item, language))) {
+      bad[key] = parsed[key];
+    }
+  }
+
+  return bad;
+}
+
+/**
+ * Rewrite the fields that came back in the wrong language.
+ *
+ * The vision prompt already asks for the farmer's language, but models
+ * occasionally answer the title in one language and the body in another
+ * (e.g. an Urdu title above an English paragraph). This second, text-only
+ * pass guarantees the whole diagnosis matches the UI language.
+ *
+ * It is skipped entirely when the response is already correct, and any
+ * failure leaves the original text untouched so a diagnosis is never lost.
+ */
+async function enforceDiagnosisLanguage(
+  parsed: DiagnosisText,
+  language: "en" | "ur",
+  apiKey: string,
+): Promise<DiagnosisText> {
+  const bad = offendingFields(parsed, language);
+
+  if (Object.keys(bad).length === 0) return parsed;
+
+  const target = language === "ur" ? "Urdu" : "English";
+
+  const scriptRule = language === "ur"
+    ? "Use Urdu (Arabic) script for every value. Do not write words in Latin letters; keep numbers and units as they are."
+    : "Use plain English for every value. Do not use Arabic or Urdu script.";
+
+  const prompt = `
+Translate these crop-diagnosis values into ${target}.
+
+Rules:
+- Keep the meaning exactly the same. Do not add, remove or reorder information.
+- ${scriptRule}
+- Arrays must keep the same number of items in the same order.
+- Return ONLY a JSON object with the same keys and the same shapes as the input.
+
+Input:
+${JSON.stringify(bad)}
+`.trim();
+
+  try {
+    const { text } = await callGemini(apiKey, {
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: {
+        temperature: 0,
+        responseMimeType: "application/json",
+      },
+    });
+
+    const fixed = extractJson(text) as Record<string, unknown> | null;
+
+    if (!fixed || typeof fixed !== "object") return parsed;
+
+    const merged: DiagnosisText = { ...parsed };
+
+    for (
+      const key of ["diagnosis", "description", "notes"] as const
+    ) {
+      const value = fixed[key];
+      if (typeof value === "string" && value.trim()) {
+        merged[key] = value.trim();
+      }
+    }
+
+    for (
+      const key of ["causes", "recommendedActions"] as const
+    ) {
+      const value = fixed[key];
+      if (
+        Array.isArray(value) &&
+        value.length === parsed[key].length
+      ) {
+        merged[key] = value.map((item) => String(item));
+      }
+    }
+
+    return merged;
+  } catch (error) {
+    console.error(
+      "analyze-crop language repair failed:",
+      error,
+    );
+    return parsed;
+  }
+}
+
+/* ------------------------------------------------------------------ */
 /* Main handler                                                       */
 /* ------------------------------------------------------------------ */
 
@@ -615,12 +760,14 @@ ${contextBits.join("\n")}`
    */
   const languageDirective =
     language === "ur"
-      ? `LANGUAGE — CRITICAL:
-The farmer selected URDU. Write the values of "diagnosis", "description", "causes", "recommendedActions" and "notes" in clear, simple Pakistani Urdu using Urdu/Arabic script.
+      ? `LANGUAGE — MOST IMPORTANT RULE:
+The farmer uses URDU. Every value you write — "diagnosis", "description", "causes", "recommendedActions" and "notes" — MUST be in Urdu using Arabic script.
+- Do NOT answer in English. Do NOT translate only the title and leave the rest in English.
 - NEVER write Urdu in Devanagari/Hindi script.
-- Keep crop names in Urdu where a common Urdu name exists (e.g. آلو, گندم, کپاس).
-- Keep numeric values and the "severity" and "confidence" fields exactly as specified (English enum / integer).`
-      : `LANGUAGE: Write all human-readable values in clear, simple English.`;
+- Use common Urdu crop names (آلو, گندم, کپاس) and keep numbers/units as they are.
+- Before replying, check every string: if it contains English words, rewrite it in Urdu.`
+      : `LANGUAGE — MOST IMPORTANT RULE:
+The farmer uses English. Every value you write must be in clear, simple English. Do not use Urdu/Arabic script anywhere.`;
 
   const prompt = `
 You are a trusted crop-health expert for smallholder farmers in South Asia (Pakistan). You diagnose plant problems from photos.
@@ -698,6 +845,9 @@ Use exactly these fields:
         properties: {
           diagnosis: {
             type: "STRING",
+            description: language === "ur"
+              ? "Problem name in Urdu (Arabic script)"
+              : "Problem name in English",
           },
 
           severity: {
@@ -711,12 +861,18 @@ Use exactly these fields:
 
           description: {
             type: "STRING",
+            description: language === "ur"
+              ? "2-4 sentences in Urdu (Arabic script)"
+              : "2-4 sentences in English",
           },
 
           causes: {
             type: "ARRAY",
             items: {
               type: "STRING",
+              description: language === "ur"
+                ? "In Urdu (Arabic script)"
+                : "In English",
             },
           },
 
@@ -724,11 +880,17 @@ Use exactly these fields:
             type: "ARRAY",
             items: {
               type: "STRING",
+              description: language === "ur"
+                ? "In Urdu (Arabic script)"
+                : "In English",
             },
           },
 
           notes: {
             type: "STRING",
+            description: language === "ur"
+              ? "In Urdu (Arabic script)"
+              : "In English",
           },
         },
 
@@ -842,10 +1004,10 @@ Use exactly these fields:
   /* Parse diagnosis                                                 */
   /* -------------------------------------------------------------- */
 
-  const parsed =
+  const parsedRaw =
     parseDiagnosis(modelText);
 
-  if (!parsed) {
+  if (!parsedRaw) {
     console.error(
       `${provider} parse failure. Raw:`,
       modelText.slice(0, 1000),
@@ -861,6 +1023,17 @@ Use exactly these fields:
       req,
     );
   }
+
+  /**
+   * Models occasionally answer the title in one language and the body in
+   * another. This repairs any field that does not match the farmer's UI
+   * language, and is a no-op when the response is already correct.
+   */
+  const parsed = await enforceDiagnosisLanguage(
+    parsedRaw,
+    language,
+    geminiApiKey,
+  );
 
   /* -------------------------------------------------------------- */
   /* Supabase admin client                                           */
