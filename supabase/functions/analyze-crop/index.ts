@@ -186,7 +186,7 @@ async function callOpenRouter(
         {
           role: "system",
           content:
-            "You are a trusted crop-health expert for smallholder farmers in South Asia, especially Pakistan. Analyze crop photos carefully. Return ONLY valid JSON. Do not use markdown code fences. Do not add explanations before or after the JSON.",
+            "You are a trusted crop-health expert for smallholder farmers in South Asia, especially Pakistan. Analyze crop photos carefully. Return ONLY valid JSON. Do not use markdown code fences. Do not add explanations before or after the JSON. Obey the LANGUAGE rule in the user message exactly: every string value must be written in the language it requests (Urdu must use Arabic script, never English or Devanagari).",
         },
         {
           role: "user",
@@ -276,6 +276,83 @@ async function callOpenRouter(
     text: text.trim(),
     model,
   };
+}
+
+/**
+ * Text-only OpenRouter call, used to repair a diagnosis that came back in
+ * the wrong language. No image is sent, so it is cheap and fast.
+ */
+async function callOpenRouterText(
+  apiKey: string,
+  prompt: string,
+): Promise<string> {
+  const response = await fetch(OPENROUTER_URL, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+      "HTTP-Referer": "https://kissan-ai-six.vercel.app",
+      "X-Title": "Kissan AI",
+    },
+    body: JSON.stringify({
+      model: OPENROUTER_MODELS[0],
+      models: OPENROUTER_MODELS,
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are a precise translator for a farming app. Translate the given field values exactly, without adding or removing information. Return ONLY valid JSON. Do not use markdown code fences.",
+        },
+        {
+          role: "user",
+          content: prompt,
+        },
+      ],
+      temperature: 0,
+      response_format: {
+        type: "json_object",
+      },
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+
+    console.error(
+      "OpenRouter (text) error:",
+      response.status,
+      errorText.slice(0, 500),
+    );
+
+    throw new Error("OPENROUTER_TEXT_ERROR");
+  }
+
+  const data = await response.json();
+
+  const content = data?.choices?.[0]?.message?.content;
+
+  let text = "";
+
+  if (typeof content === "string") {
+    text = content;
+  } else if (Array.isArray(content)) {
+    text = content
+      .map((part: unknown) =>
+        part &&
+        typeof part === "object" &&
+        "text" in part &&
+        typeof (part as { text?: unknown }).text === "string"
+          ? (part as { text: string }).text
+          : "",
+      )
+      .join("");
+  }
+
+  if (!text.trim()) {
+    throw new Error("OPENROUTER_TEXT_EMPTY_RESPONSE");
+  }
+
+  return text.trim();
 }
 
 /* ------------------------------------------------------------------ */
@@ -498,14 +575,18 @@ async function enforceDiagnosisLanguage(
 
   if (Object.keys(bad).length === 0) return parsed;
 
+  console.log(
+    `analyze-crop language repair: language=${language} fields=${Object.keys(bad).join(",")}`,
+  );
+
   const target = language === "ur" ? "Urdu" : "English";
 
   const scriptRule = language === "ur"
-    ? "Use Urdu (Arabic) script for every value. Do not write words in Latin letters; keep numbers and units as they are."
+    ? "Use Urdu (Arabic) script for every value. Do not write any word in Latin letters; keep numbers, units and chemical names as they are."
     : "Use plain English for every value. Do not use Arabic or Urdu script.";
 
   const prompt = `
-Translate these crop-diagnosis values into ${target}.
+Translate these crop-diagnosis field values into ${target}.
 
 Rules:
 - Keep the meaning exactly the same. Do not add, remove or reorder information.
@@ -517,8 +598,11 @@ Input:
 ${JSON.stringify(bad)}
 `.trim();
 
+  /* Gemini first, OpenRouter second (Gemini may be rate limited). */
+  const texts: string[] = [];
+
   try {
-    const { text } = await callGemini(apiKey, {
+    const gemini = await callGemini(apiKey, {
       contents: [{ parts: [{ text: prompt }] }],
       generationConfig: {
         temperature: 0,
@@ -526,11 +610,19 @@ ${JSON.stringify(bad)}
       },
     });
 
+    texts.push(gemini.text);
+  } catch (error) {
+    console.error("analyze-crop repair via Gemini failed:", error);
+  }
+
+  const merged: DiagnosisText = { ...parsed };
+
+  const applyFix = (text: string): boolean => {
     const fixed = extractJson(text) as Record<string, unknown> | null;
 
-    if (!fixed || typeof fixed !== "object") return parsed;
+    if (!fixed || typeof fixed !== "object") return false;
 
-    const merged: DiagnosisText = { ...parsed };
+    let changed = false;
 
     for (
       const key of ["diagnosis", "description", "notes"] as const
@@ -538,6 +630,7 @@ ${JSON.stringify(bad)}
       const value = fixed[key];
       if (typeof value === "string" && value.trim()) {
         merged[key] = value.trim();
+        changed = true;
       }
     }
 
@@ -550,17 +643,49 @@ ${JSON.stringify(bad)}
         value.length === parsed[key].length
       ) {
         merged[key] = value.map((item) => String(item));
+        changed = true;
       }
     }
 
-    return merged;
-  } catch (error) {
+    return changed;
+  };
+
+  let fixed = texts.some(applyFix);
+
+  if (!fixed) {
+    const openRouterKey = Deno.env.get("OPENROUTER_API_KEY");
+
+    if (openRouterKey) {
+      try {
+        const text = await callOpenRouterText(openRouterKey, prompt);
+        fixed = applyFix(text);
+      } catch (error) {
+        console.error(
+          "analyze-crop repair via OpenRouter failed:",
+          error,
+        );
+      }
+    }
+  }
+
+  if (!fixed) {
     console.error(
-      "analyze-crop language repair failed:",
-      error,
+      "analyze-crop language repair failed, keeping original text.",
     );
     return parsed;
   }
+
+  const remaining = Object.keys(
+    offendingFields(merged, language),
+  );
+
+  if (remaining.length) {
+    console.error(
+      `analyze-crop still wrong after repair: ${remaining.join(",")}`,
+    );
+  }
+
+  return merged;
 }
 
 /* ------------------------------------------------------------------ */
@@ -655,6 +780,10 @@ Deno.serve(async (req: Request) => {
   } = body ?? {};
 
   const language: "en" | "ur" = body?.language === "ur" ? "ur" : "en";
+
+  console.log(
+    `analyze-crop request: language=${language} (raw=${JSON.stringify(body?.language)}) farmId=${farmId ? "yes" : "no"}`,
+  );
 
   const cropName =
     (body?.cropName ?? "crop")
@@ -770,6 +899,8 @@ The farmer uses URDU. Every value you write — "diagnosis", "description", "cau
 The farmer uses English. Every value you write must be in clear, simple English. Do not use Urdu/Arabic script anywhere.`;
 
   const prompt = `
+${languageDirective}
+
 You are a trusted crop-health expert for smallholder farmers in South Asia (Pakistan). You diagnose plant problems from photos.
 
 ${systemContext}
@@ -804,6 +935,12 @@ Use exactly these fields:
   "causes": ["likely cause 1", "likely cause 2"],
   "recommendedActions": ["simple, affordable, safe action 1", "action 2", "action 3"],
   "notes": "Any important caveat, e.g. when to consult a local agricultural officer. Always remind that this is AI guidance, not a substitute for a professional."
+}
+
+${
+  language === "ur"
+    ? "FINAL CHECK: every string value above must be written in Urdu with Arabic script. If any value is in English, rewrite it in Urdu before answering."
+    : "FINAL CHECK: every string value above must be written in English."
 }
 `.trim();
 
