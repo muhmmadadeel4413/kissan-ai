@@ -21,7 +21,7 @@ export function UserIdentity({ className }: { className?: string }) {
       <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary-soft text-xs font-bold text-primary ring-1 ring-inset ring-primary/15">
         {initial}
       </span>
-      <span className="max-w-[10rem] truncate text-sm font-medium text-foreground">
+      <span className="bidi-auto max-w-[10rem] truncate text-sm font-medium text-foreground">
         {name || t("common.guest")}
       </span>
     </div>

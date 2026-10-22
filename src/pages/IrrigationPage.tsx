@@ -31,6 +31,8 @@ import { useFarm } from "../context/FarmContext";
 import { useFarmWeather } from "../hooks/useFarmWeather";
 import { usePreferences } from "../context/PreferencesContext";
 import { buildFarmContext } from "../lib/farm-context";
+import { formatDate } from "../lib/format";
+import { localizeCrop, localizeGrowthStage, localizeIrrigationMethod, localizeMissingField, localizeSoilType, isUnknownGrowthStage } from "../lib/localize";
 import {
   fetchIrrigationHistory,
   requestIrrigationAdvice,
@@ -211,7 +213,7 @@ export default function IrrigationPage() {
           {farm?.id ? (
             <Button asChild variant="outline" size="sm" className="shrink-0">
               <Link to={`/farm-setup?edit=${farm.id}`}>
-                <MapPin className="mr-1.5 h-3.5 w-3.5" />
+                <MapPin className="me-1.5 h-3.5 w-3.5" />
                 {t("farmProfile.editBtn")}
               </Link>
             </Button>
@@ -297,7 +299,7 @@ export default function IrrigationPage() {
                           className="h-1.5 w-1.5 shrink-0 rounded-full bg-warning"
                           aria-hidden="true"
                         />
-                        {m}
+                        {localizeMissingField(m, language)}
                       </li>
                     ))}
                   </ul>
@@ -430,10 +432,11 @@ const URGENCY_META: Record<
   high: { labelKey: "irrigation.urgency.high", variant: "danger" },
 };
 
-function formatDate(iso: string): string {
+/** Locale-aware date stamp for history rows. */
+function formatHistoryDate(iso: string, language: "en" | "ur"): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleDateString(undefined, {
+  return formatDate(iso, language, {
     month: "short",
     day: "numeric",
     year: "numeric",
@@ -455,16 +458,26 @@ function CurrentRecommendationCard({
   weatherUnavailable?: boolean;
   onViewPlan?: () => void;
 }) {
-  const { t } = usePreferences();
+  const { t, language } = usePreferences();
   const statusMeta = STATUS_META[recommendation.status] ?? STATUS_META.insufficient;
   const urgencyMeta = URGENCY_META[recommendation.urgency] ?? URGENCY_META.low;
   const context = buildFarmContext(farm);
 
   const farmChips = [
-    { labelKey: "irrigation.crop", value: farm.currentCrop || "—", icon: Sprout },
-    { labelKey: "irrigation.growthStage", value: context.growth.stageLabel || "—", icon: TrendingUp },
-    { labelKey: "irrigation.soil", value: farm.soilType || "—", icon: Leaf },
-    { labelKey: "irrigation.method", value: farm.irrigationMethod || "—", icon: DropletIcon },
+    { labelKey: "irrigation.crop", value: localizeCrop(farm.currentCrop, language) || "—", icon: Sprout },
+    {
+      labelKey: "irrigation.growthStage",
+      value: isUnknownGrowthStage(context.growth)
+        ? "—"
+        : localizeGrowthStage(context.growth, language),
+      icon: TrendingUp,
+    },
+    { labelKey: "irrigation.soil", value: localizeSoilType(farm.soilType, language) || "—", icon: Leaf },
+    {
+      labelKey: "irrigation.method",
+      value: localizeIrrigationMethod(farm.irrigationMethod, language) || "—",
+      icon: DropletIcon,
+    },
     { labelKey: "irrigation.location", value: farm.location || "—", icon: MapPin },
     { labelKey: "irrigation.landArea", value: farm.landArea || "—", icon: Ruler },
   ];
@@ -673,7 +686,7 @@ function HistoryRow({
   open: boolean;
   onToggle: () => void;
 }) {
-  const { t } = usePreferences();
+  const { t, language } = usePreferences();
   const rec = record.recommendation;
   const meta = STATUS_META[rec.status] ?? STATUS_META.insufficient;
   return (
@@ -682,7 +695,7 @@ function HistoryRow({
         <button
           type="button"
           onClick={onToggle}
-          className="flex w-full flex-wrap items-center justify-between gap-3 text-left cursor-pointer"
+          className="flex w-full flex-wrap items-center justify-between gap-3 text-start cursor-pointer"
           aria-expanded={open}
         >
           <div className="flex min-w-0 items-center gap-3">
@@ -694,7 +707,7 @@ function HistoryRow({
                 {t(meta.labelKey)}
               </p>
               <p className="text-xs text-muted-foreground">
-                {t("irrigation.reportedOn", { date: formatDate(record.createdAt) })}
+                {t("irrigation.reportedOn", { date: formatHistoryDate(record.createdAt, language) })}
               </p>
             </div>
           </div>

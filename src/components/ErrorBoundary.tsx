@@ -1,5 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { AlertTriangle } from "lucide-react";
+import { tNow } from "../lib/current-language";
 
 interface Props {
   children: ReactNode;
@@ -45,16 +46,15 @@ export class ErrorBoundary extends Component<Props, State> {
           <div className="flex h-14 w-14 items-center justify-center rounded-full bg-destructive/10">
             <AlertTriangle className="h-7 w-7 text-destructive" />
           </div>
-          <h1 className="text-xl font-semibold">Something went wrong</h1>
+          <h1 className="text-xl font-semibold">{tNow("common.error")}</h1>
           <p className="text-sm text-muted-foreground">
-            An unexpected error occurred. Please try reloading the page — if the
-            problem persists, let us know so we can fix it.
+            {tNow("common.errorBody")}
           </p>
           <button
             onClick={this.reset}
             className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
           >
-            Try again
+            {tNow("common.tryAgain")}
           </button>
         </div>
       </div>

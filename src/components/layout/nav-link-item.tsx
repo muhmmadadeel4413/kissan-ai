@@ -30,7 +30,7 @@ export function NavLinkItem({
           {/* Active indicator bar */}
           <span
             className={cn(
-              "absolute left-0 top-1/2 h-4 w-1 -translate-y-1/2 rounded-full bg-accent transition-all duration-200",
+              "absolute start-0 top-1/2 h-4 w-1 -translate-y-1/2 rounded-full bg-accent transition-all duration-200",
               isActive ? "opacity-100" : "opacity-0"
             )}
             aria-hidden="true"

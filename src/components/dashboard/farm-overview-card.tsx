@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { Ruler, Sprout } from "lucide-react";
 import { Card, CardContent } from "../ui/card";
 import { useI18n } from "../../context/PreferencesContext";
+import { localizeCrop, localizeGrowthStage } from "../../lib/localize";
 import type { Farm, CropGrowthInfo } from "../../types";
 
 /**
@@ -16,10 +17,12 @@ export function FarmOverviewCard({
   farm: Farm;
   growth: CropGrowthInfo;
 }) {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const stageKnown =
     growth.growthStage !== "unknown" && growth.growthStage !== "not_started";
-  const stageLabel = stageKnown ? growth.stageLabel : t("dashboard.stageUnknown");
+  const stageLabel = stageKnown
+    ? localizeGrowthStage(growth, language)
+    : t("dashboard.stageUnknown");
 
   return (
     <Card className="h-full transition-shadow duration-200 hover:shadow-lift">
@@ -39,7 +42,7 @@ export function FarmOverviewCard({
 
         <div className="min-w-0">
           <p className="font-heading text-2xl font-bold tracking-tight text-foreground">
-            {farm.currentCrop}
+            {localizeCrop(farm.currentCrop, language)}
           </p>
           <p className="mt-0.5 text-xs text-muted-foreground">{t("dashboard.currentCrop")}</p>
         </div>

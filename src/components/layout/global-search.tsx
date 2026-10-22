@@ -185,7 +185,7 @@ export function GlobalSearchDialog({
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={handleKeyDown}
-              className="h-10 w-full bg-transparent pr-12 text-base text-foreground outline-none placeholder:text-muted-foreground/70"
+              className="h-10 w-full bg-transparent pe-12 text-base text-foreground outline-none placeholder:text-muted-foreground/70"
             />
           </div>
         </div>

@@ -333,7 +333,7 @@ function ActionRow({
                 )}
                 aria-hidden="true"
               />
-              <span className="ml-1.5">{t(meta.labelKey)}</span>
+              <span className="ms-1.5">{t(meta.labelKey)}</span>
             </Badge>
           </div>
           <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
@@ -375,7 +375,7 @@ function ActionRow({
           </span>
         ) : null}
 
-        <span className="ml-auto">
+        <span className="ms-auto">
           <Button
             variant={action.completed ? "secondary" : "outline"}
             size="sm"

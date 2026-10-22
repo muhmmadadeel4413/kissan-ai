@@ -150,7 +150,7 @@ function SettingsPopover() {
         aria-haspopup="dialog"
       >
         <Settings className="h-4 w-4 shrink-0" aria-hidden="true" />
-        <span className="flex-1 text-left">{t("app.nav.settings")}</span>
+        <span className="flex-1 text-start">{t("app.nav.settings")}</span>
         <ChevronDown
           className={cn(
             "h-3.5 w-3.5 shrink-0 transition-transform duration-200",
@@ -164,7 +164,7 @@ function SettingsPopover() {
         <div
           role="dialog"
           aria-label={t("app.settingsPanelAria")}
-          className="absolute bottom-full left-0 z-50 mb-2 w-[200px] overflow-hidden rounded-xl border border-sidebar-border bg-sidebar shadow-pop animate-slide-in"
+          className="absolute bottom-full start-0 z-50 mb-2 w-[200px] overflow-hidden rounded-xl border border-sidebar-border bg-sidebar shadow-pop animate-slide-in"
         >
           {/* Profile section */}
           <div className="border-b border-sidebar-border px-3 py-2.5">
@@ -355,12 +355,12 @@ function ProfileMenu() {
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-soft text-sm font-bold text-primary ring-1 ring-inset ring-primary/15">
           {initial}
         </span>
-        <span className="hidden min-w-0 text-left md:block">
-          <span className="block truncate text-sm font-semibold leading-tight text-foreground">
+        <span className="hidden min-w-0 text-start md:block">
+          <span className="bidi-auto block truncate text-sm font-semibold leading-tight text-foreground">
             {name}
           </span>
           {location ? (
-            <span className="block truncate text-xs leading-tight text-muted-foreground">
+            <span className="bidi-auto block truncate text-xs leading-tight text-muted-foreground">
               {location}
             </span>
           ) : null}
@@ -378,7 +378,7 @@ function ProfileMenu() {
         <div
           role="menu"
           aria-label={t("app.accountMenuAria")}
-          className="absolute right-0 top-full z-50 mt-2 w-56 overflow-hidden rounded-2xl border border-border bg-background p-1.5 shadow-pop animate-slide-in"
+          className="absolute end-0 top-full z-50 mt-2 w-56 overflow-hidden rounded-2xl border border-border bg-background p-1.5 shadow-pop animate-slide-in"
         >
           <div className="border-b border-border px-2.5 py-2.5">
             <p className="truncate text-sm font-semibold text-foreground">{name}</p>
@@ -495,7 +495,7 @@ export function AppLayout() {
   return (
     <div className="min-h-screen bg-background">
       {/* Desktop sidebar — full-height flex layout, no scrolling needed. */}
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-[220px] flex-col border-r border-sidebar-border bg-sidebar px-3 py-3 lg:flex">
+      <aside className="fixed inset-y-0 start-0 z-30 hidden w-[220px] flex-col border-e border-sidebar-border bg-sidebar px-3 py-3 lg:flex">
         {/* Logo / Brand */}
         <div className="flex shrink-0 items-center justify-between px-1.5 pb-2">
           <Brand />
@@ -530,7 +530,7 @@ export function AppLayout() {
         </div>
       </aside>
 
-      <div className="lg:pl-[220px]">
+      <div className="lg:ps-[220px]">
         {/* Desktop top bar — search, notifications, farmer profile (reference) */}
         <header className="sticky top-0 z-20 hidden border-b border-border bg-background/90 backdrop-blur lg:block">
           <div className="mx-auto flex h-16 w-full max-w-[1060px] items-center gap-3 px-6">
@@ -541,12 +541,12 @@ export function AppLayout() {
               aria-label={t("search.open")}
             >
               <Search className="h-4 w-4 shrink-0" aria-hidden="true" />
-              <span className="flex-1 text-left">{t("app.searchYourFarm")}</span>
+              <span className="flex-1 text-start">{t("app.searchYourFarm")}</span>
               <kbd className="hidden rounded-md border border-border bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground sm:inline">
                 ⌘K
               </kbd>
             </button>
-            <div className="ml-auto flex items-center gap-1.5">
+            <div className="ms-auto flex items-center gap-1.5">
               <FarmSwitcher />
               <NotificationBell />
               <div className="mx-1.5 h-6 w-px bg-border" aria-hidden="true" />
@@ -559,7 +559,7 @@ export function AppLayout() {
         <header className="sticky top-0 z-30 flex items-center justify-between border-b border-border bg-background/95 px-4 py-3 backdrop-blur lg:hidden">
           <Brand tone="light" />
           <div className="flex items-center gap-1">
-            <FarmSwitcher className="mr-1" />
+            <FarmSwitcher className="me-1" />
             <button
               type="button"
               onClick={openSearch}
@@ -589,7 +589,7 @@ export function AppLayout() {
               onClick={closeDrawer}
               aria-label={t("nav.closeMenu")}
             />
-            <div className="absolute inset-y-0 left-0 flex w-72 max-w-[85vw] flex-col bg-sidebar p-4 shadow-pop animate-slide-in rtl:left-auto rtl:right-0">
+            <div className="absolute inset-y-0 start-0 flex w-72 max-w-[85vw] flex-col bg-sidebar p-4 shadow-pop animate-slide-in">
               <div className="mb-6 flex items-center justify-between">
                 <Brand />
                 <button

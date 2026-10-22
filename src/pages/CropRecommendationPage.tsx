@@ -26,6 +26,8 @@ import {
 import { useFarm } from "../context/FarmContext";
 import { useFarmWeather } from "../hooks/useFarmWeather";
 import { usePreferences } from "../context/PreferencesContext";
+import { formatDate } from "../lib/format";
+import { localizeMissingField } from "../lib/localize";
 import {
   fetchCropRecommendations,
   requestCropRecommendations,
@@ -258,7 +260,7 @@ function TopRecommendationsCard({
   onRun: () => void;
   onViewFull: () => void;
 }) {
-  const { t } = usePreferences();
+  const { t, language } = usePreferences();
 
   // Ranked by confidence, descending — real data, never hardcoded.
   const ranked = result
@@ -283,7 +285,7 @@ function TopRecommendationsCard({
             <div className="flex flex-1 flex-col items-center justify-center gap-4 py-8 text-center">
               <Loader2 className="h-7 w-7 animate-spin text-primary" aria-hidden="true" />
               <p className="text-sm font-semibold text-foreground">{t("cropRec.analyzing")}</p>
-              <div className="mt-1 w-full space-y-4 text-left" aria-hidden="true">
+              <div className="mt-1 w-full space-y-4 text-start" aria-hidden="true">
                 {[{ w: "w-2/3" }, { w: "w-1/2" }, { w: "w-3/4" }].map((s, i) => (
                   <div key={i} className="space-y-2">
                     <div className={`h-3.5 animate-pulse rounded bg-muted ${s.w}`} />
@@ -311,7 +313,7 @@ function TopRecommendationsCard({
                           className="flex items-center gap-2 text-xs font-medium text-foreground"
                         >
                           <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-warning" aria-hidden="true" />
-                          {m}
+                          {localizeMissingField(m, language)}
                         </li>
                       ))}
                     </ul>
@@ -399,10 +401,11 @@ function InfoNote({ text, tone }: { text: string; tone: "neutral" | "warning" })
   );
 }
 
-function formatDate(iso: string): string {
+/** Locale-aware stamp for history rows. */
+function formatHistoryDate(iso: string, language: "en" | "ur"): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleDateString(undefined, {
+  return formatDate(iso, language, {
     month: "short",
     day: "numeric",
     year: "numeric",
@@ -418,7 +421,7 @@ function HistoryRow({
   open: boolean;
   onToggle: () => void;
 }) {
-  const { t } = usePreferences();
+  const { t, language } = usePreferences();
   const top = record.recommendations[0] ?? null;
   return (
     <Card>
@@ -426,7 +429,7 @@ function HistoryRow({
         <button
           type="button"
           onClick={onToggle}
-          className="flex w-full flex-wrap items-center justify-between gap-3 text-left cursor-pointer"
+          className="flex w-full flex-wrap items-center justify-between gap-3 text-start cursor-pointer"
           aria-expanded={open}
         >
           <div className="flex min-w-0 items-center gap-3">
@@ -438,7 +441,7 @@ function HistoryRow({
                 {top ? top.crop : t("cropRec.noHistory")}
               </p>
               <p className="text-xs text-muted-foreground">
-                {t("cropRec.reportedOn", { date: formatDate(record.createdAt) })}
+                {t("cropRec.reportedOn", { date: formatHistoryDate(record.createdAt, language) })}
               </p>
             </div>
           </div>

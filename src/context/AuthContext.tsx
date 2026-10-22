@@ -2,6 +2,7 @@ import * as React from "react";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase, supabaseReady } from "../lib/supabase";
 import { isNetworkError } from "../lib/supabase-errors";
+import { tNow } from "../lib/current-language";
 
 /**
  * Centralized authentication state for Kissan AI.
@@ -47,28 +48,28 @@ function friendlyMessage(error: { code?: string; message?: string }, fallback: s
     raw.includes("already registered") ||
     raw.includes("already exists")
   ) {
-    return "An account with this email already exists.";
+    return tNow("auth.errEmailTaken");
   }
   if (code === "invalid_credentials" || raw.includes("invalid login credentials")) {
-    return "Incorrect email or password. Please try again.";
+    return tNow("auth.errInvalidCredentials");
   }
   if (raw.includes("email not confirmed")) {
-    return "Please confirm your email address, then log in.";
+    return tNow("auth.errEmailNotConfirmed");
   }
   if (code === "email_address_invalid") {
-    return "Please enter a valid email address.";
+    return tNow("auth.errEmailInvalid");
   }
   if (code === "weak_password") {
-    return "Password must be at least 6 characters.";
+    return tNow("auth.errPasswordTooShort");
   }
   return fallback;
 }
 
-const NETWORK_BODY = "We couldn't reach the server. Check your connection and try again.";
+const NETWORK_BODY = () => tNow("auth.errNetwork");
 
 /** Wrap an auth failure, converting network errors into a friendly message. */
 function asFriendlyError(err: unknown, fallback: string): Error {
-  if (isNetworkError(err)) return new Error(NETWORK_BODY);
+  if (isNetworkError(err)) return new Error(NETWORK_BODY());
   return new Error(friendlyMessage((err as { message?: string }) || {}, fallback));
 }
 
@@ -149,7 +150,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               return { needsEmailConfirmation: false };
             }
           }
-          throw asFriendlyError(error, "We couldn't create your account. Please try again.");
+          throw asFriendlyError(error, tNow("auth.errSignupFailed"));
         }
         // If email confirmation is enabled, Supabase returns no session; if it
         // is disabled, the returned session is non-null. Report the real state.
@@ -160,14 +161,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       async signIn(email, password) {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) {
-          throw asFriendlyError(error, "Incorrect email or password. Please try again.");
+          throw asFriendlyError(error, tNow("auth.errInvalidCredentials"));
         }
       },
 
       async signOut() {
         const { error } = await supabase.auth.signOut();
         if (error) {
-          throw new Error("We couldn't log you out. Please try again.");
+          throw new Error(tNow("auth.errLogoutFailed"));
         }
       },
 
@@ -178,7 +179,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (error) {
           throw asFriendlyError(
             error,
-            "We couldn't send a reset link. Please try again."
+            tNow("auth.errResetLinkFailed")
           );
         }
       },
@@ -188,7 +189,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (error) {
           throw asFriendlyError(
             error,
-            "We couldn't update your password. Please try again."
+            tNow("auth.errUpdateFailed")
           );
         }
       },

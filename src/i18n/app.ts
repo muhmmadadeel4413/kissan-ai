@@ -38,6 +38,8 @@ export const enApp: Record<string, string> = {  /* ---------- App nav (sidebar /
   "common.light": "Light",
   "common.dark": "Dark",
   "common.error": "Something went wrong",
+  "common.errorBody": "An unexpected error occurred. Please try reloading the page — if the problem persists, let us know so we can fix it.",
+  "common.close": "Close",
   "common.optional": "Optional",
 
     /* ---------- Page titles ---------- */
@@ -143,7 +145,6 @@ export const enApp: Record<string, string> = {  /* ---------- App nav (sidebar /
   "dashboard.healthClear": "Clear",
   "dashboard.healthWeather": "Weather",
   "dashboard.healthAvailable": "Available",
-  "dashboard.healthUnavailable": "Unavailable",
   "dashboard.healthDiagnosis": "Diagnosis",
   "dashboard.healthMissing": "Missing",
   "dashboard.farmHealth": "Farm Health",
@@ -278,6 +279,8 @@ export const urApp: Record<string, string> = {  /* ---------- App nav ----------
   "common.light": "روشنی",
   "common.dark": "اندھیرا",
   "common.error": "کچھ غلط ہو گیا",
+  "common.errorBody": "ایک غیر متوقع خرابی پیش آئی۔ براہ کرم صفحہ دوبارہ لوڈ کرنے کی کوشش کریں — اگر مسئلہ برقرار رہے تو ہمیں بتائیں تاکہ ہم اسے ٹھیک کر سکیں۔",
+  "common.close": "بند کریں",
   "common.optional": "اختیاری",
 
     /* ---------- Page titles ---------- */
@@ -383,7 +386,6 @@ export const urApp: Record<string, string> = {  /* ---------- App nav ----------
   "dashboard.healthClear": "صاف",
   "dashboard.healthWeather": "موسم",
   "dashboard.healthAvailable": "دستیاب",
-  "dashboard.healthUnavailable": "دستیاب نہیں",
   "dashboard.healthDiagnosis": "تشخیص",
   "dashboard.healthMissing": "غائب",
   "dashboard.farmHealth": "فارم ہیلتھ",

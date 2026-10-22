@@ -28,6 +28,7 @@ import { LoadingState } from "../components/layout/loading-state";
 import { ErrorState } from "../components/layout/error-state";
 import { StatCard } from "../components/layout/stat-card";
 import { exportExpensesCsv, downloadCsv } from "../lib/export-utils";
+import { formatCurrency, formatDate } from "../lib/format";
 import { useFarm } from "../context/FarmContext";
 import { useI18n } from "../context/PreferencesContext";
 import { supabase } from "../lib/supabase";
@@ -64,8 +65,9 @@ function toDateInputValue(d: Date): string {
   ).padStart(2, "0")}`;
 }
 
-function formatMoney(amount: number): string {
-  return `Rs ${amount.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+/** Locale-aware money label, e.g. "Rs 12,500". */
+function formatMoney(amount: number, language: "en" | "ur"): string {
+  return formatCurrency(amount, language, { maximumFractionDigits: 0 });
 }
 
 interface FormState {
@@ -78,7 +80,7 @@ interface FormState {
 const EMPTY_FORM: FormState = { category: "", amount: "", description: "", expenseDate: "" };
 
 export default function ExpensesPage() {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const { farm } = useFarm();
 
   const [expenses, setExpenses] = React.useState<Expense[]>([]);
@@ -194,7 +196,7 @@ export default function ExpensesPage() {
       return;
     }
     if (!form.category) {
-      setFormError("Please select a category.");
+      setFormError(t("expenses.errCategory"));
       return;
     }
 
@@ -283,7 +285,7 @@ export default function ExpensesPage() {
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <StatCard
             label={t("expenses.totalSpent")}
-            value={formatMoney(totalSpent)}
+            value={formatMoney(totalSpent, language)}
             icon={Wallet}
             iconClassName="bg-success-soft text-success"
           />
@@ -371,7 +373,7 @@ export default function ExpensesPage() {
                         <span className="font-medium text-foreground">
                           {t(CATEGORY_LABEL_KEY[category])}
                         </span>
-                        <span className="text-muted-foreground">{formatMoney(total)}</span>
+                        <span className="text-muted-foreground">{formatMoney(total, language)}</span>
                       </div>
                       <div className="h-2 overflow-hidden rounded-full bg-muted">
                         <div
@@ -415,10 +417,11 @@ export default function ExpensesPage() {
                             {t(CATEGORY_LABEL_KEY[expense.category])}
                           </Badge>
                           <span className="text-xs text-muted-foreground">
-                            {new Date(expense.expenseDate + "T00:00:00").toLocaleDateString(
-                              undefined,
-                              { day: "numeric", month: "short", year: "numeric" }
-                            )}
+                            {formatDate(expense.expenseDate + "T00:00:00", language, {
+                              day: "numeric",
+                              month: "short",
+                              year: "numeric",
+                            })}
                           </span>
                         </div>
                         {expense.description ? (
@@ -429,7 +432,7 @@ export default function ExpensesPage() {
                       </div>
                       <div className="flex shrink-0 items-center gap-2">
                         <span className="text-sm font-semibold text-foreground">
-                          {formatMoney(expense.amount)}
+                          {formatMoney(expense.amount, language)}
                         </span>
                         <Button
                           variant="ghost"

@@ -17,6 +17,7 @@ import { IrrigationAdvisorCard } from "../components/dashboard/irrigation-adviso
 import { UpcomingTasksCard } from "../components/dashboard/upcoming-tasks-card";
 import type { HealthInput } from "../components/dashboard/farm-health-gauge";
 import { buildFarmContext } from "../lib/farm-context";
+import { formatDate } from "../lib/format";
 import { fetchActiveRisks } from "../lib/risk-service";
 import { fetchDiagnoses } from "../lib/diagnosis-service";
 import { useFarm } from "../context/FarmContext";
@@ -45,7 +46,7 @@ function greetingFor(hour: number, t: (key: string) => string): string {
  */
 export default function DashboardPage() {
   const { farm } = useFarm();
-  const { t } = useI18n();
+  const { t, language } = useI18n();
 
   if (!farm) {
     return (
@@ -65,7 +66,7 @@ export default function DashboardPage() {
   }
 
   const farmContext = buildFarmContext(farm);
-  const firstName = farm.farmerName.trim().split(/\s+/)[0] || "Farmer";
+  const firstName = farm.farmerName.trim().split(/\s+/)[0] || t("dashboard.farmerDefault");
 
   /* ---- Risk Alerts (real persisted alerts from the Risk Engine) -------- */
   const [riskAlerts, setRiskAlerts] = React.useState<RiskAlert[]>([]);
@@ -154,7 +155,7 @@ export default function DashboardPage() {
     [riskAlerts.length, riskCounts.high, weatherStatus, latestDiagnosis, activity.items.length]
   );
 
-  const today = new Date().toLocaleDateString(undefined, {
+  const today = formatDate(new Date(), language, {
     weekday: "long",
     month: "long",
     day: "numeric",

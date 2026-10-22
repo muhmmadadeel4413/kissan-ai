@@ -2,6 +2,7 @@ import { CalendarClock, Sprout } from "lucide-react";
 import { Card, CardContent } from "../ui/card";
 import { Badge, type BadgeProps } from "../ui/badge";
 import { useI18n } from "../../context/PreferencesContext";
+import { localizeGrowthReason, localizeGrowthStage } from "../../lib/localize";
 import type { CropGrowthInfo, CropGrowthStage } from "../../types";
 
 /** Map a growth stage to a semantic badge color for at-a-glance reading. */
@@ -33,7 +34,7 @@ export function GrowthStageCard({
   growth: CropGrowthInfo;
   compact?: boolean;
 }) {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const unavailable =
     growth.growthStage === "unknown" || growth.growthStage === "not_started";
   const ageKnown = growth.cropAgeDays !== null;
@@ -59,7 +60,7 @@ export function GrowthStageCard({
           {ageKnown ? (
             <p className="text-2xl font-bold tracking-tight text-foreground">
               {growth.cropAgeDays}
-              <span className="ml-1 text-sm font-medium text-muted-foreground">{t("farm.daysUnit")}</span>
+              <span className="ms-1 text-sm font-medium text-muted-foreground">{t("farm.daysUnit")}</span>
             </p>
           ) : (
             <span className="text-sm font-medium text-muted-foreground">
@@ -89,12 +90,14 @@ export function GrowthStageCard({
             </div>
           </div>
           <Badge variant={stageVariant(growth.growthStage)}>
-            {growth.stageLabel}
+            {localizeGrowthStage(growth, language)}
           </Badge>
         </div>
 
         {unavailable && growth.reason ? (
-          <p className="text-xs text-muted-foreground">{growth.reason}</p>
+          <p className="text-xs text-muted-foreground">
+            {localizeGrowthReason(growth, language)}
+          </p>
         ) : null}
       </CardContent>
     </Card>

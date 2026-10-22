@@ -3,6 +3,7 @@ import { ChevronRight, Droplets, Leaf, Sprout } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Badge } from "../ui/badge";
 import { evaluateIrrigation } from "../../lib/irrigation-engine";
+import { localizeCrop, localizeGrowthStage, localizeIrrigationMethod, localizeIrrigationReason, localizeSoilType } from "../../lib/localize";
 import { useI18n } from "../../context/PreferencesContext";
 import { cn } from "../../lib/utils";
 import type { Farm, CropGrowthInfo } from "../../types";
@@ -34,10 +35,12 @@ export function IrrigationAdvisorCard({
   farm: Farm;
   growth: CropGrowthInfo;
 }) {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const result = evaluateIrrigation({
     crop: farm.currentCrop || null,
-    growthStage: growth.stageLabel || null,
+    // Pass the stable stage CODE (vegetative/flowering/…), not the English
+    // display label — the engine keys off codes and the label is localised.
+    growthStage: growth.growthStage || null,
     soilType: farm.soilType,
     irrigationMethod: farm.irrigationMethod,
   });
@@ -65,27 +68,27 @@ export function IrrigationAdvisorCard({
           </Badge>
         </CardTitle>
         <p className="text-xs text-muted-foreground">
-          {farm.currentCrop || t("dashboard.yourCrop")} ·{" "}
-          {growth.stageLabel || t("dashboard.stageUnknown")}
+          {localizeCrop(farm.currentCrop, language) || t("dashboard.yourCrop")} ·{" "}
+          {growth.stageLabel ? localizeGrowthStage(growth, language) : t("dashboard.stageUnknown")}
         </p>
       </CardHeader>
       <CardContent className="flex flex-1 flex-col gap-3">
         <p className="text-sm leading-relaxed text-foreground">
-          {result.reason}
+          {localizeIrrigationReason(result.reason, language)}
         </p>
 
         <div className="mt-auto flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-border pt-3">
           <span className="inline-flex items-center gap-1.5 text-xs font-medium text-foreground">
             <Leaf className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
-            {farm.soilType || t("dashboard.soilDash")}
+            {localizeSoilType(farm.soilType, language) || t("dashboard.soilDash")}
           </span>
           <span className="inline-flex items-center gap-1.5 text-xs font-medium text-foreground">
             <Sprout className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
-            {farm.irrigationMethod || t("dashboard.noMethod")}
+            {localizeIrrigationMethod(farm.irrigationMethod, language) || t("dashboard.noMethod")}
           </span>
           <Link
             to="/irrigation"
-            className="ml-auto inline-flex items-center gap-0.5 text-xs font-semibold text-primary hover:text-primary-deep transition-colors cursor-pointer"
+            className="ms-auto inline-flex items-center gap-0.5 text-xs font-semibold text-primary hover:text-primary-deep transition-colors cursor-pointer"
           >
             {t("dashboard.openAdvisor")}
             <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />

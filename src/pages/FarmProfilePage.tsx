@@ -28,6 +28,8 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "../compone
 import { EmptyState } from "../components/layout/empty-state";
 import { PageHeader } from "../components/layout/page-header";
 import { buildFarmContext } from "../lib/farm-context";
+import { formatDate } from "../lib/format";
+import { isUnknownGrowthStage, localizeGrowthStage, localizeIrrigationMethod, localizeSoilType } from "../lib/localize";
 import { useFarm } from "../context/FarmContext";
 import { usePreferences } from "../context/PreferencesContext";
 import { cn } from "../lib/utils";
@@ -168,7 +170,7 @@ export default function FarmProfilePage() {
                   )}
                 >
                   {isActive ? (
-                    <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-primary px-2 py-0.5 text-[10px] font-bold text-primary-foreground">
+                    <span className="absolute end-3 top-3 inline-flex items-center gap-1 rounded-full bg-primary px-2 py-0.5 text-[10px] font-bold text-primary-foreground">
                       <Sprout className="h-3 w-3" aria-hidden="true" />
                       {t("farmProfile.activeBadge")}
                     </span>
@@ -401,9 +403,9 @@ function FarmDetailView({
 /* ------------------------------------------------------------------ */
 
 function OverviewTab({ farm: f }: { farm: Farm }) {
-  const { t } = usePreferences();
+  const { t, language } = usePreferences();
   const sowingDate = f.plantingDate
-    ? new Date(f.plantingDate + "T00:00:00").toLocaleDateString()
+    ? formatDate(f.plantingDate + "T00:00:00", language)
     : "";
 
   return (
@@ -447,8 +449,8 @@ function OverviewTab({ farm: f }: { farm: Farm }) {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard icon={Mountain} label={t("farmProfile.soilType")} value={f.soilType} />
-        <StatCard icon={Droplets} label={t("farmProfile.irrigationMethod")} value={f.irrigationMethod} />
+        <StatCard icon={Mountain} label={t("farmProfile.soilType")} value={localizeSoilType(f.soilType, language)} />
+        <StatCard icon={Droplets} label={t("farmProfile.irrigationMethod")} value={localizeIrrigationMethod(f.irrigationMethod, language)} />
         <StatCard icon={Waves} label={t("farmProfile.waterSource")} value={f.waterSource ?? ""} />
         <StatCard icon={Timer} label={t("farmProfile.farmAge")} value={f.farmAgeYears != null ? t("farmProfile.years", { n: f.farmAgeYears }) : ""} />
       </div>
@@ -461,7 +463,7 @@ function OverviewTab({ farm: f }: { farm: Farm }) {
 /* ------------------------------------------------------------------ */
 
 function FieldsTab({ farm: f, farmContext }: { farm: Farm; farmContext: ReturnType<typeof buildFarmContext> }) {
-  const { t } = usePreferences();
+  const { t, language } = usePreferences();
   return (
     <div className="space-y-6">
       <Card>
@@ -488,9 +490,9 @@ function FieldsTab({ farm: f, farmContext }: { farm: Farm; farmContext: ReturnTy
         <CardContent className="grid gap-4 sm:grid-cols-2">
           <InfoRow icon={<Leaf className="h-4 w-4" />} label={t("farmProfile.currentCrop")} value={f.currentCrop} />
           <InfoRow icon={<Sprout className="h-4 w-4" />} label={t("farmProfile.cropVariety")} value={f.currentCropVariety ?? ""} />
-          <InfoRow icon={<CalendarDays className="h-4 w-4" />} label={t("farmProfile.sowingDate")} value={f.plantingDate ? new Date(f.plantingDate + "T00:00:00").toLocaleDateString() : ""} />
+          <InfoRow icon={<CalendarDays className="h-4 w-4" />} label={t("farmProfile.sowingDate")} value={f.plantingDate ? formatDate(f.plantingDate + "T00:00:00", language, { day: "numeric", month: "long", year: "numeric" }) : ""} />
           <InfoRow icon={<Timer className="h-4 w-4" />} label={t("farmProfile.cropAge")} value={farmContext.growth.cropAgeDays !== null ? `${farmContext.growth.cropAgeDays} ${t("farmProfile.days")}` : ""} />
-          <InfoRow icon={<Leaf className="h-4 w-4" />} label={t("farmProfile.growthStage")} value={farmContext.growth.stageLabel === "Growth stage unavailable" ? "" : farmContext.growth.stageLabel} />
+          <InfoRow icon={<Leaf className="h-4 w-4" />} label={t("farmProfile.growthStage")} value={isUnknownGrowthStage(farmContext.growth) ? "" : localizeGrowthStage(farmContext.growth, language)} />
         </CardContent>
       </Card>
       <Card>
@@ -516,7 +518,7 @@ function FieldsTab({ farm: f, farmContext }: { farm: Farm; farmContext: ReturnTy
 /* ------------------------------------------------------------------ */
 
 function SoilTab({ farm: f }: { farm: Farm }) {
-  const { t } = usePreferences();
+  const { t, language } = usePreferences();
   return (
     <div className="space-y-6">
       <Card>
@@ -527,7 +529,7 @@ function SoilTab({ farm: f }: { farm: Farm }) {
           </CardTitle>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
-          <InfoRow icon={<Mountain className="h-4 w-4" />} label={t("farmProfile.soilType")} value={f.soilType} />
+          <InfoRow icon={<Mountain className="h-4 w-4" />} label={t("farmProfile.soilType")} value={localizeSoilType(f.soilType, language)} />
           <InfoRow icon={<MapPin className="h-4 w-4" />} label={t("farmProfile.location")} value={f.location} />
         </CardContent>
       </Card>
@@ -549,7 +551,7 @@ function SoilTab({ farm: f }: { farm: Farm }) {
 /* ------------------------------------------------------------------ */
 
 function IrrigationTab({ farm: f }: { farm: Farm }) {
-  const { t } = usePreferences();
+  const { t, language } = usePreferences();
   return (
     <div className="space-y-6">
       <Card>
@@ -560,7 +562,7 @@ function IrrigationTab({ farm: f }: { farm: Farm }) {
           </CardTitle>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
-          <InfoRow icon={<Droplets className="h-4 w-4" />} label={t("farmProfile.irrigationMethod")} value={f.irrigationMethod} />
+          <InfoRow icon={<Droplets className="h-4 w-4" />} label={t("farmProfile.irrigationMethod")} value={localizeIrrigationMethod(f.irrigationMethod, language)} />
           <InfoRow icon={<Waves className="h-4 w-4" />} label={t("farmProfile.waterSource")} value={f.waterSource ?? ""} />
           <InfoRow icon={<Ruler className="h-4 w-4" />} label={t("farmProfile.totalArea")} value={f.landArea} />
         </CardContent>

@@ -206,101 +206,45 @@
     font-family: var(--font-heading);
   }
 
-  /* Urdu (RTL) mode: swap the whole font stack to Unicode Urdu fonts.
-     Nastaliq for display/body plus a clean sans fallback. English glyphs
-     keep the original stack because it is restored for LTR documents.
+  /* ---------------------------------------------------------------------
+     Urdu (RTL) typography
+     ---------------------------------------------------------------------
+     Two separate stacks, deliberately:
 
-     Nastaliq typography needs:
-       • A generous line-height (1.9) because the script cascades vertically
-         and descenders extend well below the baseline.
-       • A slightly larger root font-size (~18 px body) for comfortable reading.
-       • font-language-override so the shaper picks Urdu-specific glyphs
-         rather than generic Arabic forms.
-       • overflow-wrap and word-break tuned for RTL script.
-       • Extra bottom padding on the body so the lowest Nastaliq descenders
-         in the last line of a block are never clipped by overflow containers. */
+       --font-sans     UI / body / labels / buttons / inputs
+                       → "Noto Sans Urdu". Nastaliq is a calligraphic cascade
+                         and is *illegible* below ~18 px, so it must never be
+                         used for dense UI text (sidebar nav, badges, table
+                         cells). Noto Sans Urdu keeps the same letterforms
+                         readable at 12–16 px.
+
+       --font-heading  Display text only (h1–h4, brand lockup)
+                       → "Noto Nastaliq Urdu". Beautiful at large sizes and
+                         that is the only place it is used.
+
+     The previous build used Nastaliq for BOTH and then scaled the root to
+     112.5%. That inflated every rem-based Tailwind spacing/size value (so
+     cards overflowed and the sidebar wrapped), while Nastaliq's tiny
+     x-height simultaneously made small text look shrunken and its deep
+     descenders made headings look enormous. Fixing the stack split lets us
+     drop the root scaling entirely and keep rem 1:1 with the LTR layout. */
   html[dir="rtl"] {
-    --font-sans: "Noto Nastaliq Urdu", "Noto Sans Urdu", ui-sans-serif,
-      system-ui, -apple-system, "Segoe UI", sans-serif;
-    --font-heading: "Noto Nastaliq Urdu", "Noto Sans Urdu", ui-sans-serif,
-      system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-sans: "Noto Sans Urdu", "Noto Naskh Arabic", "Segoe UI",
+      ui-sans-serif, system-ui, -apple-system, sans-serif;
+    --font-heading: "Noto Nastaliq Urdu", "Noto Sans Urdu", "Segoe UI",
+      ui-sans-serif, system-ui, -apple-system, sans-serif;
 
-    /* ~18 px base when the browser default is 16 px; all rem-based Tailwind
-       sizes scale proportionally so headings land in the 20–28 px range. */
-    font-size: 112.5%;
+    /* NO root font-size scaling — see note above. */
   }
 
   html[dir="rtl"] body {
-    line-height: 1.9;
-    font-feature-settings: "kern";
+    line-height: 1.7;
+    font-feature-settings: "kern", "liga", "calt";
     font-language-override: "urd";
-    word-spacing: 0.04em;
+    word-spacing: 0.02em;
     overflow-wrap: break-word;
-    /* Guard against Nastaliq descender clipping at the viewport bottom. */
-    padding-bottom: 0.25rem;
-  }
-
-  /* Headings inherit the Nastaliq stack; bump the two largest sizes a touch
-     so they still feel like headings at the larger root font-size. */
-  html[dir="rtl"] h1 {
-    font-size: 1.65rem;
-    line-height: 2.1;
-  }
-
-  html[dir="rtl"] h2 {
-    font-size: 1.35rem;
-    line-height: 2;
-  }
-
-  html[dir="rtl"] h3 {
-    font-size: 1.125rem;
-    line-height: 1.95;
-  }
-
-  html[dir="rtl"] h4 {
-    font-size: 1rem;
-    line-height: 1.9;
-  }
-
-  /* Buttons, nav links, and interactive controls: keep text slightly smaller
-     than body (~16–17 px) so Nastaliq doesn't crowd tight containers. */
-  html[dir="rtl"] button,
-  html[dir="rtl"] [role="button"],
-  html[dir="rtl"] a,
-  html[dir="rtl"] input,
-  html[dir="rtl"] select,
-  html[dir="rtl"] textarea {
-    line-height: 1.8;
-  }
-
-  /* Prevent Nastaliq descender clipping inside tight card / list containers
-     where overflow:hidden would otherwise cut the bottom of the last line. */
-  html[dir="rtl"] [class*="overflow-hidden"],
-  html[dir="rtl"] [class*="truncate"] {
-    padding-bottom: 0.15em;
-  }
-
-  /* Tailwind's leading-none (line-height:1) and leading-tight (1.25) are far
-     too tight for Nastaliq — descenders extend well below the baseline.
-     Override them in RTL to a minimum that keeps Nastaliq visible. */
-  html[dir="rtl"] [class*="leading-none"] {
-    line-height: 1.6;
-  }
-
-  html[dir="rtl"] [class*="leading-tight"] {
-    line-height: 1.75;
-  }
-
-  /* Single-line text inputs need enough vertical space for Nastaliq glyphs
-     whose ascenders/descenders exceed the Latin bounding box. */
-  html[dir="rtl"] input[type="text"],
-  html[dir="rtl"] input[type="email"],
-  html[dir="rtl"] input[type="password"],
-  html[dir="rtl"] input[type="search"],
-  html[dir="rtl"] input[type="tel"],
-  html[dir="rtl"] input[type="url"],
-  html[dir="rtl"] input[type="number"] {
-    min-height: 2.5rem;
+    /* Logical text alignment: resolves to `right` in RTL, `left` in LTR. */
+    text-align: start;
   }
 
   /* ---- Deliberate dark palette (not an inversion of the light theme) ---- */
@@ -383,6 +327,101 @@
 }
 
 @layer utilities {
+  /* ---------------------------------------------------------------------
+     Urdu typography — overrides that must beat Tailwind utilities
+     ---------------------------------------------------------------------
+     Line-height and font-family fixes live in the utilities layer because
+     Tailwind's own `text-*`, `leading-*`, `font-*` classes also live here
+     and would otherwise win over the base layer. Font SIZE is deliberately
+     left to the Tailwind class so the Latin and Urdu layouts share one
+     scale (the old build inflated the root instead, which broke spacing).
+
+     Selectors use `html[dir="rtl"] …` (specificity 0,1,1) so they outrank a
+     single utility class (0,1,0) inside the same layer.
+     --------------------------------------------------------------------- */
+
+  /* Mixed-direction data (farmer names, farm names, English disease names)
+     must resolve direction from their own first strong character, otherwise
+     RTL punctuation reordering mangles them — e.g. "Muhammad Adeel abbas"
+     truncating to "…hammad Adeel abbas". */
+  html[dir="rtl"] .bidi-auto {
+    unicode-bidi: plaintext;
+  }
+
+  /* Display headings use Nastaliq. Its em-box is much taller than Latin, so
+     it needs a generous line-height and a small optical nudge upward. */
+  html[dir="rtl"] h1,
+  html[dir="rtl"] h2,
+  html[dir="rtl"] h3,
+  html[dir="rtl"] h4,
+  html[dir="rtl"] .font-heading {
+    font-family: var(--font-heading);
+    line-height: 1.85;
+    padding-block: 0.06em;
+  }
+
+  /* Interactive controls: a little looser than Latin so nav rows and buttons
+     stay legible without wrapping inside fixed-width sidebars. */
+  html[dir="rtl"] button,
+  html[dir="rtl"] [role="button"],
+  html[dir="rtl"] input,
+  html[dir="rtl"] select,
+  html[dir="rtl"] textarea {
+    line-height: 1.6;
+  }
+
+  /* Small print (badges, timestamps, captions) needs more leading in Urdu
+     than in Latin, but must not grow in size. */
+  html[dir="rtl"] .text-xs,
+  html[dir="rtl"] .text-\[0\.65rem\],
+  html[dir="rtl"] .text-\[0\.7rem\] {
+    line-height: 1.6;
+  }
+
+  /* Tailwind's leading-none (line-height:1) genuinely clips Urdu glyphs, but
+     blanket padding-bottom on every truncate element (the previous
+     workaround) shifted baselines and broke vertical alignment in lists. */
+  html[dir="rtl"] [class*="leading-none"] {
+    line-height: 1.45;
+  }
+
+  html[dir="rtl"] [class*="leading-tight"] {
+    line-height: 1.6;
+  }
+
+  /* ---------------------------------------------------------------------
+     Directional icons in RTL
+     ---------------------------------------------------------------------
+     Chevrons, arrows and sidebar-toggle icons encode a *physical* reading
+     direction. Lucide stamps every icon with `lucide-<name>`, so we can flip
+     the whole family in one place instead of adding `rtl:-scale-x-100` to
+     ~25 call sites (and forgetting some).
+
+     `transform` is used rather than Tailwind's `scale` utility because the
+     two compose independently — a hover `translate` still works.
+
+     Icons that already carry their own `rotate-180` opt-out are excluded so
+     they are not double-flipped back to their LTR orientation.
+     --------------------------------------------------------------------- */
+  html[dir="rtl"] .lucide-chevron-right,
+  html[dir="rtl"] .lucide-chevron-left,
+  html[dir="rtl"] .lucide-arrow-right,
+  html[dir="rtl"] .lucide-arrow-left,
+  html[dir="rtl"] .lucide-arrow-up-right,
+  html[dir="rtl"] .lucide-arrow-up-left,
+  html[dir="rtl"] .lucide-panel-left-close,
+  html[dir="rtl"] .lucide-panel-left-open,
+  html[dir="rtl"] .lucide-log-out,
+  html[dir="rtl"] .lucide-corner-down-right,
+  html[dir="rtl"] .lucide-corner-down-left {
+    transform: scaleX(-1);
+  }
+
+  /* Never flip an icon that opted out explicitly. */
+  html[dir="rtl"] .lucide-chevron-right.rotate-180,
+  html[dir="rtl"] .lucide-arrow-right.rotate-180 {
+    transform: none;
+  }
   /* Subtle leaf-grid texture used sparingly on hero/section backgrounds */
   .bg-leaf-grid {
     background-image: radial-gradient(

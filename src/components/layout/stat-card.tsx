@@ -43,7 +43,7 @@ export function StatCard({
     >
       {/* Accent glint in the top-right corner for depth */}
       <span
-        className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full bg-accent/10 blur-2xl transition-opacity duration-300 group-hover:bg-accent/20"
+        className="pointer-events-none absolute -end-8 -top-8 h-24 w-24 rounded-full bg-accent/10 blur-2xl transition-opacity duration-300 group-hover:bg-accent/20"
         aria-hidden="true"
       />
       <div className="relative flex items-start justify-between gap-3">
@@ -88,7 +88,7 @@ export function StatCard({
       <button
         type="button"
         onClick={onClick}
-        className="block h-full w-full cursor-pointer text-left"
+        className="block h-full w-full cursor-pointer text-start"
       >
         {body}
       </button>

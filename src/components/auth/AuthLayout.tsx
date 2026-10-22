@@ -52,7 +52,7 @@ export function AuthLayout({
                 </h1>
               </div>
               {subtitle ? (
-                <p className="pl-7 text-sm leading-relaxed text-muted-foreground">
+                <p className="ps-7 text-sm leading-relaxed text-muted-foreground">
                   {subtitle}
                 </p>
               ) : null}

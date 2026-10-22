@@ -18,6 +18,8 @@ import { EmptyState } from "../components/layout/empty-state";
 import { useFarm } from "../context/FarmContext";
 import { useI18n } from "../context/PreferencesContext";
 import { buildFarmContext } from "../lib/farm-context";
+import { formatDate } from "../lib/format";
+import { localizeGrowthStage, localizeYieldLabel, localizeYieldValue } from "../lib/localize";
 import { estimateYieldForFarm, buildYieldComparison } from "../lib/yield-service";
 import { cn } from "../lib/utils";
 import { LoadingState } from "../components/layout/loading-state";
@@ -45,11 +47,10 @@ const YieldComparisonChart = React.lazy(
  * estimate.
  */
 
-function formatHarvestDate(iso: string | null): string {
+function formatHarvestDate(iso: string | null, language: "en" | "ur"): string {
   if (!iso) return "—";
-  const d = new Date(iso + "T00:00:00Z");
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  const stamp = iso.includes("T") ? iso : `${iso}T00:00:00`;
+  return formatDate(stamp, language, { month: "short", day: "numeric", year: "numeric" }) || "—";
 }
 
 function MetricTile({
@@ -79,12 +80,12 @@ function MetricTile({
 
 export default function YieldPage() {
   const { farm } = useFarm();
-  const { t } = useI18n();
+  const { t, language } = useI18n();
 
   const estimate = React.useMemo(() => (farm ? estimateYieldForFarm(farm) : null), [farm]);
   const chartData = React.useMemo(
-    () => (farm && estimate ? buildYieldComparison(farm, estimate) : []),
-    [farm, estimate]
+    () => (farm && estimate ? buildYieldComparison(farm, estimate, new Date(), language) : []),
+    [farm, estimate, language]
   );
   const context = React.useMemo(() => (farm ? buildFarmContext(farm) : null), [farm]);
 
@@ -108,7 +109,9 @@ export default function YieldPage() {
   }
 
   const canEstimate = Boolean(farm.currentCrop?.trim());
-  const stageLabel = context?.growth.stageLabel ?? t("farm.growthStageUnavailable");
+  const stageLabel = context
+    ? localizeGrowthStage(context.growth, language)
+    : t("farm.growthStageUnavailable");
   const ageKnown = context?.growth.cropAgeDays !== null;
 
   return (
@@ -164,7 +167,7 @@ export default function YieldPage() {
                 </p>
                 <p className="mt-2 font-heading text-5xl font-extrabold tracking-tight text-foreground sm:text-6xl">
                   {estimate?.estimatedYield.toFixed(1)}
-                  <span className="ml-2 align-middle text-sm font-semibold text-muted-foreground">
+                  <span className="ms-2 align-middle text-sm font-semibold text-muted-foreground">
                     {estimate?.unit}
                   </span>
                 </p>
@@ -193,7 +196,7 @@ export default function YieldPage() {
                   value={estimate?.daysToHarvest != null ? t("yield.days", { n: estimate.daysToHarvest }) : "—"}
                   sub={
                     estimate?.harvestDate
-                      ? t("yield.estDate", { date: formatHarvestDate(estimate.harvestDate) })
+                      ? t("yield.estDate", { date: formatHarvestDate(estimate.harvestDate, language) })
                       : t("yield.addPlantingDate")
                   }
                 />
@@ -283,9 +286,11 @@ export default function YieldPage() {
                         className="rounded-xl border border-border/70 bg-background p-3"
                       >
                         <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                          {f.label}
+                          {localizeYieldLabel(f.label, language)}
                         </p>
-                        <p className="mt-1 text-sm font-semibold text-foreground">{f.value}</p>
+                        <p className="mt-1 text-sm font-semibold text-foreground">
+                          {localizeYieldValue(f.label, f.value, language)}
+                        </p>
                       </div>
                     ))}
                     {estimate.missingInputs.length > 0 ? (
@@ -294,7 +299,9 @@ export default function YieldPage() {
                           {t("yield.missingWidenRange")}
                         </p>
                         <p className="mt-1 text-sm font-medium text-foreground">
-                          {estimate.missingInputs.join(", ")}
+                          {estimate.missingInputs
+                            .map((m) => localizeYieldLabel(m, language))
+                            .join("، ")}
                         </p>
                       </div>
                     ) : null}

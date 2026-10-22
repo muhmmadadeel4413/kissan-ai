@@ -137,6 +137,8 @@ export interface AnalyzeCropInput {
   growthStage?: string;
   variety?: string;
   location?: string;
+  /** UI language — the Edge Function writes the AI prose in this language. */
+  language?: "en" | "ur";
 }
 
 /** Extract a human-friendly message from a Supabase Edge Function error. */

@@ -72,7 +72,23 @@ export default function AssistantPage() {
   const [messages, setMessages] = React.useState<ChatMessage[]>([]);
   const [structuredReplies, setStructuredReplies] = React.useState<Record<string, ChatReply>>({});
   const [input, setInput] = React.useState("");
-  const [language, setLanguage] = React.useState<LanguagePref>("auto");
+  // Reply language defaults to the UI language so the assistant never answers
+  // a Urdu-mode farmer in English (the reported "English/Urdu mixture" bug).
+  // The chip still lets them override it per-conversation.
+  const [language, setLanguageState] = React.useState<LanguagePref>(() =>
+    uiLanguage === "ur" ? "urdu" : "english"
+  );
+  const languageTouchedRef = React.useRef(false);
+  const setLanguage = React.useCallback((next: LanguagePref) => {
+    languageTouchedRef.current = true;
+    setLanguageState(next);
+  }, []);
+
+  // Follow the UI language unless the farmer picked a reply language manually.
+  React.useEffect(() => {
+    if (languageTouchedRef.current) return;
+    setLanguageState(uiLanguage === "ur" ? "urdu" : "english");
+  }, [uiLanguage]);
   const [isThinking, setIsThinking] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [initializing, setInitializing] = React.useState(true);
@@ -432,17 +448,18 @@ export default function AssistantPage() {
 
   // The title shows the reply-language mode (English / Urdu) in the app's
   // active UI language — matching the reference header.
-  const languageName = language === "urdu" ? "اردو" : "English";
+  const languageName = t(
+    LANGUAGE_OPTIONS.find((o) => o.value === language)?.labelKey ?? "assistant.autoLanguage"
+  );
   const headerTitle = t("assistant.chatTitle", { language: languageName });
-  const placeholder =
-    uiLanguage === "ur" ? "اپنا سوال یہاں لکھیں…" : t("assistant.placeholder");
+  const placeholder = t("assistant.placeholder");
 
   return (
     <div className="flex h-[calc(100dvh-4.5rem)] overflow-hidden rounded-2xl border border-border bg-card shadow-soft card-sheen lg:h-[calc(100dvh-9.5rem)]">
       {/* ===================== Chat history sidebar ===================== */}
       <aside
         className={cn(
-          "flex shrink-0 flex-col border-r border-border bg-background/60 transition-all duration-200",
+          "flex shrink-0 flex-col border-e border-border bg-background/60 transition-all duration-200",
           sidebarOpen ? "w-64" : "w-0 overflow-hidden"
         )}
       >
@@ -475,7 +492,7 @@ export default function AssistantPage() {
                   if (window.innerWidth < 768) setSidebarOpen(false);
                 }}
                 className={cn(
-                  "mb-1 flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-muted/60",
+                  "mb-1 flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-start transition-colors hover:bg-muted/60",
                   c.id === activeConversationId && "bg-primary-soft text-primary"
                 )}
               >
@@ -608,7 +625,7 @@ export default function AssistantPage() {
       >
         {initializing ? (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+            <Loader2 className="me-2 h-4 w-4 animate-spin" aria-hidden="true" />
             {t("assistant.loadingConvo")}
           </div>
         ) : null}
@@ -624,7 +641,7 @@ export default function AssistantPage() {
 
         {loadingConversation ? (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+            <Loader2 className="me-2 h-4 w-4 animate-spin" aria-hidden="true" />
             {t("assistant.openingConvo")}
           </div>
         ) : null}
@@ -661,8 +678,8 @@ export default function AssistantPage() {
             <span className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-soft text-primary">
               <Bot className="h-4 w-4" aria-hidden="true" />
             </span>
-            <div className="rounded-2xl rounded-bl-sm border border-border bg-muted px-4 py-3">
-              <span className="mr-2 text-xs text-muted-foreground">
+            <div className="rounded-2xl rounded-es-sm border border-border bg-muted px-4 py-3">
+              <span className="me-2 text-xs text-muted-foreground">
                 {t("assistant.thinking")}
               </span>
               <span className="inline-flex gap-1 align-middle">
@@ -692,7 +709,7 @@ export default function AssistantPage() {
             <button
               type="button"
               onClick={() => voice.stopRecording()}
-              className="ml-2 rounded-lg bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground hover:bg-primary/90"
+              className="ms-2 rounded-lg bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground hover:bg-primary/90"
             >
               {t("assistant.stop")}
             </button>
@@ -709,7 +726,7 @@ export default function AssistantPage() {
             <button
               type="button"
               onClick={() => voice.stopSpeech()}
-              className="ml-2 rounded-lg bg-accent px-3 py-1 text-xs font-semibold text-accent-foreground hover:bg-accent/90"
+              className="ms-2 rounded-lg bg-accent px-3 py-1 text-xs font-semibold text-accent-foreground hover:bg-accent/90"
             >
               {t("assistant.stop")}
             </button>
@@ -858,8 +875,8 @@ function MessageBubble({
           className={cn(
             "whitespace-pre-wrap break-words rounded-2xl px-4 py-2.5 text-sm leading-relaxed shadow-soft",
             isUser
-              ? "bg-primary text-primary-foreground rounded-br-sm"
-              : "border border-border bg-muted text-foreground rounded-bl-sm"
+              ? "bg-primary text-primary-foreground rounded-ee-sm"
+              : "border border-border bg-muted text-foreground rounded-es-sm"
           )}
         >
           {content}
@@ -868,7 +885,7 @@ function MessageBubble({
         {!isUser && reply && reply.key_points.length > 0 ? (
           <div className="mt-2 w-full rounded-xl border border-border bg-card/70 px-4 py-3">
             <p className="mb-1.5 text-xs font-semibold text-foreground">{t("assistant.keyPoints")}</p>
-            <ul className="list-disc space-y-1 pl-4 text-sm text-foreground/90">
+            <ul className="list-disc space-y-1 ps-4 text-sm text-foreground/90">
               {reply.key_points.map((point, i) => (
                 <li key={i} className="break-words">{point}</li>
               ))}
@@ -879,7 +896,7 @@ function MessageBubble({
         {!isUser && reply && reply.recommended_actions.length > 0 ? (
           <div className="mt-2 w-full rounded-xl border border-border bg-primary-soft/60 px-4 py-3">
             <p className="mb-1.5 text-xs font-semibold text-foreground">{t("assistant.recommendedNextSteps")}</p>
-            <ol className="list-decimal space-y-1 pl-4 text-sm text-foreground/90">
+            <ol className="list-decimal space-y-1 ps-4 text-sm text-foreground/90">
               {reply.recommended_actions.map((action, i) => (
                 <li key={i} className="break-words">{action}</li>
               ))}

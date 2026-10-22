@@ -14,6 +14,8 @@ import { ErrorState } from "../components/layout/error-state";
 import { useFarmRisks } from "../hooks/useFarmRisks";
 import { useI18n } from "../context/PreferencesContext";
 import type { Level, RiskAlert } from "../types";
+import { formatDateTime } from "../lib/format";
+import { localizeRiskText } from "../lib/localize";
 import { cn } from "../lib/utils";
 
 /* ------------------------------------------------------------------ */
@@ -95,11 +97,12 @@ function relativeTime(iso: string | null, t: Translate): string {
   return days > 1 ? t("risks.daysAgo", { n: days }) : t("risks.dayAgo", { n: days });
 }
 
-function formatDateTime(iso: string | null): string {
+/** Locale-aware stamp for the "last assessed" line. */
+function formatAssessedAt(iso: string | null, language: "en" | "ur"): string {
   if (!iso) return "—";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleString([], {
+  return formatDateTime(iso, language, {
     day: "numeric",
     month: "short",
     hour: "2-digit",
@@ -112,7 +115,7 @@ function formatDateTime(iso: string | null): string {
 /* ------------------------------------------------------------------ */
 
 function AlertRow({ alert }: { alert: RiskAlert }) {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const severity = SEVERITY_META[alert.level];
 
   return (
@@ -124,7 +127,7 @@ function AlertRow({ alert }: { alert: RiskAlert }) {
     >
       {/* Severity accent bar — left edge, colour-coded from the real level */}
       <span
-        className={cn("absolute inset-y-0 left-0 w-1", severity.bar)}
+        className={cn("absolute inset-y-0 start-0 w-1", severity.bar)}
         aria-hidden="true"
       />
 
@@ -158,10 +161,10 @@ function AlertRow({ alert }: { alert: RiskAlert }) {
         </div>
 
         <p className="truncate text-sm font-semibold text-foreground sm:text-[15px]">
-          {alert.title}
+          {localizeRiskText(alert.title, language)}
         </p>
         <p className="line-clamp-2 text-sm leading-relaxed text-muted-foreground">
-          {alert.explanation}
+          {localizeRiskText(alert.explanation, language)}
         </p>
       </div>
 
@@ -179,7 +182,7 @@ function AlertRow({ alert }: { alert: RiskAlert }) {
 /* ------------------------------------------------------------------ */
 
 export default function RisksPage() {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const {
     farm,
     risks,
@@ -206,6 +209,13 @@ export default function RisksPage() {
 
   const filterCount = (key: AlertFilter) =>
     key === "all" ? risks.length : counts[key];
+
+  // Localised word for the active filter. Previously the raw English enum
+  // ("high"/"medium"/"low") was interpolated into the Urdu sentence, producing
+  // "ابھی کوئی high خطرے کے انتباہات نہیں".
+  const levelLabel = t(
+    FILTERS.find((f) => f.key === filter)?.labelKey ?? "risks.filterAll"
+  );
 
   return (
     <div className="space-y-6">
@@ -241,7 +251,7 @@ export default function RisksPage() {
               <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden="true" />
               <ul className="space-y-1">
                 {limitations.map((l, i) => (
-                  <li key={i}>{l}</li>
+                  <li key={i}>{localizeRiskText(l, language)}</li>
                 ))}
               </ul>
             </div>
@@ -295,7 +305,7 @@ export default function RisksPage() {
             </div>
             <span>
               {t("risks.lastAssessed", {
-                date: formatDateTime(assessedAt),
+                date: formatAssessedAt(assessedAt, language),
                 relative: relativeTime(assessedAt, t),
               })}
             </span>
@@ -312,8 +322,8 @@ export default function RisksPage() {
             /* Selected filter has no results */
             <EmptyState
               icon={<ShieldCheck className="h-6 w-6" />}
-              title={t("risks.noFilterAlerts", { level: filter })}
-              description={t("risks.noFilterDesc", { level: filter })}
+              title={t("risks.noFilterAlerts", { level: levelLabel })}
+              description={t("risks.noFilterDesc", { level: levelLabel })}
               action={
                 <Button variant="outline" size="sm" onClick={() => setFilter("all")}>
                   {t("risks.viewAllAlerts")}

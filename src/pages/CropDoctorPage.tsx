@@ -31,6 +31,8 @@ import {
   uploadCropImage,
 } from "../lib/diagnosis-service";
 import type { Diagnosis, Severity } from "../types";
+import { formatDateTime } from "../lib/format";
+import { isUnknownGrowthStage, localizeCrop, localizeGrowthStage } from "../lib/localize";
 
 const ACCEPTED = ["image/jpeg", "image/png", "image/webp"];
 const MAX_SIZE_MB = 10;
@@ -47,11 +49,11 @@ const SEVERITY_META: Record<
   high: { labelKey: "cropDoctor.highSeverity", variant: "danger" },
 };
 
-/** Compact date label, e.g. "12 Jan · 10:30" — same data, tighter rhythm. */
-function formatDate(iso: string): string {
+/** Compact date label, e.g. "12 Jan · 10:30" — locale follows the UI language. */
+function formatDiagnosisStamp(iso: string, language: "en" | "ur"): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString(undefined, {
+  return formatDateTime(iso, language, {
     day: "numeric",
     month: "short",
     hour: "2-digit",
@@ -62,7 +64,7 @@ function formatDate(iso: string): string {
 export default function CropDoctorPage() {
   const inputRef = useRef<HTMLInputElement>(null);
   const { farm } = useFarm();
-  const { t } = useI18n();
+  const { t, language } = useI18n();
 
   const [phase, setPhase] = useState<Phase>("idle");
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -162,9 +164,10 @@ export default function CropDoctorPage() {
         imageUrl,
         farmId: farm?.id,
         cropName: farm ? farm.currentCrop : undefined,
-        growthStage: farmContext?.growth.stageLabel,
+        growthStage: farmContext?.growth.growthStage,
         variety: farm?.currentCropVariety,
         location: farm?.location,
+        language,
       });
 
       setDiagnosis(result);
@@ -209,7 +212,15 @@ export default function CropDoctorPage() {
             <span className="font-semibold">{t("cropDoctor.analyzingForFarm", { crop: farm.currentCrop })}</span>
             <span className="text-muted-foreground">
               {" "}
-              · {[farmContext?.growth.stageLabel, farm.location].filter(Boolean).join(" · ")}
+              ·{" "}
+              {[
+                isUnknownGrowthStage(farmContext?.growth)
+                  ? null
+                  : localizeGrowthStage(farmContext?.growth, language),
+                farm.location,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
             </span>
           </p>
         </div>
@@ -473,7 +484,8 @@ export default function CropDoctorPage() {
                           </p>
                           <p className="mt-0.5 flex items-center gap-1 text-[11px] text-primary-foreground/70">
                             <CalendarDays className="h-3 w-3" aria-hidden="true" />
-                            {formatDate(d.createdAt)} · {d.crop}
+                            {formatDiagnosisStamp(d.createdAt, language)} ·{" "}
+                            {localizeCrop(d.crop, language)}
                           </p>
                         </div>
                         <ChevronRight
@@ -550,7 +562,7 @@ function DiagnosisResult({
   diagnosis: Diagnosis;
   onReset: () => void;
 }) {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const severity = SEVERITY_META[diagnosis.severity] ?? SEVERITY_META.medium;
   const causes = diagnosis.causes ?? [];
   const actions = diagnosis.recommendedActions ?? [];
@@ -584,7 +596,7 @@ function DiagnosisResult({
               {t("diagHistory.confidencePercent", { n: diagnosis.confidence })}
             </Badge>
             <Badge variant="neutral">
-              {new Date(diagnosis.createdAt).toLocaleString()}
+              {formatDateTime(diagnosis.createdAt, language)}
             </Badge>
           </div>
         </CardHeader>

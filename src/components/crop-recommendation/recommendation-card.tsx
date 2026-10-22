@@ -3,6 +3,7 @@ import { Droplets, Leaf, CloudSun, AlertTriangle, Sprout } from "lucide-react";
 import { Card, CardContent } from "../ui/card";
 import { Badge } from "../ui/badge";
 import { usePreferences } from "../../context/PreferencesContext";
+import { localizeCrop } from "../../lib/localize";
 import type { CropRecommendation, CropSuitability } from "../../types";
 
 /**
@@ -29,7 +30,7 @@ export function RecommendationCard({
 }: {
   recommendation: CropRecommendation;
 }) {
-  const { t } = usePreferences();
+  const { t, language } = usePreferences();
   const meta = SUITABILITY_META[recommendation.suitability] ?? SUITABILITY_META.moderate;
 
   const detailRows: Array<{
@@ -53,7 +54,7 @@ export function RecommendationCard({
           <div className="min-w-0 space-y-1">
             <h3 className="flex items-center gap-2 text-lg font-bold text-foreground">
               <Sprout className="h-5 w-5 text-primary" aria-hidden="true" />
-              {recommendation.crop}
+              {localizeCrop(recommendation.crop, language)}
             </h3>
             <Badge variant={meta.badge}>
               <span
@@ -64,7 +65,7 @@ export function RecommendationCard({
             </Badge>
           </div>
 
-          <div className="shrink-0 text-right">
+          <div className="shrink-0 text-end">
             <p className="text-2xl font-bold text-foreground">
               {recommendation.confidence}
               <span className="text-sm font-medium text-muted-foreground">%</span>
@@ -158,7 +159,7 @@ export function CropRankRow({
   rank: number;
   recommendation: CropRecommendation;
 }) {
-  const { t } = usePreferences();
+  const { t, language } = usePreferences();
   const meta = SUITABILITY_META[recommendation.suitability] ?? SUITABILITY_META.moderate;
 
   return (
@@ -173,7 +174,7 @@ export function CropRankRow({
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline justify-between gap-3">
             <p className="truncate text-sm font-semibold text-foreground">
-              {recommendation.crop}
+              {localizeCrop(recommendation.crop, language)}
             </p>
             <p className="shrink-0 text-sm font-bold text-primary">
               {recommendation.confidence}
@@ -186,7 +187,7 @@ export function CropRankRow({
             aria-valuemin={0}
             aria-valuemax={100}
             aria-valuenow={recommendation.confidence}
-            aria-label={`${recommendation.crop} — ${t(meta.labelKey)}`}
+            aria-label={`${localizeCrop(recommendation.crop, language)} — ${t(meta.labelKey)}`}
           >
             <div
               className={`h-full rounded-full ${meta.dot}`}

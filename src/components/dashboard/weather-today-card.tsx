@@ -3,6 +3,7 @@ import { Card, CardContent } from "../ui/card";
 import { Button } from "../ui/button";
 import { Skeleton } from "../ui/skeleton";
 import { useI18n } from "../../context/PreferencesContext";
+import { localizeWeatherCondition } from "../../lib/localize";
 import type { WeatherData } from "../../lib/weather-service";
 import type { WeatherStatus } from "../../hooks/useFarmWeather";
 
@@ -20,7 +21,7 @@ export function WeatherTodayCard({
   status: WeatherStatus;
   onRetry: () => void;
 }) {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   return (
     <Card className="h-full">
       <CardContent className="flex h-full flex-col gap-3 p-5">
@@ -69,7 +70,7 @@ export function WeatherTodayCard({
               </p>
               <p className="mt-0.5 truncate text-xs text-muted-foreground">
                 {t("dashboard.feelsLike")} {Math.round(weather.current.feelsLike)}°C ·{" "}
-                {weather.current.condition}
+                {localizeWeatherCondition(weather.current.condition, language)}
               </p>
             </div>
 

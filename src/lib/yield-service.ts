@@ -1,5 +1,7 @@
 import type { Farm } from "../types";
 import { getCropGrowthConfig, calculateCropAge } from "./growth-stage";
+import { formatDate } from "./format";
+import type { Language } from "./i18n";
 
 /**
  * Deterministic Yield Estimation (front-end, read-only).
@@ -266,7 +268,8 @@ export interface YieldComparisonPoint {
 export function buildYieldComparison(
   farm: Farm,
   estimate: YieldEstimate,
-  today: Date = new Date()
+  today: Date = new Date(),
+  language: Language = "en"
 ): YieldComparisonPoint[] {
   const crop = farm.currentCrop?.trim() || "";
   const config = getCropGrowthConfig(crop);
@@ -286,7 +289,7 @@ export function buildYieldComparison(
 
   for (let i = 0; i < 12; i++) {
     const d = new Date(start.getFullYear(), start.getMonth() + i, 1);
-    const label = d.toLocaleDateString(undefined, { month: "short" });
+    const label = formatDate(d, language, { month: "short" });
 
     // Days since season start (approx month = 30.4 days).
     const daysIn = Math.round(i * 30.44);

@@ -29,6 +29,8 @@ import { useFarm } from "../context/FarmContext";
 import { useI18n } from "../context/PreferencesContext";
 import { fetchDiagnoses } from "../lib/diagnosis-service";
 import { exportDiagnosesCsv, downloadCsv } from "../lib/export-utils";
+import { formatDateTime } from "../lib/format";
+import { localizeCrop } from "../lib/localize";
 import type { Diagnosis, Severity } from "../types";
 
 const SEVERITY_META: Record<
@@ -40,8 +42,8 @@ const SEVERITY_META: Record<
   high: { labelKey: "diagHistory.severityHigh", variant: "danger" },
 };
 
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleString(undefined, {
+function formatDate(iso: string, language: "en" | "ur"): string {
+  return formatDateTime(iso, language, {
     year: "numeric",
     month: "short",
     day: "numeric",
@@ -52,7 +54,7 @@ function formatDate(iso: string): string {
 
 export default function DiagnosisHistoryPage() {
   const { farm } = useFarm();
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const [diagnoses, setDiagnoses] = useState<Diagnosis[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Diagnosis | null>(null);
@@ -80,7 +82,7 @@ export default function DiagnosisHistoryPage() {
         title={t("diagnosisHistory.title")}
         subtitle={
           farm
-            ? t("diagHistory.subtitle", { crop: farm.currentCrop })
+            ? t("diagHistory.subtitle", { crop: localizeCrop(farm.currentCrop, language) })
             : t("diagHistory.subtitleNoFarm")
         }
         action={
@@ -169,7 +171,7 @@ export default function DiagnosisHistoryPage() {
                   </div>
                   <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
                     <CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />
-                    {formatDate(d.createdAt)} · {d.crop}
+                    {formatDate(d.createdAt, language)} · {localizeCrop(d.crop, language)}
                   </p>
                   <div className="mt-1 flex flex-wrap items-center gap-2">
                     <Badge variant="outline">
@@ -191,7 +193,7 @@ export default function DiagnosisHistoryPage() {
             <DialogTitle>{selected?.diagnosis || t("diagHistory.diagnosisDetail")}</DialogTitle>
             <DialogDescription>
               {selected
-                ? `${selected.crop} · ${formatDate(selected.createdAt)}`
+                ? `${localizeCrop(selected.crop, language)} · ${formatDate(selected.createdAt, language)}`
                 : t("diagHistory.diagnosisDetail")}
             </DialogDescription>
           </DialogHeader>

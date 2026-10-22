@@ -3,6 +3,7 @@ import { ChevronRight, TrendingUp } from "lucide-react";
 import { Card, CardContent } from "../ui/card";
 import { Badge } from "../ui/badge";
 import { useI18n } from "../../context/PreferencesContext";
+import { localizeCrop } from "../../lib/localize";
 import type { Farm } from "../../types";
 
 /**
@@ -20,7 +21,7 @@ export function YieldPredictionCard({
   farm: Farm;
   compact?: boolean;
 }) {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   return (
     <Card className="h-full">
       <CardContent className={compact ? "flex h-full flex-col gap-2 p-4" : "flex h-full flex-col gap-3 p-5"}>
@@ -44,7 +45,7 @@ export function YieldPredictionCard({
           </p>
           <p className="mt-0.5 text-xs text-muted-foreground">
             {farm.currentCrop
-              ? t("dashboard.estimatedYield", { crop: farm.currentCrop })
+              ? t("dashboard.estimatedYield", { crop: localizeCrop(farm.currentCrop, language) })
               : t("dashboard.estimatedYieldDefault")}
           </p>
         </div>

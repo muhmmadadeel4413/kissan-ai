@@ -50,6 +50,8 @@ import { useFarm } from "../context/FarmContext";
 import { useI18n } from "../context/PreferencesContext";
 import { supabase } from "../lib/supabase";
 import { buildFarmContext } from "../lib/farm-context";
+import { formatDate, formatMonthYear } from "../lib/format";
+import { localizeIrrigationMethod, localizeSoilType } from "../lib/localize";
 import type { FarmEvent, FarmEventStatus, FarmEventType } from "../types";
 import { cn } from "../lib/utils";
 
@@ -105,7 +107,7 @@ interface FormState {
 const EMPTY_FORM: FormState = { eventType: "", title: "", description: "", scheduledDate: "" };
 
 export default function CropCalendarPage() {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const { farm } = useFarm();
 
   const [events, setEvents] = React.useState<FarmEvent[]>([]);
@@ -410,12 +412,14 @@ export default function CropCalendarPage() {
                 </div>
                 <div>
                   <dt className="text-xs font-medium text-muted-foreground">{t("calendar.soilType")}</dt>
-                  <dd className="text-sm font-bold text-foreground">{farm.soilType || "—"}</dd>
+                  <dd className="text-sm font-bold text-foreground">
+                    {localizeSoilType(farm.soilType, language) || "—"}
+                  </dd>
                 </div>
                 <div>
                   <dt className="text-xs font-medium text-muted-foreground">{t("calendar.irrigationLabel")}</dt>
                   <dd className="text-sm font-bold text-foreground">
-                    {farm.irrigationMethod || "—"}
+                    {localizeIrrigationMethod(farm.irrigationMethod, language) || "—"}
                   </dd>
                 </div>
               </dl>
@@ -441,7 +445,7 @@ export default function CropCalendarPage() {
             {t("calendar.prevMonth")}
           </Button>
           <h2 className="font-heading text-lg font-bold tracking-tight text-foreground">
-            {anchor.toLocaleDateString(undefined, { month: "long", year: "numeric" })}
+            {formatMonthYear(anchor, language)}
           </h2>
           <div className="flex items-center gap-2">
             {monthOffset !== 0 ? (
@@ -553,7 +557,7 @@ export default function CropCalendarPage() {
                         </Badge>
                       </div>
                       <p className="mt-0.5 text-xs text-muted-foreground">
-                        {new Date(event.scheduledDate + "T00:00:00").toLocaleDateString(undefined, {
+                        {formatDate(event.scheduledDate + "T00:00:00", language, {
                           weekday: "short",
                           month: "short",
                           day: "numeric",

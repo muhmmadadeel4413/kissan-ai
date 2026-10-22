@@ -45,7 +45,9 @@ export function CropHealthCard({
 }) {
   const { t } = useI18n();
   const meta = diagnosis ? (SEVERITY_META[diagnosis.severity] ?? SEVERITY_META.medium) : null;
-  const headline = diagnosis ? diagnosis.diagnosis.split(" ").slice(0, 3).join(" ") : "No check yet";
+  const headline = diagnosis
+    ? diagnosis.diagnosis.split(" ").slice(0, 3).join(" ")
+    : t("dashboard.noCropChecks");
 
   return (
     <Card className="h-full">

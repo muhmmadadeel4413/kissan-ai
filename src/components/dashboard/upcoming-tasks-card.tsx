@@ -7,6 +7,7 @@ import { Skeleton } from "../ui/skeleton";
 import { useFarm } from "../../context/FarmContext";
 import { useI18n } from "../../context/PreferencesContext";
 import { supabase } from "../../lib/supabase";
+import { formatDate } from "../../lib/format";
 import type { FarmEvent, FarmEventType } from "../../types";
 
 /**
@@ -18,14 +19,19 @@ import type { FarmEvent, FarmEventType } from "../../types";
  * exactly what to do next.
  */
 
-const EVENT_TYPE_LABEL: Record<FarmEventType, string> = {
-  irrigation: "Irrigation",
-  fertilizer: "Fertilizer",
-  pesticide: "Pesticide",
-  pest_monitoring: "Pest Monitoring",
-  harvest: "Harvest",
-  inspection: "Inspection",
-  other: "Other",
+/**
+ * Event type â†’ i18n key. The labels already exist as `calendar.type.*`
+ * (used by CropCalendarPage); reusing them here fixes the Dashboard card
+ * rendering English "Irrigation/Harvest/…" inside the Urdu UI.
+ */
+const EVENT_TYPE_LABEL_KEY: Record<FarmEventType, string> = {
+  irrigation: "calendar.type.irrigation",
+  fertilizer: "calendar.type.fertilizer",
+  pesticide: "calendar.type.pesticide",
+  pest_monitoring: "calendar.type.pest_monitoring",
+  harvest: "calendar.type.harvest",
+  inspection: "calendar.type.inspection",
+  other: "calendar.type.other",
 };
 
 function todayKey(): string {
@@ -36,7 +42,7 @@ function todayKey(): string {
 }
 
 export function UpcomingTasksCard() {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const { farm } = useFarm();
   const [events, setEvents] = React.useState<FarmEvent[]>([]);
   const [status, setStatus] = React.useState<"loading" | "ready" | "error">("loading");
@@ -178,15 +184,13 @@ export function UpcomingTasksCard() {
                   {new Date(event.scheduledDate + "T00:00:00").getDate()}
                 </span>
                 <span className="text-[9px] uppercase leading-none">
-                  {new Date(event.scheduledDate + "T00:00:00").toLocaleDateString(undefined, {
-                    month: "short",
-                  })}
+                  {formatDate(event.scheduledDate + "T00:00:00", language, { month: "short" })}
                 </span>
               </span>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-semibold text-foreground">{event.title}</p>
                 <p className="truncate text-xs text-muted-foreground">
-                  {EVENT_TYPE_LABEL[event.eventType] ?? event.eventType}
+                  {t(EVENT_TYPE_LABEL_KEY[event.eventType])}
                 </p>
               </div>
               <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />

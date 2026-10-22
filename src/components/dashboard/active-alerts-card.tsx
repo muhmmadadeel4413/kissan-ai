@@ -121,7 +121,7 @@ export function ActiveAlertsCard({
               ))}
               <Link
                 to="/risks"
-                className="ml-auto inline-flex items-center gap-0.5 text-xs font-semibold text-primary hover:text-primary-deep transition-colors cursor-pointer"
+                className="ms-auto inline-flex items-center gap-0.5 text-xs font-semibold text-primary hover:text-primary-deep transition-colors cursor-pointer"
               >
                 {t("dashboard.viewAll")}
                 <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />

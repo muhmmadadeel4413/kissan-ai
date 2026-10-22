@@ -36,6 +36,8 @@ import type {
   WeatherLocation,
 } from "../lib/weather-service";
 import { cn } from "../lib/utils";
+import { formatDate, formatTime, formatWeekday } from "../lib/format";
+import { localizeWeatherCondition } from "../lib/localize";
 
 /* ------------------------------------------------------------------ */
 /* Condition icon mapping (OpenWeatherMap condition codes)             */
@@ -75,8 +77,8 @@ function TodayWeather({
   current: CurrentWeather;
   location: WeatherLocation;
 }) {
-  const { t } = useI18n();
-  const updated = new Date(current.capturedAt).toLocaleTimeString([], {
+  const { t, language } = useI18n();
+  const updated = formatTime(current.capturedAt, language, {
     hour: "2-digit",
     minute: "2-digit",
   });
@@ -122,7 +124,7 @@ function TodayWeather({
                 <span className="text-3xl font-bold text-primary sm:text-4xl">°C</span>
               </p>
               <p className="mt-2 text-base font-semibold capitalize text-foreground">
-                {current.condition}
+                {localizeWeatherCondition(current.condition, language)}
               </p>
               <p className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
                 <MapPin className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
@@ -187,8 +189,7 @@ function InsightBadge({ level }: { level: InsightLevel }) {
 }
 
 function FarmingImpact({ insights }: { insights: WeatherInsight[] }) {
-  const { t } = useI18n();
-  if (insights.length === 0) {
+  const { t } = useI18n();  if (insights.length === 0) {
     return (
       <EmptyState
         icon={<CloudSun className="h-6 w-6" />}
@@ -218,10 +219,10 @@ function FarmingImpact({ insights }: { insights: WeatherInsight[] }) {
                 <InsightBadge level={primary.level} />
               </div>
               <p className="mt-2 font-heading text-base font-bold text-foreground">
-                {primary.title}
+                {t(primary.titleKey, primary.vars)}
               </p>
               <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-                {primary.message}
+                {t(primary.messageKey, primary.vars)}
               </p>
             </div>
           </div>
@@ -235,8 +236,12 @@ function FarmingImpact({ insights }: { insights: WeatherInsight[] }) {
               <div className="flex items-start gap-3">
                 <InsightBadge level={insight.level} />
                 <div>
-                  <p className="text-sm font-semibold text-foreground">{insight.title}</p>
-                  <p className="mt-0.5 text-sm text-muted-foreground">{insight.message}</p>
+                  <p className="text-sm font-semibold text-foreground">
+                    {t(insight.titleKey, insight.vars)}
+                  </p>
+                  <p className="mt-0.5 text-sm text-muted-foreground">
+                    {t(insight.messageKey, insight.vars)}
+                  </p>
                 </div>
               </div>
             </Card>
@@ -252,14 +257,13 @@ function FarmingImpact({ insights }: { insights: WeatherInsight[] }) {
 /* ------------------------------------------------------------------ */
 
 function ForecastDayCard({ day, index }: { day: WeatherForecastDay; index: number }) {
-  const { t } = useI18n();
-  const date = new Date(day.date + "T00:00:00");
+  const { t, language } = useI18n();
   const isToday = index === 0;
   const label = isToday
     ? t("weather.today")
     : index === 1
       ? t("weather.tomorrow")
-      : date.toLocaleDateString(undefined, { weekday: "short" });
+      : formatWeekday(day.date + "T00:00:00", language);
 
   return (
     <Card
@@ -270,14 +274,14 @@ function ForecastDayCard({ day, index }: { day: WeatherForecastDay; index: numbe
     >
       <p className="text-sm font-bold text-foreground">{label}</p>
       <p className="text-[11px] text-muted-foreground">
-        {date.toLocaleDateString(undefined, { day: "numeric", month: "short" })}
+        {formatDate(day.date + "T00:00:00", language, { day: "numeric", month: "short" })}
       </p>
       <div className="my-3 flex justify-center text-primary">
         <ConditionIcon code={day.conditionCode ?? ""} className="h-9 w-9" />
       </div>
       <p className="font-heading text-lg font-bold text-foreground">
         {Math.round(day.temperatureMax)}°
-        <span className="ml-1 text-sm font-medium text-muted-foreground">
+        <span className="ms-1 text-sm font-medium text-muted-foreground">
           {Math.round(day.temperatureMin)}°
         </span>
       </p>

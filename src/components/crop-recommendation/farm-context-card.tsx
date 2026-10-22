@@ -10,6 +10,8 @@ import {
 import { Card, CardContent } from "../ui/card";
 import { usePreferences } from "../../context/PreferencesContext";
 import { buildFarmContext } from "../../lib/farm-context";
+import { formatDate } from "../../lib/format";
+import { isUnknownGrowthStage, localizeGrowthStage, localizeIrrigationMethod, localizeSoilType } from "../../lib/localize";
 import type { Farm } from "../../types";
 
 /**
@@ -21,7 +23,7 @@ import type { Farm } from "../../types";
  * dividers match the reference layout.
  */
 export function FarmContextCard({ farm }: { farm: Farm }) {
-  const { t } = usePreferences();
+  const { t, language } = usePreferences();
   const context = buildFarmContext(farm);
 
   // Farm history is derived from real saved data only — farm age when present,
@@ -30,7 +32,7 @@ export function FarmContextCard({ farm }: { farm: Farm }) {
     farm.farmAgeYears != null && farm.farmAgeYears > 0
       ? t("cropRec.farmAgeYears", { n: farm.farmAgeYears })
       : farm.plantingDate
-        ? new Date(farm.plantingDate + "T00:00:00").toLocaleDateString(undefined, {
+        ? formatDate(farm.plantingDate + "T00:00:00", language, {
             month: "short",
             day: "numeric",
             year: "numeric",
@@ -43,15 +45,21 @@ export function FarmContextCard({ farm }: { farm: Farm }) {
     icon: React.ComponentType<{ className?: string }>;
   }> = [
     { labelKey: "cropRec.location", value: farm.location || "—", icon: MapPin },
-    { labelKey: "cropRec.soilType", value: farm.soilType || "—", icon: Leaf },
+    {
+      labelKey: "cropRec.soilType",
+      value: localizeSoilType(farm.soilType, language) || "—",
+      icon: Leaf,
+    },
     {
       labelKey: "cropRec.waterAvailability",
-      value: farm.irrigationMethod || "—",
+      value: localizeIrrigationMethod(farm.irrigationMethod, language) || "—",
       icon: Droplets,
     },
     {
       labelKey: "cropRec.currentSeason",
-      value: context.growth.stageLabel || "—",
+      value: isUnknownGrowthStage(context.growth)
+        ? "—"
+        : localizeGrowthStage(context.growth, language),
       icon: CalendarDays,
     },
     { labelKey: "cropRec.farmHistory", value: historyValue, icon: History },

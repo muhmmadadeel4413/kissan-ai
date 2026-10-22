@@ -43,7 +43,7 @@ export function LandingHero() {
       <div className="relative mx-auto max-w-6xl px-4 sm:px-6">
         <div className="grid items-center gap-16 pb-24 pt-28 sm:pt-32 lg:grid-cols-2 lg:gap-10 lg:pb-32">
           {/* ---- Left: badge + headline + copy + CTAs ---- */}
-          <div className="mx-auto max-w-xl text-center lg:mx-0 lg:text-left">
+          <div className="mx-auto max-w-xl text-center lg:mx-0 lg:text-start">
             <p className="mb-5 inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary-soft px-4 py-1.5 text-sm font-medium text-primary shadow-soft">
               <Leaf className="h-4 w-4" aria-hidden="true" />
               {t("hero.badge")}
@@ -106,7 +106,7 @@ function FarmVisual() {
   const { t } = useI18n();
 
   return (
-    <div className="relative ml-auto w-full max-w-[560px]">
+    <div className="relative ms-auto w-full max-w-[560px]">
       {/* Soft ground glow behind the panel */}
       <div
         className="pointer-events-none absolute -bottom-7 left-1/2 h-16 w-3/4 -translate-x-1/2 rounded-[100%] bg-primary/25 blur-2xl"
@@ -242,7 +242,7 @@ function FarmVisual() {
           <p className="font-heading text-sm font-bold tracking-tight text-foreground">
             {t("brand.name")}
           </p>
-          <span className="ml-auto rounded-full bg-success-soft px-2 py-0.5 text-[10px] font-semibold text-success">
+          <span className="ms-auto rounded-full bg-success-soft px-2 py-0.5 text-[10px] font-semibold text-success">
             {t("dashboard.healthGood")}
           </span>
         </div>

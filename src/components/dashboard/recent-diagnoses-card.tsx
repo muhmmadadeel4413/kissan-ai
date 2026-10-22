@@ -5,6 +5,8 @@ import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Skeleton } from "../ui/skeleton";
 import { useI18n } from "../../context/PreferencesContext";
+import { formatDate } from "../../lib/format";
+import { localizeCrop } from "../../lib/localize";
 import type { Diagnosis, Severity } from "../../types";
 import { cn } from "../../lib/utils";
 
@@ -24,7 +26,7 @@ const SEVERITY_LABEL_KEY: Record<Severity, string> = {
   low: "dashboard.severityLow",
 };
 
-function relativeTime(iso: string, t: Translate): string {
+function relativeTime(iso: string, t: Translate, language: "en" | "ur"): string {
   const then = new Date(iso).getTime();
   if (Number.isNaN(then)) return "";
   const mins = Math.round((Date.now() - then) / 60_000);
@@ -35,7 +37,7 @@ function relativeTime(iso: string, t: Translate): string {
   const days = Math.round(hours / 24);
   if (days === 1) return t("dashboard.yesterday");
   if (days < 7) return t("dashboard.daysAgo", { n: days });
-  return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  return formatDate(iso, language, { month: "short", day: "numeric" });
 }
 
 /**
@@ -51,7 +53,7 @@ export function RecentDiagnosesCard({
   status: Status;
   onRetry: () => void;
 }) {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   return (
     <Card className="flex h-full flex-col">
       <div className="flex items-center justify-between gap-2 p-5 pb-3">
@@ -139,14 +141,14 @@ export function RecentDiagnosesCard({
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <p className="truncate text-sm font-semibold text-foreground">
-                    {d.crop}
+                    {localizeCrop(d.crop, language)}
                   </p>
                   <Badge variant={SEVERITY_VARIANT[d.severity]}>
                     {t(SEVERITY_LABEL_KEY[d.severity])}
                   </Badge>
                 </div>
-                <p className="truncate text-xs text-muted-foreground">
-                  {d.diagnosis} · {d.confidence}% · {relativeTime(d.createdAt, t)}
+                <p className="bidi-auto truncate text-xs text-muted-foreground">
+                  {d.diagnosis} · {d.confidence}% · {relativeTime(d.createdAt, t, language)}
                 </p>
               </div>
               <ChevronRight

@@ -13,6 +13,7 @@ import { useFarm } from "../context/FarmContext";
 import { useI18n } from "../context/PreferencesContext";
 import { FarmSetupInput } from "../types";
 import { cn } from "../lib/utils";
+import { localizeIrrigationMethod, localizeSoilType } from "../lib/localize";
 import { resolveLocation, findLocationSuggestions } from "../lib/location-matcher";
 
 const SOIL_TYPES = ["Clay", "Sandy", "Loamy", "Silt", "Saline", "Mixed"];
@@ -67,7 +68,7 @@ function parseLandArea(value: string): number | null {
 
 export default function FarmSetupPage() {
   const { farm, farms, status, saving, createFarm, updateFarm } = useFarm();
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const editId = searchParams.get("edit");
@@ -326,7 +327,7 @@ export default function FarmSetupPage() {
                     setField("location", resolvedLocationMatch.formatted);
                     setLocationFocused(false);
                   }}
-                  className="ml-auto font-semibold text-primary underline hover:text-primary-deep cursor-pointer"
+                  className="ms-auto font-semibold text-primary underline hover:text-primary-deep cursor-pointer"
                 >
                   Apply
                 </button>
@@ -348,7 +349,7 @@ export default function FarmSetupPage() {
                       setField("location", `${s.name}, ${s.admin1}`);
                       setLocationFocused(false);
                     }}
-                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm hover:bg-muted/80 transition-colors cursor-pointer"
+                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-start text-sm hover:bg-muted/80 transition-colors cursor-pointer"
                   >
                     <MapPin className="h-3.5 w-3.5 text-primary shrink-0" />
                     <span className="font-medium text-foreground">{s.name}</span>
@@ -382,7 +383,7 @@ export default function FarmSetupPage() {
                 <SelectContent>
                   {SOIL_TYPES.map((s) => (
                     <SelectItem key={s} value={s}>
-                      {s}
+                      {localizeSoilType(s, language)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -401,7 +402,7 @@ export default function FarmSetupPage() {
                 <SelectContent>
                   {IRRIGATION_METHODS.map((m) => (
                     <SelectItem key={m} value={m}>
-                      {m}
+                      {localizeIrrigationMethod(m, language)}
                     </SelectItem>
                   ))}
                 </SelectContent>

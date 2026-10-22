@@ -2,6 +2,8 @@ import { CalendarClock, MapPin, Sprout } from "lucide-react";
 import { Card, CardContent } from "../ui/card";
 import { Badge } from "../ui/badge";
 import { getCropGrowthConfig } from "../../lib/growth-stage";
+import { formatDate } from "../../lib/format";
+import { localizeCrop, localizeGrowthStage } from "../../lib/localize";
 import { useI18n } from "../../context/PreferencesContext";
 import type { CropGrowthInfo, Farm } from "../../types";
 import { cn } from "../../lib/utils";
@@ -34,11 +36,10 @@ function addDays(iso: string | undefined, days: number): string | null {
   return new Date(t + days * MS_PER_DAY).toISOString().slice(0, 10);
 }
 
-function formatShort(iso: string | null | undefined): string {
+function formatShort(iso: string | null | undefined, language: "en" | "ur"): string {
   if (!iso) return "—";
-  const d = new Date(iso + "T00:00:00Z");
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  const stamp = iso.includes("T") ? iso : `${iso}T00:00:00`;
+  return formatDate(stamp, language, { month: "short", day: "numeric" }) || "—";
 }
 
 export function CropCycleCard({
@@ -48,7 +49,7 @@ export function CropCycleCard({
   farm: Farm;
   growth: CropGrowthInfo;
 }) {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const config = getCropGrowthConfig(farm.currentCrop);
   const planting = farm.plantingDate;
   const ageKnown = growth.cropAgeDays !== null;
@@ -73,7 +74,7 @@ export function CropCycleCard({
             </span>
             <div className="min-w-0">
               <p className="font-heading text-lg font-bold tracking-tight text-foreground">
-                {farm.currentCrop || t("farm.noCropSet")}
+                {localizeCrop(farm.currentCrop, language) || t("farm.noCropSet")}
               </p>
               <p className="truncate text-xs text-muted-foreground">
                 {farm.currentCropVariety || t("farm.varietyNotRecorded")}
@@ -81,7 +82,7 @@ export function CropCycleCard({
             </div>
           </div>
           <Badge variant={hasTimeline ? "default" : "neutral"}>
-            {growth.stageLabel}
+            {localizeGrowthStage(growth, language)}
           </Badge>
         </div>
 
@@ -95,7 +96,7 @@ export function CropCycleCard({
               </p>
             </div>
             <p className="mt-1 text-sm font-bold text-foreground">
-              {formatShort(planting)}
+              {formatShort(planting, language)}
             </p>
           </div>
           <div className="rounded-xl border border-border/70 bg-background p-3">
@@ -105,7 +106,7 @@ export function CropCycleCard({
                 {t("farm.estHarvest")}
               </p>
             </div>
-            <p className="mt-1 text-sm font-bold text-foreground">{formatShort(harvestDate)}</p>
+            <p className="mt-1 text-sm font-bold text-foreground">{formatShort(harvestDate, language)}</p>
           </div>
         </div>
 

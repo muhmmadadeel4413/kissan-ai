@@ -76,7 +76,7 @@ export function FarmSwitcher({ className }: { className?: string }) {
         <div
           role="listbox"
           aria-label={t("farmSwitcher.selectFarmAria")}
-          className="absolute left-0 top-full z-50 mt-2 w-64 overflow-hidden rounded-2xl border border-border bg-background p-1.5 shadow-pop animate-slide-in"
+          className="absolute start-0 top-full z-50 mt-2 w-64 overflow-hidden rounded-2xl border border-border bg-background p-1.5 shadow-pop animate-slide-in"
         >
           <p className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
             {t("farmSwitcher.myFarms") || "My Farms"}
@@ -96,7 +96,7 @@ export function FarmSwitcher({ className }: { className?: string }) {
                   close();
                 }}
                 className={cn(
-                  "flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left transition-colors cursor-pointer",
+                  "flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-start transition-colors cursor-pointer",
                   isActive
                     ? "bg-primary-soft text-foreground"
                     : "text-foreground hover:bg-muted"

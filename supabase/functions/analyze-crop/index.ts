@@ -483,6 +483,8 @@ Deno.serve(async (req: Request) => {
     growthStage?: string;
     variety?: string;
     location?: string;
+    /** UI language of the farmer; AI prose must match it. */
+    language?: "en" | "ur";
   };
 
   try {
@@ -506,6 +508,8 @@ Deno.serve(async (req: Request) => {
     variety,
     location,
   } = body ?? {};
+
+  const language: "en" | "ur" = body?.language === "ur" ? "ur" : "en";
 
   const cropName =
     (body?.cropName ?? "crop")
@@ -601,6 +605,23 @@ ${contextBits.join("\n")}`
   /* Diagnosis prompt                                                */
   /* -------------------------------------------------------------- */
 
+  /**
+   * Force the AI's prose into the farmer's UI language.
+   *
+   * Without this the model replied in English regardless of the app
+   * language, which is why diagnosed crops showed up as
+   * "Healthy Potato Plant" / "Possible Brown Spot disease" inside an
+   * otherwise Urdu card.
+   */
+  const languageDirective =
+    language === "ur"
+      ? `LANGUAGE — CRITICAL:
+The farmer selected URDU. Write the values of "diagnosis", "description", "causes", "recommendedActions" and "notes" in clear, simple Pakistani Urdu using Urdu/Arabic script.
+- NEVER write Urdu in Devanagari/Hindi script.
+- Keep crop names in Urdu where a common Urdu name exists (e.g. آلو, گندم, کپاس).
+- Keep numeric values and the "severity" and "confidence" fields exactly as specified (English enum / integer).`
+      : `LANGUAGE: Write all human-readable values in clear, simple English.`;
+
   const prompt = `
 You are a trusted crop-health expert for smallholder farmers in South Asia (Pakistan). You diagnose plant problems from photos.
 
@@ -617,6 +638,8 @@ Be honest and careful:
 - Recommended actions must be simple, affordable, safe, and suitable for a smallholder farmer.
 - Do not recommend dangerous pesticide mixing or unsafe chemical practices.
 - Do not claim certainty when the photo does not provide enough evidence.
+
+${languageDirective}
 
 Respond ONLY with valid JSON.
 

@@ -23,10 +23,26 @@ describe("i18n module exports", () => {
     for (const key of urKeys) {
       expect(enKeys).toContain(key);
     }
+    // Symmetric check: every English key must also have an Urdu entry.
+    // Without this, a new English string silently ships untranslated and the
+    // Urdu UI falls back to English — the exact mixture bug this guards against.
+    const missingUrdu = enKeys.filter((key) => !(key in translations.ur));
+    expect(missingUrdu).toEqual([]);
     // English must have a representative key from each feature module.
     expect(enKeys).toContain("brand.name"); // landing
     expect(enKeys).toContain("app.nav.dashboard"); // app
     expect(enKeys).toContain("auth.email"); // auth
+  });
+
+  it("never ships an empty translation in either language", () => {
+    const emptyEn = Object.keys(translations.en).filter(
+      (key) => translations.en[key].trim() === ""
+    );
+    const emptyUr = Object.keys(translations.ur).filter(
+      (key) => translations.ur[key].trim() === ""
+    );
+    expect(emptyEn).toEqual([]);
+    expect(emptyUr).toEqual([]);
   });
 
   it("defaults to English", () => {

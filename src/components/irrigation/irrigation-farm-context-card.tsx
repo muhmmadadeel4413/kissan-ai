@@ -3,6 +3,7 @@ import { MapPin, Sprout, Droplets, Ruler, Leaf, TrendingUp } from "lucide-react"
 import { Card, CardContent } from "../ui/card";
 import { usePreferences } from "../../context/PreferencesContext";
 import { buildFarmContext } from "../../lib/farm-context";
+import { isUnknownGrowthStage, localizeCrop, localizeGrowthStage, localizeIrrigationMethod, localizeSoilType } from "../../lib/localize";
 import type { Farm } from "../../types";
 
 /**
@@ -14,7 +15,7 @@ import type { Farm } from "../../types";
  * Recommendation FarmContextCard pattern.
  */
 export function IrrigationFarmContextCard({ farm }: { farm: Farm }) {
-  const { t } = usePreferences();
+  const { t, language } = usePreferences();
   const context = buildFarmContext(farm);
 
   const items: Array<{
@@ -24,19 +25,21 @@ export function IrrigationFarmContextCard({ farm }: { farm: Farm }) {
     icon: React.ComponentType<{ className?: string }>;
   }> = [
     { key: "location", labelKey: "irrigation.location", value: farm.location || "—", icon: MapPin },
-    { key: "soil", labelKey: "irrigation.soil", value: farm.soilType || "—", icon: Leaf },
+    { key: "soil", labelKey: "irrigation.soil", value: localizeSoilType(farm.soilType, language) || "—", icon: Leaf },
     {
       key: "irrigation",
       labelKey: "irrigation.method",
-      value: farm.irrigationMethod || "—",
+      value: localizeIrrigationMethod(farm.irrigationMethod, language) || "—",
       icon: Droplets,
     },
     { key: "landArea", labelKey: "irrigation.landArea", value: farm.landArea || "—", icon: Ruler },
-    { key: "crop", labelKey: "irrigation.crop", value: farm.currentCrop || "—", icon: Sprout },
+    { key: "crop", labelKey: "irrigation.crop", value: localizeCrop(farm.currentCrop, language) || "—", icon: Sprout },
     {
       key: "stage",
       labelKey: "irrigation.growthStage",
-      value: context.growth.stageLabel || "—",
+      value: isUnknownGrowthStage(context.growth)
+        ? "—"
+        : localizeGrowthStage(context.growth, language),
       icon: TrendingUp,
     },
   ];
