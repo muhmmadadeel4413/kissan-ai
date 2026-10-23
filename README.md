@@ -1,285 +1,141 @@
 # Kissan AI — Smart Farming Assistant
 
-**Kissan AI** (کسان اے آئی) is an AI-powered web application built for Pakistani smallholder farmers. It provides intelligent crop diagnosis, weather-aware irrigation advisory, risk assessment, yield prediction, and daily action recommendations — all in English and Urdu with full RTL support.
+Kissan AI is an AI-assisted farming web application designed for farmers in Pakistan. It combines farm-specific information, weather data, deterministic agricultural rules, and AI-generated explanations to help users understand crop health, irrigation, risks, daily tasks, and farm expenses.
 
-The name "Kissan" (کسان) means "farmer" in Urdu, reflecting the app's mission: to bring precision agriculture within reach of every farmer, regardless of farm size or technical expertise.
+The application supports English and Urdu interfaces, including right-to-left (RTL) layout for Urdu.
 
----
+**Live app:** https://kissan-ai-six.vercel.app  
+**Repository:** https://github.com/muhmmadadeel4413/kissan-ai
 
-## Overview
-
-Smallholder farmers in Pakistan and South Asia often lack access to timely, data-driven agronomic advice. Kissan AI solves this by combining a farmer's profile (crop, soil, irrigation method, planting date) with live weather data, diagnosis history, and AI reasoning to produce actionable, honest recommendations.
-
-The platform follows an **honest-by-design** philosophy: when critical data is missing, features return an "insufficient" state rather than fabricating advice. Safety-critical recommendations use deterministic rule engines as a baseline, with AI adding explanation and enrichment — never overriding the deterministic layer.
+> **Important:** Kissan AI provides decision support, not a substitute for a qualified agronomist or local agricultural extension service. AI diagnoses and recommendations can be wrong; verify high-impact crop-treatment decisions locally.
 
 ---
 
-## Key Features
+## Contents
 
-| Feature | Description |
-|---------|-------------|
-| **Farm Dashboard** | Central overview with farm health gauge, active alerts, weather summary, recent diagnoses, upcoming tasks, yield estimates, and crop growth stage. |
-| **Farm Profile** | Multi-farm support with farmer name, location, land area, soil type, irrigation method, current crop, planting date, and farm switching. |
-| **AI Crop Doctor** | Upload a crop photo and receive AI-powered disease diagnosis with severity, confidence, causes, and treatment recommendations (Google Gemini Vision). |
-| **AI Chat Assistant** | Context-aware agricultural assistant that understands your farm profile, growth stage, weather, and recent diagnoses. Supports English and Urdu. |
-| **Voice Assistant** | Speak to the app in English, Urdu, or Punjabi using speech-to-text (Sarvam AI) and text-to-speech (browser `speechSynthesis`). |
-| **Weather Intelligence** | Live weather conditions and 7-day forecast via Open-Meteo, with deterministic rain/heat/humidity/wind insights and soil moisture data. |
-| **Irrigation Advisor** | Rain-aware irrigation recommendations based on crop growth stage, soil type, and irrigation method. Deterministic rules with AI enrichment. |
-| **Risk Assessment** | Hybrid deterministic rule engine + AI refinement that monitors weather, diagnosis history, and crop stress signals to flag active risks. |
-| **Yield Prediction** | Estimated yield with confidence intervals and key contributing factors based on farm and weather data. |
-| **Smart Crop Recommendations** | AI-powered crop suitability recommendations (3–5 crops) based on farm profile, soil, and current conditions. |
-| **Today's Actions** | A prioritized daily action list (1–4 items) with evidence-backed reasons sourced from weather, diagnoses, risks, and growth stage. |
-| **Expense Tracking** | Log and categorize farm expenses (seeds, fertilizer, pesticide, labor, equipment, fuel, transport, etc.) with CSV export. |
-| **Crop Calendar** | Schedule and track farm events (irrigation, fertilizer, pest monitoring, harvest, inspection) with status tracking and CSV export. |
-| **Diagnosis History** | Browse and review all past crop diagnoses with severity, confidence, and recommended actions. |
-| **Global Search** | Search across diagnoses, expenses, events, and risk alerts from a single search bar. |
-| **Dark/Light Theme** | System-aware theme with manual toggle and persistent preference. |
-| **Multi-Language (UI)** | Full English and Urdu translations with RTL layout support. |
-| **Notification Bell** | Active risk alert notifications visible in the app layout. |
+- [Features](#features)
+- [Technology stack](#technology-stack)
+- [How it works](#how-it-works)
+- [Getting started](#getting-started)
+- [Environment variables](#environment-variables)
+- [Supabase setup](#supabase-setup)
+- [Available scripts](#available-scripts)
+- [Tests and quality checks](#tests-and-quality-checks)
+- [Deployment](#deployment)
+- [Security notes](#security-notes)
+- [Localization and voice](#localization-and-voice)
+- [Project structure](#project-structure)
+- [Troubleshooting](#troubleshooting)
+- [Contributing](#contributing)
+- [License](#license)
 
----
+## Features
 
-## AI Capabilities
+| Feature | What it does |
+|---|---|
+| Farm dashboard | Summarizes farm health, weather, alerts, diagnoses, upcoming tasks, growth stage, and yield estimates. |
+| Multiple farm profiles | Lets a user maintain separate farm profiles and switch between them. |
+| Crop Doctor | Accepts a crop photo and returns an AI-assisted diagnosis, severity, possible causes, and suggested actions. |
+| AI farming assistant | Provides farm-context-aware agricultural chat in English and Urdu. |
+| Weather intelligence | Uses Open-Meteo weather data and derives weather-related insights and alerts. |
+| Irrigation advisor | Combines weather, crop growth stage, soil, and irrigation context to provide irrigation guidance. |
+| Risk assessment | Uses deterministic rules and available farm signals to identify possible crop risks. |
+| Yield prediction | Presents an estimated yield with uncertainty and contributing factors where data is available. |
+| Crop recommendations | Suggests crops based on the available farm profile and growing conditions. |
+| Today's Actions | Prioritizes practical tasks using available weather, diagnosis, risk, and crop-stage information. |
+| Expense tracker | Records farm expenses by category and supports CSV export. |
+| Crop calendar | Schedules and tracks farm activities such as irrigation, fertilizer application, monitoring, and harvest. |
+| Diagnosis history | Lets users review previous crop diagnoses and recommendations. |
+| Search and alerts | Provides global search and in-app risk notifications. |
+| English and Urdu UI | Includes translations and RTL layout support for Urdu. |
+| Voice input/output | Includes voice input through the configured speech-to-text service and browser text-to-speech support. |
 
-All AI features use **Google Gemini** (`gemini-3.5-flash`) via server-side Supabase Edge Functions. API keys never reach the browser.
+Feature availability can depend on valid Supabase configuration, deployed Edge Functions, and the corresponding third-party API secrets.
 
-| AI Feature | Edge Function | How It Works |
-|------------|--------------|--------------|
-| **Crop Doctor** | `analyze-crop` | Sends crop photo to Gemini Vision API; returns disease name, severity, confidence, causes, and recommended actions. Persists diagnosis via service role. |
-| **Chat Assistant** | `chat-assistant` | Builds a system prompt with farm profile, growth stage, weather, and recent diagnoses. Calls Gemini with conversation history. Language detection (English/Urdu). |
-| **Risk Assessment** | `assess-risks` | Runs deterministic risk rules on weather, diagnoses, and irrigation data. Optionally enriches with Gemini explanations. Marks previous alerts as expired. |
-| **Crop Recommendations** | `recommend-crops` | Validates farm ownership, loads recent diagnoses and growth stage, calls Gemini for 3–5 crop recommendations with suitability scores and reasons. |
-| **Irrigation Advisor** | `irrigation-advisor` | Deterministic irrigation rules (rain probability, temperature, growth stage). Gemini adds natural-language explanation. Never fabricates exact water quantities when data is insufficient. |
-| **Today's Actions** | `today-actions` | Loads farm context, weather, diagnoses, and risks. Calls Gemini for decision reasoning. Returns 1–4 prioritized actions with sources and timing. |
+## Technology stack
 
-### Deterministic Engines
+- **Frontend:** React 18, TypeScript 5.9
+- **Build and development:** Vite 7
+- **Styling:** Tailwind CSS 4
+- **UI and icons:** Radix UI, lucide-react
+- **Routing:** React Router 7
+- **Charts:** Recharts
+- **Backend:** Supabase (PostgreSQL, Auth, Row Level Security, Storage, Edge Functions)
+- **AI:** Google Gemini through server-side Supabase Edge Functions; optional provider fallback may be configured in individual functions
+- **Weather:** Open-Meteo
+- **Voice:** Sarvam AI speech-to-text Edge Function and browser `speechSynthesis` for text-to-speech
+- **Tests:** Vitest
+- **Code quality:** TypeScript, ESLint, Prettier
 
-Two pure TypeScript engines run client-side with no AI calls and no Supabase dependency:
+## How it works
 
-- **Risk Engine** (`src/lib/risk-engine.ts`) — Score-based risk signal detection from weather thresholds (heat ≥ 42°C, rain ≥ 70%, etc.), diagnosis text keyword matching (pest/disease), and irrigation method.
-- **Irrigation Engine** (`src/lib/irrigation-engine.ts`) — Rain-aware irrigation advisor that delays recommendations when substantial rain is expected, considers growth stage sensitivity.
+The browser application is built with React and Vite. It uses Supabase for authentication, database access, storage, and server-side Edge Functions. AI provider credentials should remain on the server in Supabase Edge Function secrets; they should not be embedded in frontend code.
 
-Both engines are covered by unit tests.
+Several agricultural recommendations use deterministic TypeScript rules alongside AI-generated explanations. When required data is unavailable, recommendations should be treated as limited rather than assumed to be precise.
 
-### Growth Stage Engine
-
-A deterministic algorithm (`src/lib/growth-stage.ts`) calculates crop growth stage from planting date and current date. Supports **wheat, rice, cotton, maize, and sugarcane** with crop-specific day boundaries and Urdu/English aliases (e.g., "gehun" → wheat, "chawal" → rice).
-
----
-
-## Voice Assistant
-
-Voice input is integrated into the AI Chat page. The implementation uses:
-
-| Component | Technology | Details |
-|-----------|-----------|---------|
-| **Speech-to-Text (STT)** | Sarvam AI (`saaras:v3` model) | Audio captured via AudioWorklet at 16 kHz PCM, encoded to WAV on stop, uploaded to `sarvam-stt` Edge Function. Non-streaming — transcript arrives after recording ends. |
-| **Text-to-Speech (TTS)** | Browser `speechSynthesis` API | No API key required. Voice preference with fallback chain (e.g., Saraiki falls back to Urdu). |
-
-### Supported Voice Languages
-
-| Language | STT | TTS | Notes |
-|----------|-----|-----|-------|
-| Auto | Supported | Urdu | Auto-detects spoken language |
-| English | `en-IN` | `en` | Fully supported |
-| Urdu | `ur-IN` | `ur` | Fully supported |
-| Punjabi | `pa-IN` | `pa` | Recognition may vary by device |
-| Saraiki | Not supported | `skr` (falls back to Urdu) | STT not available from any provider; text input recommended |
-
----
-
-## Technology Stack
-
-| Layer | Technology |
-|-------|-----------|
-| **Frontend** | React 18, TypeScript 5.9 |
-| **Build Tool** | Vite 7 with `@vitejs/plugin-react` |
-| **Styling** | Tailwind CSS 4 + `tailwindcss-animate` |
-| **UI Components** | Radix UI (Accordion, Dialog, Label, Select, Slot) |
-| **Charts** | Recharts |
-| **Icons** | lucide-react |
-| **Routing** | react-router-dom v7 (code-split per route with lazy loading) |
-| **Backend / Database** | Supabase (PostgreSQL, Row Level Security, Auth, Storage, Edge Functions) |
-| **Edge Functions** | Supabase Edge Functions (Deno runtime) |
-| **AI Provider** | Google Gemini `gemini-3.5-flash` (via server-side Edge Functions), RouterOpen Source |
-| **Weather API** | Open-Meteo (free, no API key required) |
-| **Speech-to-Text** | Sarvam AI `saaras:v3` (via `sarvam-stt` Edge Function),Groq |
-| **Text-to-Speech** | Browser `speechSynthesis` API |
-| **Testing** | Vitest |
-| **Linting** | ESLint + Prettier |
-| **Utilities** | class-variance-authority, clsx, tailwind-merge |
-
----
-
-## Architecture
-
-Kissan AI is a single-page application with a clear separation between the browser client and server-side Edge Functions:
-
-```
-Browser (React + Vite)
-  ├── AuthProvider (Supabase Auth, implicit flow)
-  ├── PreferencesProvider (language, theme — localStorage)
-  └── FarmProvider (multi-farm state, active farm — localStorage)
-        │
-        ├── Client-side services (src/lib/*-service.ts)
-        │     └── Call Supabase REST API or invoke Edge Functions
-        │
-        └── Supabase Edge Functions (Deno)
-              ├── analyze-crop      → Google Gemini Vision
-              ├── chat-assistant    → Google Gemini
-              ├── assess-risks      → Deterministic rules + Google Gemini
-              ├── irrigation-advisor→ Deterministic rules + Google Gemini
-              ├── recommend-crops   → Google Gemini
-              ├── today-actions     → Google Gemini
-              ├── get-weather       → Open-Meteo API
-              └── sarvam-stt        → Sarvam AI STT
-```
-
-**Key patterns:**
-
-- **Farm-centric isolation** — Every service scopes queries by `farm_id`. The active farm is persisted in `localStorage` (`kissania.activeFarmId.v1`).
-- **Hybrid deterministic + AI** — Safety-critical decisions use deterministic rules as baseline; AI adds explanation but never overrides.
-- **Service role for writes** — All database writes go through Edge Functions using the Supabase service role, preventing client-side forgery.
-- **Honest states** — Missing data results in "insufficient" states, never fabricated recommendations.
-
----
-
-## Project Structure
-
-```
-kissan-ai/
-├── public/                        # Static assets (favicon, robots.txt, sitemap)
-├── src/
-│   ├── components/
-│   │   ├── actions/               # Today's actions card
-│   │   ├── auth/                  # Login, signup, logout, auth guards
-│   │   ├── crop-recommendation/   # Crop recommendation display
-│   │   ├── dashboard/             # Dashboard cards (weather, alerts, health, yield, etc.)
-│   │   ├── farm/                  # Crop cycle and growth stage cards
-│   │   ├── irrigation/            # Irrigation advisor and soil moisture
-│   │   ├── landing/               # Marketing landing page sections
-│   │   ├── layout/                # App layout, navigation, search, notifications, farm switcher
-│   │   ├── ui/                    # Reusable UI primitives (button, card, dialog, etc.)
-│   │   ├── yield/                 # Yield comparison chart
-│   │   └── ErrorBoundary.tsx      # Global error boundary
-│   ├── context/                   # React Context providers (Auth, Farm, Preferences)
-│   ├── hooks/                     # Custom hooks (weather, risks, actions, activity, voice)
-│   ├── i18n/                      # Translation modules (English + Urdu)
-│   ├── lib/                       # Services, engines, Supabase client, voice, utilities
-│   ├── pages/                     # Page components (lazy-loaded where possible)
-│   ├── types/                     # TypeScript type definitions
-│   ├── App.tsx                    # Root component with routing
-│   ├── main.tsx                   # Application entry point
-│   └── index.css                  # Global styles and Tailwind imports
-├── supabase/
-│   ├── functions/                 # Supabase Edge Functions (Deno)
-│   │   ├── analyze-crop/          # Gemini Vision crop diagnosis
-│   │   ├── assess-risks/          # Hybrid risk engine + AI refinement
-│   │   ├── chat-assistant/        # Context-aware AI chat
-│   │   ├── get-weather/           # Open-Meteo weather integration
-│   │   ├── irrigation-advisor/    # Irrigation recommendation engine
-│   │   ├── recommend-crops/       # Smart crop recommendations
-│   │   ├── sarvam-stt/            # Sarvam AI speech-to-text proxy
-│   │   └── today-actions/         # Daily action decision engine
-│   ├── schema.sql                 # Complete database schema setup script
-│   ├── diagnostic.sql             # Database diagnostic queries
-│   └── fix-user-id.sql            # User ID fix utility
-├── .env.example                   # Environment variable template
-├── package.json
-├── tsconfig.json
-├── vite.config.ts
-└── vitest.config.ts
-```
-
----
-
-## Database
-
-Kissan AI uses **Supabase** (PostgreSQL) with Row Level Security (RLS) on every table. The schema is defined in `supabase/schema.sql` and is applied via the Supabase SQL Editor.
-
-### Tables
-
-| Table | Purpose |
-|-------|---------|
-| `farms` | Farmer profile — name, location, soil type, irrigation method, current crop, planting date |
-| `diagnoses` | Crop health analysis — disease, severity, confidence, causes, recommended actions |
-| `expenses` | Farm expense tracking by category (seeds, fertilizer, pesticide, labor, etc.) |
-| `chat_conversations` | AI assistant conversation threads |
-| `chat_messages` | Individual chat messages within conversations |
-| `farm_events` | Crop calendar events (irrigation, fertilizer, harvest, etc.) |
-| `risk_alerts` | Active/expired/resolved risk assessments with evidence |
-| `action_items` | Today's prioritized actions with category, priority, and completion status |
-
-### Storage
-
-- **`crop-images`** — Public storage bucket for Crop Doctor photo uploads. Users can only delete their own uploads (scoped by user ID path prefix).
-
-### Row Level Security
-
-All tables implement RLS scoped to `auth.uid()`. Child tables use a `user_owns_farm(uuid)` helper function to verify farm ownership. Auto-fill triggers set `user_id` from `auth.uid()` on insert.
-
----
-
-## Environment Variables
-
-### Client-Side (`.env`)
-
-These are bundled into the browser app. Copy `.env.example` to `.env` and fill in your values:
-
-```env
-VITE_SUPABASE_URL=https://your-project.supabase.co
-VITE_SUPABASE_ANON_KEY=your-anon-key-here
-```
-
-> **Note:** The Supabase anon key is safe to expose — it is scoped by Row Level Security (RLS) policies. Never expose the `service_role` key.
-
-### Server-Side (Edge Function Secrets)
-
-These must be added in **Supabase Dashboard → Edge Functions → Secrets**:
-
-| Secret | Required For | Description |
-|--------|-------------|-------------|
-| `GEMINI_API_KEY` | Crop Doctor, Chat, Risks, Recommendations, Irrigation, Actions | Google Gemini API key — [aistudio.google.com](https://aistudio.google.com/apikey) |
-| `SARVAM_API_KEY` | Voice Assistant (STT) | Sarvam AI API key — [sarvam.ai](https://www.sarvam.ai) |
-| `SUPABASE_SERVICE_ROLE_KEY` | All Edge Functions (auto-provided) | Set automatically by Supabase — do not add manually |
-
-> **Note:** Weather data uses Open-Meteo, which requires no API key.
-
----
-
-## Installation
+## Getting started
 
 ### Prerequisites
 
-- **Node.js** 18+ (LTS recommended)
-- **npm**
-- A **Supabase** project (free tier works) — [supabase.com](https://supabase.com)
-- A **Google Gemini API key** — [aistudio.google.com](https://aistudio.google.com/apikey)
-- A **Sarvam AI API key** (for voice features) — [sarvam.ai](https://www.sarvam.ai)
+Install the following:
 
-### Setup
+- Node.js (use a current LTS release compatible with Vite 7)
+- npm
+- A Supabase project
+- A Google Gemini API key for AI features
+- A Sarvam AI API key if you want to use speech-to-text
+
+### 1. Clone and install
 
 ```bash
-# 1. Clone the repository
 git clone https://github.com/muhmmadadeel4413/kissan-ai.git
 cd kissan-ai
-
-# 2. Install dependencies
 npm install
+```
 
-# 3. Create environment file
-cp .env.example .env
-# Edit .env with your Supabase project URL and anon key
+### 2. Configure frontend environment variables
 
-# 4. Set up the database
-# Open Supabase Dashboard → SQL Editor → paste supabase/schema.sql → Run
+Create a `.env` file in the project root. Add the values for your own Supabase project:
 
-# 5. Configure Edge Function secrets
-# In Supabase Dashboard → Edge Functions → Secrets, add:
-#   GEMINI_API_KEY
-#   SARVAM_API_KEY
+```env
+VITE_SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
+VITE_SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_OR_PUBLISHABLE_KEY
+```
 
-# 6. Deploy Edge Functions
+Get the project URL and public client key from your Supabase project's API settings. Use the public anon/publishable key with Row Level Security enabled. **Never put a Supabase `service_role` key, Gemini key, or Sarvam key in a `VITE_` variable.** Vite variables prefixed with `VITE_` are included in the client-side bundle.
+
+If your local project contains an `.env.example` file, you can copy it and then replace its placeholders. Otherwise, create `.env` using the template above.
+
+### 3. Set up Supabase
+
+1. Open your Supabase project.
+2. Open **SQL Editor**.
+3. Run the database schema from `supabase/schema.sql` in the repository.
+4. Confirm that the tables, policies, helper functions, and storage configuration required by the application were created.
+5. Configure the Edge Function secrets described below.
+
+The project also includes SQL utility files for diagnostics and targeted fixes. Do not run a fix script blindly on production data; read it first and back up important data.
+
+### 4. Configure Edge Function secrets
+
+In Supabase, open **Edge Functions / Secrets** and add the secrets required by the functions you intend to use.
+
+| Secret | Used for |
+|---|---|
+| `GEMINI_API_KEY` | Gemini-powered AI features, including crop diagnosis, chat, risk assessment, irrigation, crop recommendations, daily actions, and `speak-answer`, where configured. |
+| `OPENROUTER_API_KEY` | Optional AI fallback used by functions including `analyze-crop`, `assess-risks`, `chat-assistant`, `irrigation-advisor`, `recommend-crops`, and `today-actions`. |
+| `SARVAM_API_KEY` | Speech-to-text through the `sarvam-stt` Edge Function. |
+| `GROQ_API_KEY` | Whisper speech-to-text through the `whisper-stt` Edge Function. |
+
+Supabase Edge Functions normally receive Supabase server environment values from the platform. Keep provider API keys and the service-role key out of frontend environment variables and never commit them to the repository. Configure only the secrets needed by the functions you intend to use.
+### 5. Deploy Edge Functions
+
+Install and authenticate the Supabase CLI, link the local project to your Supabase project, and deploy the functions used by your application. From the repository root, run:
+
+```bash
+supabase login
+supabase link --project-ref YOUR_PROJECT_REF
+
 supabase functions deploy analyze-crop
 supabase functions deploy assess-risks
 supabase functions deploy chat-assistant
@@ -287,127 +143,174 @@ supabase functions deploy get-weather
 supabase functions deploy irrigation-advisor
 supabase functions deploy recommend-crops
 supabase functions deploy sarvam-stt
+supabase functions deploy speak-answer
 supabase functions deploy today-actions
+supabase functions deploy whisper-stt
+```
 
-# 7. Start the development server
+These commands cover the function directories included in the project. Frontend deployment does not automatically deploy these Edge Functions.
+
+### 6. Run locally
+
+```bash
 npm run dev
 ```
 
-The app will be available at [http://localhost:5173](http://localhost:5173).
+Vite normally serves the app at http://localhost:5173. Open the URL printed in your terminal.
 
-> **Important:** Vite reads `.env` only at startup. After editing environment variables, restart the dev server.
+**After changing `.env`, restart the development server** so Vite reads the updated values.
 
----
-
-## Available Scripts
-
-| Command | Description |
-|---------|-------------|
-| `npm run dev` | Start the Vite development server with HMR |
-| `npm run build` | Build the production bundle |
-| `npm run preview` | Preview the production build locally |
-| `npm run typecheck` | Run TypeScript type checking (`tsc --noEmit`) |
-| `npm run typecheck:watch` | Run TypeScript type checking in watch mode |
-| `npm run test` | Run unit tests with Vitest |
-| `npm run test:watch` | Run tests in watch mode |
-| `npm run lint` | Lint and fix TypeScript/TSX files with ESLint |
-| `npm run format` | Format source files with Prettier |
-
----
-
-## Testing
-
-The project uses **Vitest** for unit testing. Four test files cover the deterministic engines and utilities:
-
-| Test File | Coverage |
-|-----------|----------|
-| `src/lib/risk-engine.test.ts` | Risk signal detection, threshold logic, aggregation, and alert generation |
-| `src/lib/irrigation-engine.test.ts` | Rain-aware irrigation recommendations and growth stage sensitivity |
-| `src/lib/export-utils.test.ts` | CSV export with escaping for commas, quotes, newlines, and null values |
-| `src/i18n/index.test.ts` | Translation dictionaries, language options, fallback behavior, and interpolation |
-
-Run all tests (52 tests across 4 files):
-
-```bash
-npm run test
-```
-
-Run tests in watch mode:
-
-```bash
-npm run test:watch
-```
-
----
-
-## Deployment
+## Environment variables
 
 ### Frontend
 
-The frontend is a static Vite build suitable for any hosting provider:
+| Variable | Required | Purpose |
+|---|---|---|
+| `VITE_SUPABASE_URL` | Yes | URL of your Supabase project. |
+| `VITE_SUPABASE_ANON_KEY` | Yes | Public anon/publishable client key used by the frontend. |
+
+### Server-side secrets
+
+Set these in Supabase Edge Function secrets, not in the frontend `.env`:
+
+- `GEMINI_API_KEY` — AI functionality that uses Google Gemini.
+- `SARVAM_API_KEY` — speech-to-text functionality.
+- Any optional fallback-provider keys referenced by the source of the particular Edge Function you deploy.
+
+Open-Meteo does not normally require an API key for the weather endpoints used by this project.
+
+## Available scripts
+
+These commands are defined in `package.json`:
+
+| Command | Description |
+|---|---|
+| `npm run dev` | Starts the Vite development server. |
+| `npm run build` | Builds the production frontend into `dist/`. |
+| `npm run preview` | Serves the production build locally for preview. |
+| `npm run typecheck` | Runs TypeScript checking without emitting files. |
+| `npm run typecheck:watch` | Runs TypeScript checking in watch mode. |
+| `npm run test` | Runs the Vitest test suite once. |
+| `npm run test:watch` | Runs Vitest in watch mode. |
+| `npm run lint` | Runs ESLint on TypeScript/TSX files and applies automatic fixes. Review the diff afterward. |
+| `npm run format` | Formats TypeScript/TSX files under `src/` with Prettier. |
+
+## Tests and quality checks
+
+Before pushing changes, run:
 
 ```bash
+npm run typecheck
+npm run test
 npm run build
 ```
 
-The output is in the `dist/` directory. Deploy to:
+The repository includes Vitest tests for deterministic irrigation and risk logic, export utilities, and localization/voice-related behavior. If a command fails, fix the reported issue and rerun it before committing.
 
-- **Vercel** — Connect your GitHub repo or use `vercel` CLI
-- **Netlify** — Drag and drop `dist/` or connect via Git
-- **Cloudflare Pages** — Connect your GitHub repo
+The `lint` and `format` scripts can modify files; inspect the result with `git diff` before committing.
 
-### Edge Functions
+## Deployment
 
-Edge Functions must be deployed to your Supabase project. They run on Supabase's global Deno runtime:
+### Frontend (Vercel)
 
-```bash
-supabase functions deploy <function-name>
+The deployed frontend is available at:
+
+https://kissan-ai-six.vercel.app
+
+For a new deployment:
+
+1. Import the GitHub repository into Vercel.
+2. Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` in the Vercel project's environment-variable settings.
+3. Ensure the production Supabase project has the schema, storage, Edge Function secrets, and Edge Functions configured.
+4. Deploy the application. Vercel runs the project's build command (`npm run build`) and publishes the Vite output directory (`dist`).
+
+If you change Vite environment variables in Vercel, trigger a new deployment so the values are included in the client bundle.
+
+### Supabase backend
+
+Frontend deployment does not deploy Supabase Edge Functions or apply database changes automatically. Deploy functions and apply schema changes to the intended Supabase project separately.
+
+## Security notes
+
+- Keep database access protected by Row Level Security policies.
+- Keep Gemini, Sarvam, and other provider secrets on the server in Supabase Edge Function secrets.
+- Never commit `.env`, access tokens, passwords, or private keys.
+- Never put privileged secrets in `VITE_*` variables; those values are exposed to browser users.
+- Review database migrations and SQL repair scripts before running them against production data.
+- Treat AI-generated diagnoses and recommendations as estimates and verify consequential decisions with a qualified local expert.
+
+## Localization and voice
+
+The interface supports English and Urdu, including RTL behavior for Urdu. Voice features depend on browser/device capabilities and the server-side speech-to-text configuration. Browser text-to-speech voices vary by operating system and browser. Punjabi recognition may vary by provider/device; Saraiki speech recognition may not be available even where text-to-speech fallback is possible.
+
+## Project structure
+
+The source tree is organized around these main areas:
+
+```text
+kissan-ai/
+├── src/
+│   ├── components/      # Shared UI, dashboard, farm, auth, layout, and feature components
+│   ├── context/         # Authentication, farm, and preferences context
+│   ├── hooks/           # Reusable React hooks
+│   ├── i18n/            # English/Urdu localization
+│   ├── lib/             # Supabase client, services, rules engines, weather, voice, utilities
+│   ├── pages/           # Dashboard, assistant, Crop Doctor, calendar, expenses, and other pages
+│   ├── types/           # TypeScript types
+│   ├── App.tsx          # Routes and application shell
+│   └── main.tsx         # Frontend entry point
+├── supabase/
+│   ├── functions/       # Server-side Supabase Edge Functions
+│   └── schema.sql       # Database schema
+├── package.json
+├── vite.config.ts
+├── vitest.config.ts
+└── README.md
 ```
 
----
+## Troubleshooting
 
-## Security Model
+### The app says Supabase configuration is missing
 
-- **Row Level Security (RLS)** — All database tables are protected with RLS policies; users can only access their own farm's data.
-- **Server-side API keys** — Gemini and Sarvam keys live exclusively in Supabase Edge Function secrets and never reach the browser.
-- **Farm ownership validation** — Every Edge Function verifies farm ownership server-side using the service role before returning or modifying data.
-- **Service role writes** — AI-generated results (diagnoses, risk alerts, recommendations) are persisted via the service role so clients cannot inject or tamper with records.
-- **CORS allowlist** — Edge Functions restrict preflight responses to a defined set of allowed origins.
-- **Error sanitization** — Error messages shown to users are friendly and never expose raw internals or stack traces.
-- **Never commit `.env`** — The `.env` file is listed in `.gitignore` and must never be committed.
+- Confirm `.env` is in the repository root.
+- Confirm the variable names are exactly `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.
+- Check for placeholder values and extra spaces.
+- Stop and restart `npm run dev` after editing `.env`.
 
----
+### A feature returns an Edge Function or AI error
 
-## Localization
+- Confirm the required Edge Function is deployed to the correct Supabase project.
+- Confirm the relevant API key is configured in Supabase Edge Function secrets.
+- Check Supabase Edge Function logs for the actual provider response and quota/availability errors.
+- Remember that AI providers can rate-limit requests or temporarily become unavailable.
 
-Kissan AI supports two UI languages:
+### The frontend works locally but not after deployment
 
-| Language | Direction | Font |
-|----------|-----------|------|
-| English | LTR | System default |
-| Urdu (اردو) | RTL | Noto Nastaliq Urdu / Noto Sans Urdu |
+- Verify the Vercel environment variables for the correct deployment environment (Production, Preview, or Development).
+- Redeploy after changing environment variables.
+- Confirm the deployed app's origin is permitted by the relevant Edge Function CORS configuration.
+- Check browser developer tools and Supabase function logs for errors.
 
-Language preference is persisted in `localStorage` (`kissanai.language.v1`) and applied globally. The i18n system is a custom implementation with 5 translation modules (landing, app, farm, features, auth) and English fallback for missing keys. RTL layout flipping is applied before first paint via an inline script in `index.html`.
+### Urdu text or RTL layout looks incorrect
 
----
+- Check that the selected UI language is Urdu and that the relevant translation exists.
+- Test the page at both mobile and desktop widths.
+- Confirm text direction and font styles are applied to the specific component, not only the overall page.
 
 ## Contributing
 
-Contributions are welcome. Before submitting a PR:
+Contributions and bug reports are welcome. Before opening a pull request:
 
-1. Ensure `npm run typecheck` passes with no errors.
-2. Ensure `npm run test` passes (all tests green).
-3. Follow the existing code style (Tailwind utility classes, functional components, TypeScript strict mode).
-4. Keep Edge Functions honest — never fabricate data when information is insufficient.
-
----
+1. Run `npm run typecheck`.
+2. Run `npm run test`.
+3. Run `npm run build`.
+4. Review `git diff` and ensure no secrets or unrelated formatting changes are included.
+5. Preserve farm-data isolation, Row Level Security, and the application's principle of not inventing advice when required evidence is missing.
 
 ## License
 
-This project is proprietary. All rights reserved.
-
----
+No open-source license is currently specified in this README. Unless the repository includes a license file stating otherwise, all rights remain with the copyright holder.
 
 ## Support
 
-For issues or questions, please open an issue on the project repository.
+For bugs and feature requests, open an issue in the GitHub repository.
