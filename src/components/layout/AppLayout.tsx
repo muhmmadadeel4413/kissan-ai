@@ -493,7 +493,7 @@ export function AppLayout() {
   const manage = primaryNav.filter((i) => !TOOL_NAV_PATHS.has(i.to));
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background lg:h-screen lg:overflow-hidden">
       {/* Desktop sidebar — full-height flex layout, no scrolling needed. */}
       <aside className="fixed inset-y-0 start-0 z-30 hidden w-[220px] flex-col border-e border-sidebar-border bg-sidebar px-3 py-3 lg:flex">
         {/* Logo / Brand */}
@@ -502,8 +502,11 @@ export function AppLayout() {
         </div>
 
         {/* Navigation — takes available space, no overflow */}
-        <nav className="flex flex-1 flex-col overflow-hidden" aria-label={t("nav.primary")}>
-          <div className="flex flex-col gap-0.5">
+          <nav 
+             className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain"
+             aria-label={t("nav.primary")}
+            >
+           <div className="flex flex-col gap-0.5">
             <p className="px-2.5 pb-0.5 pt-1 text-[10px] font-semibold uppercase tracking-wider text-sidebar-muted">
               {t("nav.aiTools")}
             </p>
@@ -530,7 +533,7 @@ export function AppLayout() {
         </div>
       </aside>
 
-      <div className="lg:ps-[220px]">
+      <div className="lg:h-screen lg:overflow-y-auto lg:overscroll-contain lg:ps-[220px]">
         {/* Desktop top bar — search, notifications, farmer profile (reference) */}
         <header className="sticky top-0 z-20 hidden border-b border-border bg-background/90 backdrop-blur lg:block">
           <div className="mx-auto flex h-16 w-full max-w-[1060px] items-center gap-3 px-6">

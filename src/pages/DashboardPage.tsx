@@ -183,7 +183,7 @@ export default function DashboardPage() {
 
       {/* Row 1 — the four stat cards from the reference */}
       <section aria-label={t("dashboard.farmAtGlance")}>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
           <FarmOverviewCard farm={farm} growth={farmContext.growth} />
           <WeatherTodayCard
             weather={weather}
@@ -207,7 +207,7 @@ export default function DashboardPage() {
       {/* Row 2 — intelligence, diagnoses, irrigation, tasks.
           This four-card row now sits directly below the top stat cards. */}
       <section aria-label={t("dashboard.aiFarmIntelligence")}>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
           <FarmIntelligenceCard input={healthInput} />
           <RecentDiagnosesCard
             diagnoses={diagnoses}
