@@ -1,0 +1,709 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Kissan AI — Pitch Deck</title>
+<style>
+  :root {
+    --bg: #0c110a;
+    --panel: #151d12;
+    --panel-2: #1b2417;
+    --line: rgba(230, 236, 222, 0.1);
+    --ink: #e9efe1;
+    --muted: #9fac93;
+    --dim: #6f7d66;
+    --lime: #8fb06a;
+    --accent: #b4cd56;
+    --urdu: "Noto Sans Urdu", "Noto Naskh Arabic", "Segoe UI", "Tahoma", sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: #060905;
+    color: var(--ink);
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+  }
+
+  /* ---------- stage ---------- */
+  #stage {
+    position: relative;
+    width: 1280px;
+    height: 720px;
+    transform-origin: center center;
+    background: var(--bg);
+    box-shadow: 0 40px 120px -40px rgba(0, 0, 0, 0.9);
+    overflow: hidden;
+  }
+
+  .slide {
+    position: absolute;
+    inset: 0;
+    display: none;
+    flex-direction: column;
+    padding: 54px 64px 64px;
+    background:
+      radial-gradient(1200px 520px at 88% -10%, rgba(143, 176, 106, 0.13), transparent 70%),
+      radial-gradient(900px 500px at -10% 110%, rgba(180, 205, 86, 0.07), transparent 70%),
+      var(--bg);
+  }
+  .slide.active { display: flex; animation: fade 220ms ease-out; }
+  @keyframes fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+  /* ---------- chrome ---------- */
+  .chrome {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 26px;
+    flex: none;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 650; letter-spacing: 0.2px; }
+  .brand svg { width: 26px; height: 26px; }
+  .kicker {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--dim);
+  }
+
+  h1, h2, h3, p { margin: 0; }
+
+  h2.head {
+    font-size: 46px;
+    line-height: 1.08;
+    letter-spacing: -0.022em;
+    font-weight: 700;
+    max-width: 1020px;
+  }
+  h1.head {
+    font-size: 66px;
+    line-height: 1.02;
+    letter-spacing: -0.03em;
+    font-weight: 720;
+  }
+  .sub {
+    margin-top: 18px;
+    font-size: 21px;
+    line-height: 1.5;
+    color: var(--muted);
+    max-width: 760px;
+  }
+  .accent { color: var(--accent); }
+  .lime { color: var(--lime); }
+
+  .body { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 26px; }
+
+  /* ---------- lists ---------- */
+  ul.ticks { list-style: none; padding: 0; margin: 0; display: grid; gap: 14px; }
+  ul.ticks li {
+    position: relative;
+    padding-left: 30px;
+    font-size: 19px;
+    line-height: 1.45;
+    color: var(--ink);
+  }
+  ul.ticks li::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 9px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 0 4px rgba(180, 205, 86, 0.14);
+  }
+  ul.ticks li span { color: var(--muted); }
+
+  /* ---------- cards ---------- */
+  .grid { display: grid; gap: 16px; }
+  .grid.g2 { grid-template-columns: repeat(2, 1fr); }
+  .grid.g3 { grid-template-columns: repeat(3, 1fr); }
+  .grid.g4 { grid-template-columns: repeat(4, 1fr); }
+
+  .card {
+    background: linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0.012));
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 20px 20px 18px;
+  }
+  .card h3 { font-size: 18px; font-weight: 650; letter-spacing: -0.01em; }
+  .card p { margin-top: 8px; font-size: 15.5px; line-height: 1.45; color: var(--muted); }
+  .card .num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px; height: 26px;
+    border-radius: 8px;
+    background: rgba(180, 205, 86, 0.14);
+    color: var(--accent);
+    font-size: 13px;
+    font-weight: 700;
+    margin-bottom: 12px;
+  }
+
+  /* ---------- screenshot frame ---------- */
+  .shot {
+    position: relative;
+    margin: 0;
+    border-radius: 16px;
+    overflow: hidden;
+    border: 1px solid rgba(230, 236, 222, 0.12);
+    background: #0a0e08;
+    box-shadow: 0 36px 70px -28px rgba(0, 0, 0, 0.95), 0 0 0 1px rgba(0,0,0,0.4);
+    min-height: 0;
+  }
+  .shot img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: top center;
+  }
+  .shot .ph {
+    position: absolute;
+    inset: 0;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    text-align: center;
+    padding: 24px;
+    background:
+      repeating-linear-gradient(45deg, rgba(255,255,255,0.022) 0 12px, transparent 12px 24px),
+      #0d120a;
+  }
+  .shot .ph strong { font-size: 17px; color: var(--muted); font-weight: 600; }
+  .shot .ph small { font-size: 13px; color: var(--dim); letter-spacing: 0.04em; }
+  .shot.missing .ph { display: flex; }
+  .shot.missing img { display: none; }
+
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 36px; align-items: center; flex: 1; min-height: 0; }
+  .split.wide-right { grid-template-columns: 0.85fr 1.15fr; }
+
+  /* ---------- stats ---------- */
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+  .stat {
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 18px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01));
+  }
+  .stat .v { font-size: 34px; font-weight: 720; letter-spacing: -0.02em; color: var(--accent); }
+  .stat .k { margin-top: 4px; font-size: 13.5px; color: var(--muted); line-height: 1.35; }
+
+  /* ---------- architecture ---------- */
+  .arch { display: flex; flex-direction: column; gap: 12px; justify-content: center; flex: 1; }
+  .arch-row { display: grid; grid-template-columns: 190px 1fr; gap: 18px; align-items: center; }
+  .arch-label {
+    font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--dim); font-weight: 700; text-align: right;
+  }
+  .arch-box {
+    border: 1px solid var(--line);
+    background: var(--panel);
+    border-radius: 14px;
+    padding: 14px 18px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+  .chip {
+    font-size: 14.5px;
+    color: var(--ink);
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.07);
+    padding: 6px 11px;
+    border-radius: 9px;
+    white-space: nowrap;
+  }
+  .chip.hi { background: rgba(180,205,86,0.14); border-color: rgba(180,205,86,0.32); color: #dcecb0; }
+  .arrow { text-align: center; color: var(--dim); font-size: 15px; letter-spacing: 0.5em; }
+
+  /* ---------- title slide ---------- */
+  .title-wrap { display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 40px; flex: 1; align-items: center; min-height: 0; }
+  .badge {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 13px; font-weight: 600; letter-spacing: 0.02em;
+    color: #d6e6ac;
+    background: rgba(180, 205, 86, 0.12);
+    border: 1px solid rgba(180, 205, 86, 0.28);
+    padding: 7px 13px; border-radius: 999px;
+    margin-bottom: 22px;
+  }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+  .meta { margin-top: 30px; display: flex; gap: 26px; font-size: 14.5px; color: var(--dim); flex-wrap: wrap; }
+  .meta b { color: var(--muted); font-weight: 600; }
+
+  /* ---------- urdu bits ---------- */
+  .ur { font-family: var(--urdu); direction: rtl; unicode-bidi: isolate; line-height: 1.9; }
+  .urdu-strip {
+    display: flex; align-items: center; gap: 14px;
+    border: 1px solid var(--line); border-radius: 14px;
+    padding: 14px 18px; background: var(--panel);
+    font-size: 19px;
+  }
+  .urdu-strip .tag {
+    font-family: inherit; direction: ltr;
+    font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--dim); font-weight: 700; white-space: nowrap;
+  }
+
+  /* ---------- footer / hud ---------- */
+  .foot {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-top: 22px; font-size: 13.5px; color: var(--dim); flex: none;
+  }
+  .pagenum { font-variant-numeric: tabular-nums; }
+
+  #hud { position: fixed; inset: auto 0 0 0; height: 3px; background: rgba(255,255,255,0.06); z-index: 50; }
+  #bar { height: 100%; width: 0; background: linear-gradient(90deg, var(--lime), var(--accent)); transition: width 180ms ease; }
+  #hint {
+    position: fixed; right: 14px; bottom: 14px; z-index: 60;
+    font-size: 12px; color: #56614f; user-select: none;
+  }
+
+  .note {
+    font-size: 15.5px;
+    line-height: 1.5;
+    color: var(--muted);
+    border-left: 2px solid rgba(180,205,86,0.5);
+    padding-left: 14px;
+  }
+
+  /* ---------- print ---------- */
+  @page { size: 1280px 720px; margin: 0; }
+  @media print {
+    html, body { background: #fff; height: auto; overflow: visible; }
+    body { display: block; }
+    #hud, #hint { display: none !important; }
+    #stage { transform: none !important; width: 1280px; height: auto; box-shadow: none; }
+    .slide {
+      position: relative;
+      display: flex !important;
+      width: 1280px;
+      height: 720px;
+      page-break-after: always;
+      break-after: page;
+      animation: none;
+    }
+    .slide:last-child { page-break-after: auto; break-after: auto; }
+    .slide .ph { display: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+
+  <!-- 1 · TITLE -->
+  <section class="slide active" data-label="Kissan AI">
+    <div class="chrome">
+      <div class="brand">
+        <svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#3e7c4f"/><g fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round"><path d="M32 40V24"/><path d="M32 26C26 26 22 30 22 36c6 0 10-4 10-10Z"/><path d="M32 30c6 0 10-4 10-10-6 0-10 4-10 10Z"/><path d="M32 40v8"/></g></svg>
+        Kissan AI
+      </div>
+      <div class="kicker">Final year project · 2026</div>
+    </div>
+
+    <div class="title-wrap">
+      <div>
+        <span class="badge"><span class="dot"></span> Urdu-first · Offline-tolerant · Built for smallholders</span>
+        <h1 class="head">Farming advice<br />that speaks<br /><span class="accent">your language.</span></h1>
+        <p class="sub">
+          An AI assistant that turns a crop photo, today's weather and the farm's own records
+          into one clear next step — in Urdu or English.
+        </p>
+        <div class="meta">
+          <div><b>Presented by</b> Muhammad Adeel</div>
+          <div><b>Live</b> kissan-ai-six.vercel.app</div>
+        </div>
+      </div>
+
+      <figure class="shot" style="height: 430px;">
+        <img src="img/01-landing.png" alt="Kissan AI landing page"
+             onerror="this.parentNode.classList.add('missing')" />
+        <figcaption class="ph"><strong>Landing page</strong><small>drop img/01-landing.png</small></figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <!-- 2 · PROBLEM -->
+  <section class="slide" data-label="Problem">
+    <div class="chrome"><div class="brand">Kissan AI</div><div class="kicker">The problem</div></div>
+    <h2 class="head">A farmer makes dozens of decisions a season, with <span class="accent">nobody to ask.</span></h2>
+    <div class="body">
+      <div class="grid g2" style="margin-top: 6px;">
+        <div class="card"><h3>Advice is scattered</h3><p>Pesticide shop, YouTube, neighbours, the extension officer who visits twice a year. Nobody agrees.</p></div>
+        <div class="card"><h3>Risk stays invisible</h3><p>Heat, frost, untimely rain and disease pressure are only noticed after the damage is done.</p></div>
+        <div class="card"><h3>Diagnosis costs a trip</h3><p>A sick leaf means a photo, a journey and a wait — so most farmers guess, or over-spray.</p></div>
+        <div class="card"><h3>English-only tools exclude</h3><p>The people who farm are least served by apps written for a different user in a different language.</p></div>
+      </div>
+      <p class="note">The information exists. It just never reaches the farmer in a form they can use, in a language they read.</p>
+    </div>
+  </section>
+
+  <!-- 3 · SOLUTION -->
+  <section class="slide" data-label="Solution">
+    <div class="chrome"><div class="brand">Kissan AI</div><div class="kicker">The solution</div></div>
+    <h2 class="head">One app. Ten jobs. <span class="accent">Two languages that actually matter.</span></h2>
+    <div class="body">
+      <div class="grid g2" style="grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 4px;">
+        <div class="grid g2" style="gap: 12px;">
+          <div class="card" style="padding:15px 17px;"><h3 style="font-size:16px;">Crop Doctor</h3><p style="font-size:14px;">Photo → diagnosis</p></div>
+          <div class="card" style="padding:15px 17px;"><h3 style="font-size:16px;">AI Assistant</h3><p style="font-size:14px;">Chat + voice</p></div>
+          <div class="card" style="padding:15px 17px;"><h3 style="font-size:16px;">Weather</h3><p style="font-size:14px;">7-day + impact</p></div>
+          <div class="card" style="padding:15px 17px;"><h3 style="font-size:16px;">Irrigation</h3><p style="font-size:14px;">When and how much</p></div>
+          <div class="card" style="padding:15px 17px;"><h3 style="font-size:16px;">Risk alerts</h3><p style="font-size:14px;">Before the damage</p></div>
+        </div>
+        <div class="grid g2" style="gap: 12px;">
+          <div class="card" style="padding:15px 17px;"><h3 style="font-size:16px;">Today's actions</h3><p style="font-size:14px;">Prioritised list</p></div>
+          <div class="card" style="padding:15px 17px;"><h3 style="font-size:16px;">Yield</h3><p style="font-size:14px;">Estimate + factors</p></div>
+          <div class="card" style="padding:15px 17px;"><h3 style="font-size:16px;">Crop calendar</h3><p style="font-size:14px;">Sow → harvest</p></div>
+          <div class="card" style="padding:15px 17px;"><h3 style="font-size:16px;">Expenses</h3><p style="font-size:14px;">Cost per season</p></div>
+          <div class="card" style="padding:15px 17px;"><h3 style="font-size:16px;">Farm profile</h3><p style="font-size:14px;">Soil, water, crop</p></div>
+        </div>
+      </div>
+      <div class="stats">
+        <div class="stat"><div class="v">25+</div><div class="k">crops recognised</div></div>
+        <div class="stat"><div class="v">2</div><div class="k">UI languages, full RTL</div></div>
+        <div class="stat"><div class="v">10</div><div class="k">serverless AI functions</div></div>
+        <div class="stat"><div class="v">0</div><div class="k">API keys in the browser</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4 · DASHBOARD -->
+  <section class="slide" data-label="Demo · Dashboard">
+    <div class="chrome"><div class="brand">Kissan AI</div><div class="kicker">Live demo · 1 of 6</div></div>
+    <div class="split wide-right">
+      <div>
+        <h2 class="head" style="font-size: 40px;">The whole farm<br />on one screen.</h2>
+        <ul class="ticks" style="margin-top: 22px;">
+          <li>Today's weather and the 7-day outlook <span>— in one glance</span></li>
+          <li>Crop stage, farm health and active risks</li>
+          <li>Irrigation due, recent diagnoses, tasks for today</li>
+          <li>Everything the AI needs, already on the page</li>
+        </ul>
+      </div>
+      <figure class="shot" style="height: 470px;">
+        <img src="img/02-dashboard.png" alt="Dashboard"
+             onerror="this.parentNode.classList.add('missing')" />
+        <figcaption class="ph"><strong>Dashboard</strong><small>drop img/02-dashboard.png</small></figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <!-- 5 · CROP DOCTOR -->
+  <section class="slide" data-label="Demo · Crop Doctor">
+    <div class="chrome"><div class="brand">Kissan AI</div><div class="kicker">Live demo · 2 of 6</div></div>
+    <div class="split">
+      <figure class="shot" style="height: 470px;">
+        <img src="img/03-crop-doctor.png" alt="Crop Doctor diagnosis"
+             onerror="this.parentNode.classList.add('missing')" />
+        <figcaption class="ph"><strong>Crop Doctor result</strong><small>drop img/03-crop-doctor.png</small></figcaption>
+      </figure>
+      <div>
+        <h2 class="head" style="font-size: 40px;">Photo in.<br />Diagnosis out — <span class="accent">in Urdu.</span></h2>
+        <ul class="ticks" style="margin-top: 22px;">
+          <li>Camera or gallery → compressed upload</li>
+          <li>Vision model returns severity, confidence, causes, actions, caveats</li>
+          <li>Saved to history so the farm remembers</li>
+          <li>Language checked server-side, not left to the model's mood</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6 · ASSISTANT -->
+  <section class="slide" data-label="Demo · Assistant">
+    <div class="chrome"><div class="brand">Kissan AI</div><div class="kicker">Live demo · 3 of 6</div></div>
+    <div class="split wide-right">
+      <div>
+        <h2 class="head" style="font-size: 40px;">Ask it the way<br />you'd ask a neighbour.</h2>
+        <ul class="ticks" style="margin-top: 22px;">
+          <li>Answers grounded in this farm: crop, stage, soil, water, weather, risks</li>
+          <li>Type or hold the mic — speech in, speech out</li>
+          <li>Reply is read aloud, including key points and next steps</li>
+          <li>"What should I do today?" works in Urdu and English</li>
+        </ul>
+      </div>
+      <figure class="shot" style="height: 470px;">
+        <img src="img/04-assistant.png" alt="AI Assistant"
+             onerror="this.parentNode.classList.add('missing')" />
+        <figcaption class="ph"><strong>AI Assistant</strong><small>drop img/04-assistant.png</small></figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <!-- 7 · WEATHER + IRRIGATION -->
+  <section class="slide" data-label="Demo · Weather &amp; Irrigation">
+    <div class="chrome"><div class="brand">Kissan AI</div><div class="kicker">Live demo · 4 of 6</div></div>
+    <div class="split">
+      <figure class="shot" style="height: 470px;">
+        <img src="img/05-weather.png" alt="Weather page"
+             onerror="this.parentNode.classList.add('missing')" />
+        <figcaption class="ph"><strong>Weather / Irrigation</strong><small>drop img/05-weather.png</small></figcaption>
+      </figure>
+      <div>
+        <h2 class="head" style="font-size: 40px;">Irrigate on evidence,<br />not on habit.</h2>
+        <ul class="ticks" style="margin-top: 22px;">
+          <li>Forecast from Open-Meteo — no key, no billing, no lock-in</li>
+          <li>Weather translated into farming impact, not just degrees</li>
+          <li>Irrigation advice uses soil type, method, crop stage and recent rain</li>
+          <li>Every recommendation says <em>why</em>, so it can be trusted</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 8 · RISKS + ACTIONS -->
+  <section class="slide" data-label="Demo · Risks &amp; Actions">
+    <div class="chrome"><div class="brand">Kissan AI</div><div class="kicker">Live demo · 5 of 6</div></div>
+    <div class="split wide-right">
+      <div>
+        <h2 class="head" style="font-size: 40px;">Know what's coming.<br />And what to do about it.</h2>
+        <ul class="ticks" style="margin-top: 22px;">
+          <li>Heat, frost, rain, wind, pest and disease windows</li>
+          <li>Each alert explains the trigger and the window</li>
+          <li>Today's Actions turn everything into a short, ordered list</li>
+          <li>One screen the farmer can act on in 60 seconds</li>
+        </ul>
+      </div>
+      <figure class="shot" style="height: 470px;">
+        <img src="img/06-risks.png" alt="Risks and alerts"
+             onerror="this.parentNode.classList.add('missing')" />
+        <figcaption class="ph"><strong>Risks / Actions</strong><small>drop img/06-risks.png</small></figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <!-- 9 · YIELD + EXPENSES -->
+  <section class="slide" data-label="Demo · Yield &amp; Expenses">
+    <div class="chrome"><div class="brand">Kissan AI</div><div class="kicker">Live demo · 6 of 6</div></div>
+    <div class="split">
+      <figure class="shot" style="height: 470px;">
+        <img src="img/07-yield.png" alt="Yield prediction"
+             onerror="this.parentNode.classList.add('missing')" />
+        <figcaption class="ph"><strong>Yield / Expenses</strong><small>drop img/07-yield.png</small></figcaption>
+      </figure>
+      <div>
+        <h2 class="head" style="font-size: 40px;">Plan the season.<br />And the money.</h2>
+        <ul class="ticks" style="margin-top: 22px;">
+          <li>Yield estimate with the factors behind it — not a magic number</li>
+          <li>Costs tracked by category across the season</li>
+          <li>Sowing → harvest calendar tied to the real crop stage</li>
+          <li>Comparisons that make the next season cheaper</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 10 · URDU-FIRST -->
+  <section class="slide" data-label="Urdu-first">
+    <div class="chrome"><div class="brand">Kissan AI</div><div class="kicker">Design decision</div></div>
+    <h2 class="head">Urdu isn't a translation layer.<br /><span class="accent">It's the product.</span></h2>
+    <div class="body">
+      <div class="grid g3" style="margin-top: 6px;">
+        <div class="card"><h3>Real RTL, not flipped</h3><p>Logical spacing and alignment throughout, so layouts mirror correctly instead of breaking.</p></div>
+        <div class="card"><h3>Typography that stays readable</h3><p>Noto Sans Urdu for UI at 12–16 px; no root font scaling, so nothing overflows.</p></div>
+        <div class="card"><h3>AI follows the UI</h3><p>Diagnosis and chat answer in the selected language — verified on the server.</p></div>
+      </div>
+      <div class="grid g2" style="gap: 12px; margin-top: 4px;">
+        <div class="urdu-strip"><span class="tag">UI</span><span class="ur">آج کیا کرنا ہے؟</span></div>
+        <div class="urdu-strip"><span class="tag">AI</span><span class="ur">آلو کے پتوں پر دھبے دیر سے جھلسنے کی علامت ہیں۔</span></div>
+      </div>
+      <p class="note">Every key exists in both dictionaries, and a test fails the build if English and Urdu drift apart.</p>
+    </div>
+  </section>
+
+  <!-- 11 · ARCHITECTURE -->
+  <section class="slide" data-label="Architecture">
+    <div class="chrome"><div class="brand">Kissan AI</div><div class="kicker">How it works</div></div>
+    <h2 class="head" style="font-size: 40px;">A small stack with <span class="accent">nothing to babysit.</span></h2>
+    <div class="arch">
+      <div class="arch-row">
+        <div class="arch-label">Client</div>
+        <div class="arch-box">
+          <span class="chip hi">React 18</span><span class="chip">TypeScript</span><span class="chip">Vite 7</span>
+          <span class="chip">Tailwind 4</span><span class="chip">Radix UI</span><span class="chip">Recharts</span>
+          <span class="chip">Vercel</span>
+        </div>
+      </div>
+      <div class="arrow">▼</div>
+      <div class="arch-row">
+        <div class="arch-label">Backend</div>
+        <div class="arch-box">
+          <span class="chip hi">Supabase Postgres</span><span class="chip">Row Level Security</span>
+          <span class="chip">Auth</span><span class="chip">Storage</span><span class="chip">7 tables</span>
+        </div>
+      </div>
+      <div class="arrow">▼</div>
+      <div class="arch-row">
+        <div class="arch-label">Edge functions</div>
+        <div class="arch-box">
+          <span class="chip">analyze-crop</span><span class="chip">chat-assistant</span><span class="chip">assess-risks</span>
+          <span class="chip">irrigation-advisor</span><span class="chip">today-actions</span><span class="chip">recommend-crops</span>
+          <span class="chip">get-weather</span><span class="chip">speak-answer</span><span class="chip">sarvam-stt</span><span class="chip">whisper-stt</span>
+        </div>
+      </div>
+      <div class="arrow">▼</div>
+      <div class="arch-row">
+        <div class="arch-label">AI &amp; data</div>
+        <div class="arch-box">
+          <span class="chip hi">Gemini — vision, text, speech</span><span class="chip">OpenRouter fallback</span>
+          <span class="chip">Open-Meteo forecast</span>
+        </div>
+      </div>
+    </div>
+    <p class="note">Secrets live only in Edge Function env vars. The browser never sees a model key.</p>
+  </section>
+
+  <!-- 12 · ENGINEERING -->
+  <section class="slide" data-label="Engineering choices">
+    <div class="chrome"><div class="brand">Kissan AI</div><div class="kicker">Engineering choices</div></div>
+    <h2 class="head" style="font-size: 40px;">AI where it helps. <span class="accent">Deterministic code where it matters.</span></h2>
+    <div class="body">
+      <div class="grid g2" style="margin-top: 4px;">
+        <div class="card">
+          <div class="num">1</div>
+          <h3>Rules, not guesses</h3>
+          <p>Growth stage, risk scoring, irrigation and yield are plain TypeScript engines. Same input, same answer — explainable, testable, free.</p>
+        </div>
+        <div class="card">
+          <div class="num">2</div>
+          <h3>The model only does language</h3>
+          <p>Gemini reads the photo and writes the sentence. It never decides the risk score or the watering amount.</p>
+        </div>
+        <div class="card">
+          <div class="num">3</div>
+          <h3>Language is enforced server-side</h3>
+          <p>Prompt + schema hints + a script check on every field, with a repair pass if the model drifts back to English.</p>
+        </div>
+        <div class="card">
+          <div class="num">4</div>
+          <h3>Degrade, don't fail</h3>
+          <p>Rate-limited model → second provider. Weather source down → cached view. Missing data → the UI says so.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 13 · QUALITY -->
+  <section class="slide" data-label="Quality &amp; security">
+    <div class="chrome"><div class="brand">Kissan AI</div><div class="kicker">Quality &amp; security</div></div>
+    <h2 class="head" style="font-size: 40px;">Boring on purpose.</h2>
+    <div class="body">
+      <div class="stats" style="margin-top: 4px;">
+        <div class="stat"><div class="v">76</div><div class="k">automated tests</div></div>
+        <div class="stat"><div class="v">100%</div><div class="k">tables behind RLS</div></div>
+        <div class="stat"><div class="v">10</div><div class="k">JWT-verified functions</div></div>
+        <div class="stat"><div class="v">0</div><div class="k">secrets shipped to users</div></div>
+      </div>
+      <ul class="ticks" style="margin-top: 8px;">
+        <li>Every table is row-level secured — one farmer never sees another's farm</li>
+        <li>Function calls are JWT-verified, with an explicit CORS allow-list</li>
+        <li>Typecheck and production build gate every change; tests cover engines, i18n parity and voice</li>
+        <li>No placeholder numbers in the UI: when data is missing, it says so</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 14 · CLOSE -->
+  <section class="slide" data-label="Impact &amp; next">
+    <div class="chrome"><div class="brand">Kissan AI</div><div class="kicker">Impact · Roadmap · Ask</div></div>
+    <h2 class="head">Built and shipped.<br /><span class="accent">Now it needs farmers.</span></h2>
+    <div class="body">
+      <div class="grid g3" style="margin-top: 2px;">
+        <div class="card"><h3>Next: reach</h3><p>SMS and IVR for feature phones — no smartphone, no data plan required.</p></div>
+        <div class="card"><h3>Next: offline</h3><p>Cache today's advice and the crop calendar so the field has no dead zones.</p></div>
+        <div class="card"><h3>Next: trust</h3><p>An agronomist review loop that audits AI diagnoses and feeds corrections back.</p></div>
+      </div>
+      <div class="grid g2" style="gap: 16px; margin-top: 4px;">
+        <div class="card" style="background: linear-gradient(135deg, rgba(180,205,86,0.14), rgba(180,205,86,0.03)); border-color: rgba(180,205,86,0.3);">
+          <h3>The ask</h3>
+          <p>A pilot with 25–50 farmers this season, and mentorship on turning the prototype into a service they keep using after harvest.</p>
+        </div>
+        <div class="card">
+          <h3>Why it can work</h3>
+          <p>Free-tier infrastructure, a model-agnostic backend and Urdu-first design mean each extra farmer costs almost nothing.</p>
+        </div>
+      </div>
+      <div style="margin-top: 8px; display:flex; align-items:baseline; gap:18px;">
+        <div style="font-size: 30px; font-weight: 720; letter-spacing: -0.02em;">Thank you.</div>
+        <div style="font-size: 15px; color: var(--dim);">Questions — and Urdu demo — welcome.</div>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<div id="hud"><div id="bar"></div></div>
+<div id="hint">← → to navigate · F for fullscreen</div>
+
+<script>
+  (function () {
+    var stage = document.getElementById('stage');
+    var slides = Array.prototype.slice.call(document.querySelectorAll('.slide'));
+    var bar = document.getElementById('bar');
+    var hint = document.getElementById('hint');
+    var i = 0;
+
+    function fit() {
+      var s = Math.min(window.innerWidth / 1280, window.innerHeight / 720);
+      stage.style.transform = 'scale(' + s + ')';
+    }
+
+    function show(n) {
+      i = Math.max(0, Math.min(slides.length - 1, n));
+      slides.forEach(function (el, k) { el.classList.toggle('active', k === i); });
+      bar.style.width = ((i + 1) / slides.length * 100) + '%';
+      if (history.replaceState) history.replaceState(null, '', '#' + (i + 1));
+    }
+
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ' || e.key === 'Enter') {
+        e.preventDefault(); show(i + 1);
+      } else if (e.key === 'ArrowLeft' || e.key === 'PageUp' || e.key === 'Backspace') {
+        e.preventDefault(); show(i - 1);
+      } else if (e.key === 'Home') { e.preventDefault(); show(0); }
+      else if (e.key === 'End') { e.preventDefault(); show(slides.length - 1); }
+      else if (e.key === 'f' || e.key === 'F') {
+        if (document.fullscreenElement) document.exitFullscreen();
+        else document.documentElement.requestFullscreen().catch(function () {});
+      } else if (e.key === '?') {
+        hint.style.display = hint.style.display === 'none' ? 'block' : 'none';
+      }
+    });
+
+    stage.addEventListener('click', function (e) {
+      if (e.target.closest('a')) return;
+      var x = e.clientX;
+      if (x > window.innerWidth / 2) show(i + 1); else show(i - 1);
+    });
+
+    window.addEventListener('resize', fit);
+
+    var fromHash = parseInt((location.hash || '').replace('#', ''), 10);
+    fit();
+    show(isNaN(fromHash) ? 0 : fromHash - 1);
+  })();
+</script>
+
+</body>
+</html>
