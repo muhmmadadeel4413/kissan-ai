@@ -47,7 +47,10 @@ import {
 import type { ChatMessage } from "../types";
 import { cn } from "../lib/utils";
 
-function buildSpeechText(reply: ChatReply): string {
+function buildSpeechText(
+  reply: ChatReply,
+  t: (key: string, vars?: Record<string, string | number>) => string,
+): string {
   const sections: string[] = [];
 
   if (reply.answer?.trim()) {
@@ -56,7 +59,7 @@ function buildSpeechText(reply: ChatReply): string {
 
   if (reply.key_points?.length) {
     sections.push(
-      `Ahm nuqaat:\n${reply.key_points
+      `${t("assistant.speechKeyPoints")}:\n${reply.key_points
         .map((point, index) => `${index + 1}. ${point}`)
         .join("\n")}`
     );
@@ -64,7 +67,7 @@ function buildSpeechText(reply: ChatReply): string {
 
   if (reply.recommended_actions?.length) {
     sections.push(
-      `Tajweez shuda aglay qadam:\n${reply.recommended_actions
+      `${t("assistant.speechNextSteps")}:\n${reply.recommended_actions
         .map((action, index) => `${index + 1}. ${action}`)
         .join("\n")}`
     );
@@ -400,7 +403,7 @@ export default function AssistantPage() {
       // Auto-speak the response if this came from voice input.
       if (fromVoice || lastWasVoiceRef.current) {
         lastWasVoiceRef.current = false;
-        voice.speak(buildSpeechText(result.reply));
+        voice.speak(buildSpeechText(result.reply, t));
       }
     } catch (err) {
       // Remove the optimistic message so we never show a message that wasn't saved.
@@ -689,7 +692,7 @@ export default function AssistantPage() {
                 isLastAssistant
                   ? () => {
                       const reply = structuredReplies[msg.id];
-                      if (reply) voice.speak(buildSpeechText(reply));
+                      if (reply) voice.speak(buildSpeechText(reply, t));
                     }
                   : undefined
               }

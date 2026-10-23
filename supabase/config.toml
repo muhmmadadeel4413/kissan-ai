@@ -1,7 +1,9 @@
 
 [functions.speak-answer]
 enabled = true
-verify_jwt = false
+# The client sends the signed-in user's JWT; the gateway must verify it.
+# Never set this to false: the function bills Gemini TTS usage.
+verify_jwt = true
 import_map = "./functions/speak-answer/deno.json"
 # Uncomment to specify a custom file path to the entrypoint.
 # Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx

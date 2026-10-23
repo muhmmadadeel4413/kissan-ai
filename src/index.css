@@ -209,35 +209,29 @@
   /* ---------------------------------------------------------------------
      Urdu (RTL) typography
      ---------------------------------------------------------------------
-     Two separate stacks, deliberately:
+     Both stacks use "Noto Sans Urdu".
+
+     Nastaliq is a calligraphic cascade: its tiny x-height makes small text
+     look shrunken and its deep descenders make headings look enormous, so
+     it is no longer used in the UI. Noto Sans Urdu keeps the same
+     letterforms readable at 12–16 px body sizes and at heading sizes.
 
        --font-sans     UI / body / labels / buttons / inputs
-                       → "Noto Sans Urdu". Nastaliq is a calligraphic cascade
-                         and is *illegible* below ~18 px, so it must never be
-                         used for dense UI text (sidebar nav, badges, table
-                         cells). Noto Sans Urdu keeps the same letterforms
-                         readable at 12–16 px.
-
        --font-heading  Display text only (h1–h4, brand lockup)
-                       → "Noto Nastaliq Urdu". Beautiful at large sizes and
-                         that is the only place it is used.
 
      The previous build used Nastaliq for BOTH and then scaled the root to
      112.5%. That inflated every rem-based Tailwind spacing/size value (so
-     cards overflowed and the sidebar wrapped), while Nastaliq's tiny
-     x-height simultaneously made small text look shrunken and its deep
-     descenders made headings look enormous. Fixing the stack split lets us
-     drop the root scaling entirely and keep rem 1:1 with the LTR layout. */
- 
-html[dir="rtl"] {
-  --font-sans: "Noto Sans Urdu", "Noto Naskh Arabic", "Segoe UI",
-    ui-sans-serif, system-ui, -apple-system, sans-serif;
-  --font-heading: "Noto Sans Urdu", "Noto Naskh Arabic", "Segoe UI",
-    ui-sans-serif, system-ui, -apple-system, sans-serif;
+     cards overflowed and the sidebar wrapped). Dropping the root scaling
+     keeps rem 1:1 with the LTR layout. */
 
-  /* NO root font-size scaling — see note above. */
-}
+  html[dir="rtl"] {
+    --font-sans: "Noto Sans Urdu", "Noto Naskh Arabic", "Segoe UI",
+      ui-sans-serif, system-ui, -apple-system, sans-serif;
+    --font-heading: "Noto Sans Urdu", "Noto Naskh Arabic", "Segoe UI",
+      ui-sans-serif, system-ui, -apple-system, sans-serif;
 
+    /* NO root font-size scaling — see note above. */
+  }
 
   html[dir="rtl"] body {
     line-height: 1.7;
