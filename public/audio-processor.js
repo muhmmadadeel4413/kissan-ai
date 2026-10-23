@@ -1,3 +1,4 @@
+
 class AudioProcessor extends AudioWorkletProcessor {
   process(inputs) {
     const input = inputs[0];
@@ -7,7 +8,7 @@ class AudioProcessor extends AudioWorkletProcessor {
 
       this.port.postMessage(
         {
-          type: "pcm",
+          type: "audio",
           samples,
         },
         [samples.buffer]

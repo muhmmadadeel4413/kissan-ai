@@ -228,14 +228,16 @@
      x-height simultaneously made small text look shrunken and its deep
      descenders made headings look enormous. Fixing the stack split lets us
      drop the root scaling entirely and keep rem 1:1 with the LTR layout. */
-  html[dir="rtl"] {
-    --font-sans: "Noto Sans Urdu", "Noto Naskh Arabic", "Segoe UI",
-      ui-sans-serif, system-ui, -apple-system, sans-serif;
-    --font-heading: "Noto Nastaliq Urdu", "Noto Sans Urdu", "Segoe UI",
-      ui-sans-serif, system-ui, -apple-system, sans-serif;
+ 
+html[dir="rtl"] {
+  --font-sans: "Noto Sans Urdu", "Noto Naskh Arabic", "Segoe UI",
+    ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-heading: "Noto Sans Urdu", "Noto Naskh Arabic", "Segoe UI",
+    ui-sans-serif, system-ui, -apple-system, sans-serif;
 
-    /* NO root font-size scaling — see note above. */
-  }
+  /* NO root font-size scaling — see note above. */
+}
+
 
   html[dir="rtl"] body {
     line-height: 1.7;

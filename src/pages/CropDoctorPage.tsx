@@ -160,6 +160,7 @@ export default function CropDoctorPage() {
       const imageUrl = await uploadCropImage(prepared, file, farm?.id);
 
       setPhase("analyzing");
+      console.log("[Crop Doctor] Selected language:", language);
       const result = await analyzeCropPhoto({
         imageUrl,
         farmId: farm?.id,

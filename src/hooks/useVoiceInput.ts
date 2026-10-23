@@ -15,90 +15,41 @@ import {
   resumeSpeech,
   speak as ttsSpeak,
   stopSpeech,
-  ttsAvailable,
 } from "../lib/voice-tts";
 
 /**
  * Voice input hook for AI Chat.
  *
- * Extracts the voice recording, STT, and TTS logic from VoicePage into a
- * reusable hook. Manages the full voice lifecycle:
- *
- * 1. User taps mic → startRecording()
- * 2. AudioWorklet captures PCM → micLevel for waveform
- * 3. User taps mic again → stopRecording() → WAV upload → final transcript
- * 4. Transcript returned via onTranscript callback
- * 5. speak() for TTS playback of AI responses
- *
- * The hook does NOT send messages — it only provides the transcript. The
- * calling component decides what to do with it (e.g., send as chat message).
+ * STT lifecycle is preserved. TTS supports browser speech
+ * and the deployed speak-answer server function.
  */
 
 export interface UseVoiceInputOptions {
-  /** Called when a final transcript is ready (user should send this as a message). */
   onTranscript?: (text: string) => void;
-
-  /** Initial language (default: "auto"). */
   initialLanguage?: VoiceLang;
 }
 
 export interface UseVoiceInputReturn {
-  /** Current voice state (idle, listening, transcribing, etc.). */
   voiceState: VoiceState;
-
-  /** Mic level 0-1 for waveform visualization. */
   micLevel: number;
-
-  /** Finalized transcript (empty until stopRecording completes). */
   transcript: string;
-
-  /** Partial transcript during recording (empty for non-streaming STT). */
   partial: string;
-
-  /** TTS playback state. */
   ttsState: TtsState;
-
-  /** True when browser TTS is unavailable for the selected language. */
   ttsUnavailable: boolean;
-
-  /** Current voice language. */
   language: VoiceLang;
-
-  /** Change voice language (cancels any active recording). */
   setLanguage: (lang: VoiceLang) => void;
-
-  /** Start recording (requests mic permission if needed). */
   startRecording: () => Promise<void>;
-
-  /** Stop recording and finalize transcript. */
   stopRecording: () => void;
-
-  /** Cancel recording without finalizing. */
   cancelRecording: () => void;
-
-  /** Speak text aloud using TTS. */
   speak: (text: string) => void;
-
-  /** Pause TTS playback. */
   pauseSpeech: () => void;
-
-  /** Resume TTS playback. */
   resumeSpeech: () => void;
-
-  /** Stop TTS playback. */
   stopSpeech: () => void;
-
-  /** Current error message (null if no error). */
   error: string | null;
-
-  /** Clear the current error. */
   clearError: () => void;
-
-  /** True when voice is busy (recording, transcribing, or thinking). */
   isBusy: boolean;
 }
 
-/** Timeout for final transcript after stop() (ms). */
 const FINAL_TIMEOUT_MS = 15_000;
 
 export function useVoiceInput(
@@ -118,36 +69,20 @@ export function useVoiceInput(
   const [ttsState, setTtsState] =
     React.useState<TtsState>("idle");
 
-  const [partial, setPartial] =
-    React.useState("");
-
-  const [transcript, setTranscript] =
-    React.useState("");
-
-  const [error, setError] =
-    React.useState<string | null>(null);
-
-  const [ttsUnavailable, setTtsUnavailable] =
-    React.useState(false);
-
-  const [micLevel, setMicLevel] =
-    React.useState(0);
+  const [partial, setPartial] = React.useState("");
+  const [transcript, setTranscript] = React.useState("");
+  const [error, setError] = React.useState<string | null>(null);
+  const [ttsUnavailable, setTtsUnavailable] = React.useState(false);
+  const [micLevel, setMicLevel] = React.useState(0);
 
   const sttRef = React.useRef<
     Awaited<ReturnType<typeof startSTT>> | null
   >(null);
 
-  const finalTimerRef =
-    React.useRef<number | null>(null);
-
-  const gotFinalRef =
-    React.useRef(false);
-
-  const levelRef =
-    React.useRef(0);
-
-  const onTranscriptRef =
-    React.useRef(onTranscript);
+  const finalTimerRef = React.useRef<number | null>(null);
+  const gotFinalRef = React.useRef(false);
+  const levelRef = React.useRef(0);
+  const onTranscriptRef = React.useRef(onTranscript);
 
   onTranscriptRef.current = onTranscript;
 
@@ -158,18 +93,14 @@ export function useVoiceInput(
     voiceState === "transcribing" ||
     voiceState === "thinking";
 
-  /* ------------------------------------------------------------------ */
-  /* Cleanup on unmount                                                  */
-  /* ------------------------------------------------------------------ */
+  /* Cleanup on unmount */
 
   React.useEffect(() => {
     return () => {
       sttRef.current?.cancel();
 
       if (finalTimerRef.current !== null) {
-        window.clearTimeout(
-          finalTimerRef.current,
-        );
+        window.clearTimeout(finalTimerRef.current);
         finalTimerRef.current = null;
       }
 
@@ -177,25 +108,18 @@ export function useVoiceInput(
     };
   }, []);
 
-  /* ------------------------------------------------------------------ */
-  /* Language change                                                     */
-  /* ------------------------------------------------------------------ */
+  /* Language change */
 
   function setLanguage(next: VoiceLang) {
-    if (next === language) {
-      return;
-    }
+    if (next === language) return;
 
-    // Cancel any active recording.
     if (sttRef.current) {
       sttRef.current.cancel();
       sttRef.current = null;
     }
 
     if (finalTimerRef.current !== null) {
-      window.clearTimeout(
-        finalTimerRef.current,
-      );
+      window.clearTimeout(finalTimerRef.current);
       finalTimerRef.current = null;
     }
 
@@ -213,9 +137,7 @@ export function useVoiceInput(
     setMicLevel(0);
   }
 
-  /* ------------------------------------------------------------------ */
-  /* Error handling                                                      */
-  /* ------------------------------------------------------------------ */
+  /* Error handling */
 
   function clearError() {
     setError(null);
@@ -225,23 +147,18 @@ export function useVoiceInput(
     }
   }
 
-  /* ------------------------------------------------------------------ */
-  /* Start recording                                                     */
-  /* ------------------------------------------------------------------ */
+  /* Start recording — STT logic preserved */
 
   async function startRecording() {
     if (!cfg.sttSupported) {
       setVoiceState("error");
-
       setError(
         cfg.note ??
           "Voice input is not supported for this language.",
       );
-
       return;
     }
 
-    // If already listening, stop instead.
     if (voiceState === "listening") {
       stopRecording();
       return;
@@ -261,113 +178,73 @@ export function useVoiceInput(
 
     stopSpeech();
     setTtsState("idle");
-
     setVoiceState("requesting_permission");
 
     levelRef.current = 0;
     setMicLevel(0);
-
     gotFinalRef.current = false;
 
     try {
-      /*
-       * IMPORTANT:
-       * startSTT() expects VoiceLang, not STTLanguageCode.
-       *
-       * Passing `language` allows voice-stt.ts to select the correct
-       * STT language/provider internally.
-       */
-      const session = await startSTT(
-        language,
-        {
-          onPartial: (text) => {
-            setPartial(text);
-          },
-
-          onFinal: (result) => {
-            gotFinalRef.current = true;
-
-            if (
-              finalTimerRef.current !== null
-            ) {
-              window.clearTimeout(
-                finalTimerRef.current,
-              );
-
-              finalTimerRef.current = null;
-            }
-
-            const finalText = result.transcript;
-
-            setTranscript(finalText);
-            setPartial("");
-            setVoiceState("idle");
-            sttRef.current = null;
-
-            levelRef.current = 0;
-            setMicLevel(0);
-
-            // Notify the caller that a transcript is ready.
-            if (
-              finalText.trim() &&
-              onTranscriptRef.current
-            ) {
-              onTranscriptRef.current(
-                finalText,
-              );
-            }
-          },
-
-          onError: (err) => {
-            gotFinalRef.current = true;
-
-            if (
-              finalTimerRef.current !== null
-            ) {
-              window.clearTimeout(
-                finalTimerRef.current,
-              );
-
-              finalTimerRef.current = null;
-            }
-
-            sttRef.current = null;
-
-            setVoiceState("error");
-
-            setError(err.message);
-
-            levelRef.current = 0;
-            setMicLevel(0);
-          },
-
-          /*
-           * voice-stt.ts exposes onVolume.
-           * The hook converts the raw volume into a smoother 0-1
-           * value for waveform visualization.
-           */
-          onVolume: (value) => {
-            levelRef.current =
-              levelRef.current * 0.6 +
-              Math.min(
-                1,
-                value * 1.5,
-              ) *
-                0.4;
-
-            setMicLevel(
-              levelRef.current,
-            );
-          },
+      const session = await startSTT(language, {
+        onPartial: (text) => {
+          setPartial(text);
         },
-      );
+
+        onFinal: (result) => {
+          gotFinalRef.current = true;
+
+          if (finalTimerRef.current !== null) {
+            window.clearTimeout(finalTimerRef.current);
+            finalTimerRef.current = null;
+          }
+
+          const finalText = result.transcript;
+
+          setTranscript(finalText);
+          setPartial("");
+          setVoiceState("idle");
+          sttRef.current = null;
+
+          levelRef.current = 0;
+          setMicLevel(0);
+
+          if (
+            finalText.trim() &&
+            onTranscriptRef.current
+          ) {
+            onTranscriptRef.current(finalText);
+          }
+        },
+
+        onError: (err) => {
+          gotFinalRef.current = true;
+
+          if (finalTimerRef.current !== null) {
+            window.clearTimeout(finalTimerRef.current);
+            finalTimerRef.current = null;
+          }
+
+          sttRef.current = null;
+          setVoiceState("error");
+          setError(err.message);
+
+          levelRef.current = 0;
+          setMicLevel(0);
+        },
+
+        onVolume: (value) => {
+          levelRef.current =
+            levelRef.current * 0.6 +
+            Math.min(1, value * 1.5) * 0.4;
+
+          setMicLevel(levelRef.current);
+        },
+      });
 
       sttRef.current = session;
-
       setVoiceState("listening");
     } catch (err) {
       sttRef.current = null;
-
       setVoiceState("error");
 
       setError(
@@ -381,48 +258,36 @@ export function useVoiceInput(
     }
   }
 
-  /* ------------------------------------------------------------------ */
-  /* Stop recording                                                      */
-  /* ------------------------------------------------------------------ */
+  /* Stop recording — STT logic preserved */
 
   function stopRecording() {
-    if (voiceState !== "listening") {
-      return;
-    }
+    if (voiceState !== "listening") return;
 
     gotFinalRef.current = false;
-
     sttRef.current?.stop();
 
     setVoiceState("transcribing");
     setPartial("");
 
     if (finalTimerRef.current !== null) {
-      window.clearTimeout(
-        finalTimerRef.current,
-      );
+      window.clearTimeout(finalTimerRef.current);
     }
 
-    // Timeout: if no final transcript after 15s, show error.
-    finalTimerRef.current =
-      window.setTimeout(() => {
-        if (!gotFinalRef.current) {
-          setVoiceState("error");
+    finalTimerRef.current = window.setTimeout(() => {
+      if (!gotFinalRef.current) {
+        setVoiceState("error");
 
-          setError(
-            "Voice recognition is taking too long. Please check your connection and try again, or type your question.",
-          );
+        setError(
+          "Voice recognition is taking too long. Please check your connection and try again, or type your question.",
+        );
 
-          setPartial("");
-
-          sttRef.current = null;
-        }
-      }, FINAL_TIMEOUT_MS);
+        setPartial("");
+        sttRef.current = null;
+      }
+    }, FINAL_TIMEOUT_MS);
   }
 
-  /* ------------------------------------------------------------------ */
-  /* Cancel recording                                                    */
-  /* ------------------------------------------------------------------ */
+  /* Cancel recording — STT logic preserved */
 
   function cancelRecording() {
     if (sttRef.current) {
@@ -431,10 +296,7 @@ export function useVoiceInput(
     }
 
     if (finalTimerRef.current !== null) {
-      window.clearTimeout(
-        finalTimerRef.current,
-      );
-
+      window.clearTimeout(finalTimerRef.current);
       finalTimerRef.current = null;
     }
 
@@ -447,24 +309,19 @@ export function useVoiceInput(
     setMicLevel(0);
   }
 
-  /* ------------------------------------------------------------------ */
-  /* TTS                                                                  */
-  /* ------------------------------------------------------------------ */
+  /* Text-to-Speech */
 
-  function speak(text: string) {
+  function speak(text: string): void {
+    if (!text.trim()) return;
+
     const ttsLang = cfg.tts;
 
-    if (!ttsAvailable(ttsLang)) {
-      setTtsUnavailable(true);
-      return;
-    }
-
+    setError(null);
     setTtsUnavailable(false);
-
     setVoiceState("speaking");
     setTtsState("playing");
 
-    ttsSpeak(text, ttsLang, {
+    void ttsSpeak(text, ttsLang, {
       onEnd: () => {
         setVoiceState("idle");
         setTtsState("idle");
@@ -474,7 +331,27 @@ export function useVoiceInput(
         setVoiceState("idle");
         setTtsState("idle");
         setTtsUnavailable(true);
+
+        setError(
+          "Audio playback failed. Please try again.",
+        );
       },
+    }).then((started) => {
+      if (!started) {
+        setVoiceState("idle");
+        setTtsState("idle");
+        setTtsUnavailable(true);
+      }
+    }).catch((err: unknown) => {
+      console.error("TTS error:", err);
+
+      setVoiceState("idle");
+      setTtsState("idle");
+      setTtsUnavailable(true);
+
+      setError(
+        "Audio playback failed. Please try again.",
+      );
     });
   }
 
